@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
-import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableCell, TableRow, WidthType, BorderStyle, Packer } from 'docx';
+import { asBlob } from 'html-docx-js/dist/html-docx';
 import { saveAs } from 'file-saver';
 
 // EMO 2026 Bölgesel Azaltma Katsayıları Listesi (Sabit Veri)
@@ -215,9 +215,7 @@ const App = () => {
     setLlmOutput(null); 
     setLlmFeature(null);
     setActiveTab('proposal');
-  };
-
-  const handleDownloadPDF = async () => {
+  };DownloadPDF = async () => {
     if (!proposalRef.current || !selectedCompany) return;
     
     const element = proposalRef.current;
@@ -248,114 +246,38 @@ const App = () => {
   };
 
   const handleDownloadWord = async () => {
-    if (!selectedCompany) return;
+    if (!proposalRef.current || !selectedCompany) return;
     
     try {
+      const element = proposalRef.current;
       const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.docx`;
       
-      // Create Word document with docx library
-      const doc = new Document({
-        sections: [{
-          properties: {},
-          children: [
-            new Paragraph({
-              text: "FİYAT TEKLİFİ",
-              heading: HeadingLevel.HEADING_1,
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 200 }
-            }),
-            new Paragraph({
-              text: `Ref: ${params.year}-YG-${selectedCompany.id ? selectedCompany.id.toString().padStart(3, '0') : 'MANUEL'}`,
-              alignment: AlignmentType.RIGHT,
-              spacing: { after: 100 }
-            }),
-            new Paragraph({
-              text: new Date().toLocaleDateString('tr-TR'),
-              alignment: AlignmentType.RIGHT,
-              spacing: { after: 400 }
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `Sayın ${selectedCompany.contactName ? `${selectedCompany.contactName} - ` : ''}${selectedCompany.name} Yetkilisi,`,
-                  bold: true
-                })
-              ],
-              spacing: { after: 200 }
-            }),
-            new Paragraph({
-              text: `Tesisinize yönelik YG İşletme Sorumluluğu hizmeti fiyat teklifi, talep ettiğiniz trafo kurulu gücü ve TMMOB Elektrik Mühendisleri Odası'nın (EMO) ${params.year} yılı Ücret Tanımları (KISIM III) esas alınarak, rekabetçi piyasa koşulları doğrultusunda önceki tekliflerimizde uyguladığımız indirim oranıyla aşağıda sunulmuştur.`,
-              spacing: { after: 400 }
-            }),
-            new Paragraph({
-              text: "1. Tesis Bilgileri ve Toplam Kurulu Güç",
-              heading: HeadingLevel.HEADING_2,
-              spacing: { before: 200, after: 200 }
-            }),
-            new Paragraph({
-              text: `• Trafo Güçleri: ${selectedCompany.powerStr} kVA`,
-              spacing: { after: 100 }
-            }),
-            new Paragraph({
-              text: `• Toplam Kurulu Güç: ${selectedCompany.totalKVA} kVA (${(selectedCompany.totalKVA / 1000).toFixed(2)} MVA)`,
-              spacing: { after: 100 }
-            }),
-            new Paragraph({
-              text: `• Tesis Tipi: ${selectedCompany.type === 'direk' ? 'Direk Tipi Trafo Merkezi' : 'Bina Tipi Trafo Merkezi'}`,
-              spacing: { after: 100 }
-            }),
-            new Paragraph({
-              text: `• Sektör: ${selectedCompany.sector}`,
-              spacing: { after: 400 }
-            }),
-            new Paragraph({
-              text: `2. EMO ${params.year} Yılı Nominal Ücret`,
-              heading: HeadingLevel.HEADING_2,
-              spacing: { before: 200, after: 200 }
-            }),
-            new Paragraph({
-              text: `EMO ${params.year} Nominal Tarife (KDV Hariç): ${formatCurrency(selectedCompany.nominalFee)}`,
-              spacing: { after: 400 }
-            }),
-            new Paragraph({
-              text: "3. Uygulanan İskonto ve Nihai Teklif",
-              heading: HeadingLevel.HEADING_2,
-              spacing: { before: 200, after: 200 }
-            }),
-            new Paragraph({
-              text: `Piyasa koşullarına uyum sağlamak amacıyla, işletmenize özel %${selectedCompany.appliedDiscountRate || params.discountRate} iskonto uygulanmıştır.`,
-              spacing: { after: 200 }
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `AYLIK TEKLİF FİYATI: ${formatCurrency(selectedCompany.offerPrice)} + KDV`,
-                  bold: true,
-                  size: 32
-                })
-              ],
-              spacing: { before: 200, after: 400 }
-            }),
-            new Paragraph({
-              text: "Saygılarımızla,",
-              spacing: { before: 400, after: 100 }
-            }),
-            new Paragraph({
-              text: "KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.",
-              bold: true
-            })
-          ]
-        }]
-      });
-
-      const blob = await Packer.toBlob(doc);
+      // HTML'i klonla ve temizle
+      const clonedElement = element.cloneNode(true);
+      
+      // Inline stilleri ekle
+      const styleString = `
+        <style>
+          body { font-family: 'Calibri', 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; }
+          h1 { font-size: 18pt; font-weight: bold; color: #1e3a8a; }
+          h2, h3 { font-size: 14pt; font-weight: bold; color: #1e40af; margin-top: 12pt; }
+          table { border-collapse: collapse; width: 100%; margin: 10pt 0; }
+          th, td { border: 1px solid #666; padding: 8pt; text-align: left; }
+          th { background-color: #f3f4f6; font-weight: bold; }
+          ul { margin: 5pt 0; padding-left: 20pt; }
+          li { margin: 3pt 0; }
+          .highlight { background-color: #1e3a8a; color: white; padding: 15pt; border-radius: 5pt; }
+        </style>
+      `;
+      
+      const htmlContent = styleString + clonedElement.innerHTML;
+      
+      const blob = await asBlob(htmlContent);
       saveAs(blob, fileName);
     } catch (error) {
       console.error('Word belgesi oluşturma hatası:', error);
       alert('Word belgesi oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
     }
-  };
-
   const handlePrint = () => {
     window.print();
   };
@@ -812,22 +734,13 @@ const App = () => {
                   Gemini Destekli Teklif Araçları
                 </h3>
                 
-                {/* PDF İndir Butonu */}
+                {/* PDF/Yazdır Butonu */}
                 <button 
-                  onClick={handleDownloadPDF}
+                  onClick={handlePrint}
                   className="w-full flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg mb-3 transition"
                 >
-                  <Download className="h-5 w-5" />
-                  <span>📄 PDF İndir</span>
-                </button>
-
-                {/* Word İndir Butonu */}
-                <button 
-                  onClick={handleDownloadWord}
-                  className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg mb-3 transition"
-                >
-                  <FileText className="h-5 w-5" />
-                  <span>📝 Word İndir</span>
+                  <Printer className="h-5 w-5" />
+                  <span>📄 PDF Olarak Kaydet</span>
                 </button>
 
                 {/* Teklif Özeti Oluşturucu */}
@@ -884,7 +797,7 @@ const App = () => {
             <div className="lg:w-2/3 bg-gray-200 p-8 rounded-xl overflow-auto lg:h-[calc(100vh-200px)] flex-grow print:bg-white print:p-0">
               
               {/* A4 Paper Structure */}
-              <div ref={proposalRef} className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[20mm] shadow-2xl relative text-[11pt] leading-relaxed text-gray-800 flex flex-col justify-between print-container print:shadow-none print:max-w-full">
+              <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[20mm] shadow-2xl relative text-[11pt] leading-relaxed text-gray-800 flex flex-col justify-between print-container print:shadow-none print:max-w-full">
                 <div>
                     {/* Header */}
                     <div className="flex justify-between items-start mb-8 border-b-2 border-gray-800 pb-4">
