@@ -673,22 +673,13 @@ const App = () => {
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition appearance-none bg-white"
                             >
                                 {REGION_LIST.map((r, index) => (
-                        İndir Butonu */}
-                <button 
-                  onClick={handleDownloadPDF}
-                  className="w-full flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg mb-3 transition"
-                >
-                  <Download className="h-5 w-5" />
-                  <span>📄 PDF İndir</span>
-                </button>
-
-                {/* Word İndir Butonu */}
-                <button 
-                  onClick={handleDownloadWord}
-                  className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg mb-3 transition"
-                >
-                  <FileText className="h-5 w-5" />
-                  <span>📝 Word İndirme="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    <option key={index} value={r.name}>
+                                        {r.name} (x{r.coeff.toFixed(2)})
+                                    </option>
+                                ))}
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
                         </div>
                         <p className="text-xs text-green-600 mt-1 font-semibold">
