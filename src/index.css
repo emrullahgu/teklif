@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Print Styles */
+@media print {
+  body {
+    background: white;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Başlık, sidebar ve kontrol panellerini gizle */
+  header, .no-print, .print-hide {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+  
+  /* A4 sayfa yapısını optimize et */
+  .print-container {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0;
+    padding: 0;
+    page-break-after: always;
+    box-shadow: none !important;
+  }
+  
+  /* Sayfa kırılmalarını kontrol et */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  
+  table, figure, img {
+    page-break-inside: avoid;
+  }
+  
+  /* Gereksiz boşlukları kaldır */
+  .container {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+}
