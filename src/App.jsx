@@ -1,6 +1,13 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent } from 'lucide-react';
+import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet } from 'lucide-react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import emailjs from 'emailjs-com';
 import html2pdf from 'html2pdf.js';
+import html2canvas from 'html2canvas';
 import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableCell, TableRow, WidthType, BorderStyle, Packer } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -100,11 +107,30 @@ const App = () => {
   const [selectedCompany, setSelectedCompany] = useState(null);
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [llmOutput, setLlmOutput] = useState(null);
-  const [llmLoading, setLlmLoading] = useState(false);
-  const [llmFeature, setLlmFeature] = useState(null); 
+  
+  // AI States
+  const [aiOutput, setAiOutput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [aiActiveFeature, setAiActiveFeature] = useState(null); // 'email' or 'tips'
 
-  const apiKey = ""; // API key environment tarafından sağlanır
+  const [logo, setLogo] = useState(null); // Logo state
+  
+  // Teklif Sayacı ve Sabit Sicil No
+  const [proposalCount, setProposalCount] = useState(1);
+  const ODA_SICIL_NO = "92558";
+
+  const apiKey = "AIzaSyBMTNck0O4t_zFGoojvqseM1KX3OSxCy2s"; // Gemini API key
+  
+  // Editor Mode States
+  const [editorMode, setEditorMode] = useState(false);
+  const [editableContent, setEditableContent] = useState('');
+  const [emailConfig, setEmailConfig] = useState({
+    serviceId: '',
+    templateId: '',
+    userId: '',
+    recipientEmail: ''
+  });
   
   const proposalRef = useRef(null); // PDF/Word export için referans
 
@@ -115,7 +141,7 @@ const App = () => {
     contactName: '',
     powerStr: '',
     type: 'bina', // 'bina' or 'direk'
-    region: 'İzmir (Kemalpaşa)', // Varsayılan görüntülenen isim
+    region: 'İzmir (Aliağa/Kemalpaşa/Ödemiş)', // Varsayılan görüntülenen isim
     regionCoeff: 1.00, // Varsayılan katsayı
     customDiscount: 70 // Kullanıcıya özel iskonto
   });
@@ -205,42 +231,89 @@ const App = () => {
         discountAmount,
         offerPrice,
         regionCoeff: appliedRegionCoeff,
-        appliedDiscountRate
+        appliedDiscountRate,
+        refNo: `${params.year}-YG-${ODA_SICIL_NO}-${proposalCount.toString().padStart(3, '0')}` // Referans Numarası Oluşturma
       };
   };
 
   // --- Handlers ---
   const generateProposal = (company) => {
     setSelectedCompany(company);
-    setLlmOutput(null); 
-    setLlmFeature(null);
+    setAiOutput(""); 
+    setAiActiveFeature(null);
     setActiveTab('proposal');
+    setProposalCount(prev => prev + 1);
   };
 
   const handleDownloadPDF = async () => {
-    if (!proposalRef.current || !selectedCompany) return;
+    if (!selectedCompany) return;
     
-    const element = proposalRef.current;
+    const pages = document.querySelectorAll('.pdf-page');
+    if (!pages || pages.length === 0) {
+      alert('İçerik bulunamadı.');
+      return;
+    }
+    
     const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
-    
-    const opt = {
-      margin: 0,
-      filename: fileName,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2,
-        useCORS: true,
-        letterRendering: true
-      },
-      jsPDF: { 
-        unit: 'mm', 
-        format: 'a4', 
-        orientation: 'portrait' 
-      }
-    };
+    const targetWidthPx = 793;
+    const SCALE_FACTOR = 2;
 
     try {
-      await html2pdf().set(opt).from(element).save();
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      });
+
+      // Her sayfayı ayrı yakalayıp PDF'e ekle
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        
+        // Geçici stil ayarları
+        const originalWidth = page.style.width;
+        const originalMargin = page.style.margin;
+        const originalBoxShadow = page.style.boxShadow;
+        
+        page.style.width = '210mm';
+        page.style.margin = '0 auto';
+        page.style.boxShadow = 'none';
+        page.classList.add('pdf-exporting');
+
+        // html2canvas ile yakalama
+        const canvas = await html2canvas(page, {
+          scale: SCALE_FACTOR,
+          width: targetWidthPx,
+          windowWidth: targetWidthPx,
+          useCORS: true,
+          allowTaint: false,
+          letterRendering: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const imgWidth = 210; // A4 genişlik mm
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        // İlk sayfa için yeni sayfa ekleme
+        if (i > 0) {
+          pdf.addPage();
+        }
+
+        // Görseli PDF'e ekle
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+
+        // Stil ayarlarını geri al
+        page.style.width = originalWidth;
+        page.style.margin = originalMargin;
+        page.style.boxShadow = originalBoxShadow;
+        page.classList.remove('pdf-exporting');
+      }
+
+      pdf.save(fileName);
     } catch (error) {
       console.error('PDF oluşturma hatası:', error);
       alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
@@ -253,27 +326,83 @@ const App = () => {
     try {
       const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.docx`;
       
-      // Create Word document with docx library
+      // Tablo satırlarını oluştur
+      const createTableRow = (label, value) => {
+        return new TableRow({
+          children: [
+            new TableCell({
+              children: [new Paragraph({ text: label })],
+              width: { size: 40, type: WidthType.PERCENTAGE }
+            }),
+            new TableCell({
+              children: [new Paragraph({ text: value })],
+              width: { size: 60, type: WidthType.PERCENTAGE }
+            })
+          ]
+        });
+      };
+
+      // Detaylı hesaplama tablosu
+      const calculationRows = [];
+      
+      if (selectedCompany.type !== 'direk' && selectedCompany.totalKVA >= 400) {
+        calculationRows.push(createTableRow('İlk 400 kVA (Sabit)', formatCurrency(params.baseFee)));
+        
+        if (selectedCompany.totalKVA > 400 && selectedCompany.totalKVA <= 5000) {
+          calculationRows.push(createTableRow(
+            `401 - ${selectedCompany.totalKVA} kVA Arası`, 
+            formatCurrency((selectedCompany.totalKVA - 400) * params.rate1)
+          ));
+        } else if (selectedCompany.totalKVA > 5000) {
+          calculationRows.push(createTableRow('401 - 5000 kVA Arası', formatCurrency(4600 * params.rate1)));
+          calculationRows.push(createTableRow('5000 kVA Üzeri', formatCurrency((selectedCompany.totalKVA - 5000) * params.rate2)));
+        }
+      } else {
+        const poleType = selectedCompany.totalKVA <= 50 ? '0-50 kVA' : 
+                        selectedCompany.totalKVA <= 160 ? '51-160 kVA' : '161-400 kVA';
+        calculationRows.push(createTableRow(poleType + ' Sabit Bedel', formatCurrency(selectedCompany.nominalFee / selectedCompany.regionCoeff)));
+      }
+
+      if (selectedCompany.regionCoeff !== 1) {
+        calculationRows.push(createTableRow(
+          `Bölgesel Katsayı (x${selectedCompany.regionCoeff.toFixed(2)})`,
+          formatCurrency(selectedCompany.nominalFee - (selectedCompany.nominalFee / selectedCompany.regionCoeff))
+        ));
+      }
+
+      // Word belgesi oluştur
       const doc = new Document({
         sections: [{
-          properties: {},
+          properties: {
+            page: {
+              margin: {
+                top: 1440, // 1 inch = 1440 twips
+                right: 1440,
+                bottom: 1440,
+                left: 1440
+              }
+            }
+          },
           children: [
+            // Başlık
             new Paragraph({
               text: "FİYAT TEKLİFİ",
               heading: HeadingLevel.HEADING_1,
               alignment: AlignmentType.CENTER,
-              spacing: { after: 200 }
+              spacing: { after: 300 }
             }),
             new Paragraph({
-              text: `Ref: ${params.year}-YG-${selectedCompany.id ? selectedCompany.id.toString().padStart(3, '0') : 'MANUEL'}`,
+              text: `Ref: ${selectedCompany.refNo}`,
               alignment: AlignmentType.RIGHT,
               spacing: { after: 100 }
             }),
             new Paragraph({
               text: new Date().toLocaleDateString('tr-TR'),
               alignment: AlignmentType.RIGHT,
-              spacing: { after: 400 }
+              spacing: { after: 300 }
             }),
+            
+            // Giriş
             new Paragraph({
               children: [
                 new TextRun({
@@ -284,16 +413,18 @@ const App = () => {
               spacing: { after: 200 }
             }),
             new Paragraph({
-              text: `Tesisinize yönelik YG İşletme Sorumluluğu hizmeti fiyat teklifi, talep ettiğiniz trafo kurulu gücü ve TMMOB Elektrik Mühendisleri Odası'nın (EMO) ${params.year} yılı Ücret Tanımları (KISIM III) esas alınarak, rekabetçi piyasa koşulları doğrultusunda önceki tekliflerimizde uyguladığımız indirim oranıyla aşağıda sunulmuştur.`,
+              text: `Tesisinize yönelik YG İşletme Sorumluluğu hizmeti fiyat teklifi, talep ettiğiniz trafo kurulu gücü ve TMMOB Elektrik Mühendisleri Odası'nın (EMO) ${params.year} yılı Ücret Tanımları (KISIM III) esas alınarak, rekabetçi piyasa koşulları doğrultusunda aşağıda sunulmuştur.`,
               spacing: { after: 400 }
             }),
+            
+            // 1. Bölüm: Tesis Bilgileri
             new Paragraph({
               text: "1. Tesis Bilgileri ve Toplam Kurulu Güç",
               heading: HeadingLevel.HEADING_2,
               spacing: { before: 200, after: 200 }
             }),
             new Paragraph({
-              text: `• Trafo Güçleri: ${selectedCompany.powerStr} kVA`,
+              text: `• Trafo Güçleri Dağılımı: ${selectedCompany.powerStr} kVA`,
               spacing: { after: 100 }
             }),
             new Paragraph({
@@ -305,18 +436,56 @@ const App = () => {
               spacing: { after: 100 }
             }),
             new Paragraph({
+              text: `• Bölge/Katsayı: ${selectedCompany.region || 'Belirtilmemiş'} (x${selectedCompany.regionCoeff.toFixed(2)})`,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
               text: `• Sektör: ${selectedCompany.sector}`,
               spacing: { after: 400 }
             }),
+            
+            // 2. Bölüm: Hesaplama
             new Paragraph({
-              text: `2. EMO ${params.year} Yılı Nominal Ücret`,
+              text: `2. EMO ${params.year} Yılı Aylık Asgari Ücret Hesaplaması`,
               heading: HeadingLevel.HEADING_2,
               spacing: { before: 200, after: 200 }
             }),
-            new Paragraph({
-              text: `EMO ${params.year} Nominal Tarife (KDV Hariç): ${formatCurrency(selectedCompany.nominalFee)}`,
-              spacing: { after: 400 }
+            
+            // Hesaplama Tablosu
+            new Table({
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({ text: "Kapasite Aralığı", bold: true })],
+                      shading: { fill: "bbdefb" }
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: "Tutar (TL)", bold: true })],
+                      shading: { fill: "bbdefb" }
+                    })
+                  ]
+                }),
+                ...calculationRows,
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({ text: `EMO ${params.year} TOPLAM NOMİNAL TARİFE`, bold: true })],
+                      shading: { fill: "c8f0c8" }
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: formatCurrency(selectedCompany.nominalFee), bold: true })],
+                      shading: { fill: "c8f0c8" }
+                    })
+                  ]
+                })
+              ],
+              width: { size: 100, type: WidthType.PERCENTAGE }
             }),
+            
+            new Paragraph({ text: "", spacing: { after: 400 } }),
+            
+            // 3. Bölüm: İskonto ve Teklif
             new Paragraph({
               text: "3. Uygulanan İskonto ve Nihai Teklif",
               heading: HeadingLevel.HEADING_2,
@@ -324,25 +493,77 @@ const App = () => {
             }),
             new Paragraph({
               text: `Piyasa koşullarına uyum sağlamak amacıyla, işletmenize özel %${selectedCompany.appliedDiscountRate || params.discountRate} iskonto uygulanmıştır.`,
-              spacing: { after: 200 }
+              spacing: { after: 300 }
             }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `AYLIK TEKLİF FİYATI: ${formatCurrency(selectedCompany.offerPrice)} + KDV`,
-                  bold: true,
-                  size: 32
+            
+            // Nihai Teklif Tablosu
+            new Table({
+              rows: [
+                createTableRow('EMO Nominal Tarife:', formatCurrency(selectedCompany.nominalFee)),
+                createTableRow(`İskonto Tutarı (%${selectedCompany.appliedDiscountRate || params.discountRate}):`, `- ${formatCurrency(selectedCompany.discountAmount)}`),
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({ text: "AYLIK TEKLİF FİYATI:", bold: true })],
+                      shading: { fill: "c8e6c9" }
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ text: `${formatCurrency(selectedCompany.offerPrice)} + KDV`, bold: true, color: "1b5e20" })]
+                      })],
+                      shading: { fill: "c8e6c9" }
+                    })
+                  ]
                 })
               ],
-              spacing: { before: 200, after: 400 }
+              width: { size: 100, type: WidthType.PERCENTAGE }
+            }),
+            
+            new Paragraph({ text: "", spacing: { after: 400 } }),
+            
+            // Açıklamalar
+            new Paragraph({
+              text: "Açıklamalar:",
+              bold: true,
+              spacing: { before: 400, after: 200 }
             }),
             new Paragraph({
+              text: `1. Bu teklif ${params.year} yılı boyunca geçerli olmak üzere aylık periyotlarla hazırlanmıştır.`,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "2. İşletme sorumluluğu hizmetinin SMM tarafından üstlenilmesi halinde YG tesisi en az ayda bir kez denetlenmelidir.",
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "3. Enerji tüketiminin izlenmesi ve kompanzasyon tesisinin sağlıklı çalışıp çalışmadığının denetlenmesi bu hizmetin SORUMLULUK KAPSAMINDADIR.",
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "4. EMO tarafından hazırlanan Elektrik Yüksek Gerilim Tesisleri İşletme Sorumluluğu Yönetmeliği bu sözleşmenin ayrılmaz bir parçasıdır.",
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "5. İşveren olarak sizin yükümlülüğünüz, İşletme Sorumlusunun görevlerini yerine getirebilmesi için gerekli imalatları/hizmetleri sağlamak, talep edilen güvenlik malzemelerini almak ve uyarılarına riayet etmektir.",
+              spacing: { after: 400 }
+            }),
+            
+            // Footer
+            new Paragraph({
               text: "Saygılarımızla,",
-              spacing: { before: 400, after: 100 }
+              spacing: { before: 600, after: 100 }
             }),
             new Paragraph({
               text: "KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.",
-              bold: true
+              bold: true,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa - İzmir",
+              spacing: { after: 50 }
+            }),
+            new Paragraph({
+              text: "T: +90 535 714 52 88 | W: www.kobinerji.com"
             })
           ]
         }]
@@ -363,12 +584,13 @@ const App = () => {
   const handleManualSubmit = (e) => {
     e.preventDefault();
     const manualCompany = {
-        id: '', // Manuel için boş bırakabiliriz
+        id: 'MANUEL', 
         name: manualForm.name,
         sector: manualForm.sector,
         powerStr: manualForm.powerStr,
         contactName: manualForm.contactName,
         type: manualForm.type,
+        region: manualForm.region, // Bölge adı
         regionCoeff: manualForm.regionCoeff, // Manuel formdan gelen özel katsayı
         discountRate: manualForm.customDiscount // Manuel formdan gelen özel iskonto
     };
@@ -388,142 +610,325 @@ const App = () => {
     }
   };
 
-  // --- Gemini API Call Function ---
-  const callGeminiApi = async (prompt, maxRetries = 5) => {
-    setLlmLoading(true);
-    setLlmOutput(null);
-
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-    const systemInstruction = {
-        parts: [{ 
-            text: "Sen, Yüksek Gerilim İşletme Sorumluluğu teklifleri hazırlayan bir enerji firmasının deneyimli Satış ve Pazarlama Yöneticisisin. Cevaplarını her zaman Türkçe, profesyonel, özgüvenli ve ikna edici bir dille, Markdown formatında (Başlıklar, kalınlaştırmalar, listeler kullanarak) ve kısa tutarak oluştur. Kesinlikle EMO rakamlarını veya TL cinsinden fiyatları metin içinde tekrar etme. Fiyatların rekabetçi olduğunu vurgula. Cevap, sadece talep edilen analiz veya metin olmalıdır, başka bir konuşma veya açıklama içermemelidir." 
-        }]
-    };
-
-    const payload = {
-      contents: [{ parts: [{ text: prompt }] }],
-      systemInstruction: systemInstruction,
-      config: {
-        temperature: 0.7
+  // --- Logo Upload Handler ---
+  const handleLogoUpload = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setLogo(reader.result);
+          };
+          reader.readAsDataURL(file);
       }
-    };
+  };
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+  // --- Gemini API Handler ---
+  const handleGeminiCall = async (type) => {
+    if (!selectedCompany) return;
+    
+    setAiLoading(true);
+    setAiError(null);
+    setAiActiveFeature(type);
+    setAiOutput("");
+
+    const systemPrompt = "Sen Kobinerji Mühendislik şirketinin deneyimli bir satış mühendisisin. Dilin Türkçe, kurumsal, nazik ve profesyonel olmalı.";
+    let userPrompt = "";
+
+    if (type === 'email') {
+        userPrompt = `
+          Aşağıdaki bilgilerle müşteriye gönderilmek üzere bir e-posta taslağı hazırla.
+          Müşteri Firma: ${selectedCompany.name}
+          Yetkili Kişi: ${selectedCompany.contactName || 'İlgili Yetkili'}
+          Hizmet: Yüksek Gerilim İşletme Sorumluluğu
+          Toplam Güç: ${selectedCompany.totalKVA} kVA
+          Teklif Tutarı: ${formatCurrency(selectedCompany.offerPrice)} + KDV (Aylık)
+          
+          E-posta, teklifin ekte sunulduğunu belirtmeli, Kobinerji'nin uzmanlığına vurgu yapmalı ve işbirliği temennisiyle bitmeli. Konu satırı da ekle.
+        `;
+    } else if (type === 'tips') {
+        userPrompt = `
+          ${selectedCompany.sector} sektöründe faaliyet gösteren ve ${selectedCompany.totalKVA} kVA trafo gücüne sahip bir işletme için;
+          Yüksek Gerilim işletme güvenliği, enerji verimliliği ve bakım konularında 3 adet kısa, çarpıcı ve teknik tavsiye maddesi yaz.
+          Bu tavsiyeler müşteriye katma değer sağladığımızı hissettirmeli.
+        `;
+    }
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            })
         });
 
-        if (response.status === 429 && attempt < maxRetries - 1) {
-          const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
+        if (!response.ok) throw new Error('API Hatası');
 
-        if (!response.ok) {
-          throw new Error(`API error: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Gemini'den yanıt alınamadı.";
-        setLlmLoading(false);
-        return text;
-
-      } catch (error) {
-        console.error(`Gemini API çağrısı başarısız oldu (Deneme ${attempt + 1}):`, error);
-        if (attempt === maxRetries - 1) {
-          setLlmLoading(false);
-          return "API çağrısında kritik bir hata oluştu. Lütfen daha sonra tekrar deneyin.";
-        }
-        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "İçerik oluşturulamadı.";
+        setAiOutput(text);
+    } catch (error) {
+        console.error("AI Error:", error);
+        setAiError("Bağlantı hatası oluştu. Lütfen tekrar deneyin.");
+    } finally {
+        setAiLoading(false);
     }
   };
 
-  const handleGenerateSummary = async (company) => {
-    setLlmFeature('summary');
-    const prompt = `
-      "${company.name}" (Yetkili: ${company.contactName || 'Belirtilmemiş'}) için YG İşletme Sorumluluğu hizmeti teklifi hazırladım.
-      Tesisin Sektörü: ${company.sector}.
-      Toplam Kurulu Güç: ${company.totalKVA} kVA.
-      Tesis Tipi: ${company.type === 'direk' ? 'Direk Tipi' : 'Bina Tipi'}.
-      EMO Nominal Ücret: ${company.nominalFee} TL.
-      Uygulanan İskonto Oranı: %${company.appliedDiscountRate || params.discountRate}.
-      Nihai Teklif Fiyatı (Aylık): ${company.offerPrice} TL (KDV hariç).
-
-      Bu bilgileri kullanarak, teklifi sunmak üzere profesyonel ve kısa bir e-posta gövdesi (sadece içerik, hitap ve imza hariç) oluştur. Metinde, teklifin uygun maliyetli olduğunu ve işletme sürekliliği için ne kadar önemli olduğunu vurgula.
-    `;
-    const result = await callGeminiApi(prompt);
-    setLlmOutput(result);
+  const copyToClipboard = () => {
+      if (aiOutput) {
+          navigator.clipboard.writeText(aiOutput);
+          alert("Metin kopyalandı!");
+      }
   };
 
-  const handleGenerateAnalysis = async (company) => {
-    setLlmFeature('analysis');
-    const prompt = `
-      "${company.name}" için YG İşletme Sorumluluğu hizmeti teklifi hazırladım.
-      Tesisin Sektörü: ${company.sector}.
-      Toplam Kurulu Güç: ${company.totalKVA} kVA.
-      EMO Nominal Ücret: ${company.nominalFee} TL.
-      Nihai Teklif Fiyatı (Aylık): ${company.offerPrice} TL (KDV hariç).
+  // --- Excel Export Handler ---
+  const handleExcelExport = () => {
+    if (!selectedCompany) return;
+    
+    const workbook = XLSX.utils.book_new();
+    
+    // Teklif Bilgileri Sayfası
+    const proposalData = [
+      ['YÜKSEKKGERİLİM İŞLETME SORUMLULUĞU TEKLİFİ'],
+      [],
+      ['Referans No:', selectedCompany.refNo],
+      ['Tarih:', new Date().toLocaleDateString('tr-TR')],
+      [],
+      ['FİRMA BİLGİLERİ'],
+      ['Firma Unvanı:', selectedCompany.name],
+      ['Yetkili:', selectedCompany.contactName],
+      ['Sektör:', selectedCompany.sector],
+      ['Tesis Tipi:', selectedCompany.type === 'direk' ? 'Direk Tipi' : 'Bina Tipi'],
+      ['Bölge:', selectedCompany.region || 'Belirtilmemiş'],
+      ['Bölge Katsayısı:', selectedCompany.regionCoeff],
+      [],
+      ['GÜÇ BİLGİLERİ'],
+      ['Trafo Güçleri:', selectedCompany.powerStr + ' kVA'],
+      ['Toplam Kurulu Güç:', selectedCompany.totalKVA + ' kVA'],
+      ['Toplam Kurulu Güç (MVA):', (selectedCompany.totalKVA / 1000).toFixed(2)],
+      [],
+      ['MALİ BİLGİLER'],
+      ['EMO Nominal Ücret:', formatCurrency(selectedCompany.nominalFee)],
+      ['İskonto Oranı:', '%' + (selectedCompany.appliedDiscountRate || params.discountRate)],
+      ['İskonto Tutarı:', formatCurrency(selectedCompany.discountAmount)],
+      ['AYLIK TEKLİF FİYATI:', formatCurrency(selectedCompany.offerPrice) + ' + KDV'],
+      [],
+      ['KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.'],
+      ['Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa - İzmir'],
+      ['T: +90 535 714 52 88 | W: www.kobinerji.com']
+    ];
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(proposalData);
+    
+    // Sütun genişlikleri
+    worksheet['!cols'] = [
+      { wch: 25 },
+      { wch: 50 }
+    ];
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Teklif');
+    
+    // Dosya adı
+    const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.xlsx`;
+    
+    XLSX.writeFile(workbook, fileName);
+  };
 
-      Bu tesis için, sektör ve kurulu güce göre piyasa fiyat ortalamalarına ve diğer firmaların rekabet düzeyine dair bir "Rekabetçi Konumlandırma Analizi" metni oluştur. Bu metin, teklifimizin rekabetçiliğini ve firmanın kritik enerji altyapı ihtiyaçlarına nasıl yanıt verdiğini vurgulamalıdır. Sektördeki olası fiyat dalgalanmalarına karşı güvencemizi belirt.
-    `;
-    const result = await callGeminiApi(prompt);
-    setLlmOutput(result);
+  // --- Email Gönderme Handler ---
+  const handleSendEmail = async () => {
+    if (!selectedCompany) {
+      alert('Lütfen önce bir teklif oluşturun.');
+      return;
+    }
+    
+    const recipientEmail = prompt('Alıcı e-posta adresini girin:');
+    if (!recipientEmail) return;
+    
+    try {
+      // EmailJS yapılandırması - Kullanıcının kendi hesabını oluşturması gerekir
+      const serviceID = 'service_xxxxxxx'; // EmailJS Service ID
+      const templateID = 'template_xxxxxxx'; // EmailJS Template ID
+      const userID = 'user_xxxxxxxxxx'; // EmailJS User ID
+      
+      const templateParams = {
+        to_email: recipientEmail,
+        company_name: selectedCompany.name,
+        contact_name: selectedCompany.contactName,
+        ref_no: selectedCompany.refNo,
+        total_power: selectedCompany.totalKVA,
+        offer_price: formatCurrency(selectedCompany.offerPrice),
+        date: new Date().toLocaleDateString('tr-TR')
+      };
+      
+      await emailjs.send(serviceID, templateID, templateParams, userID);
+      alert('E-posta başarıyla gönderildi!');
+    } catch (error) {
+      console.error('Email Error:', error);
+      alert('E-posta gönderilemedi. Lütfen EmailJS yapılandırmasını kontrol edin.');
+    }
+  };
+
+  // --- Editor Toggle Handler ---
+  const toggleEditorMode = () => {
+    if (!editorMode && selectedCompany) {
+      // Editor moduna geçerken mevcut içeriği al
+      const element = document.getElementById('printable-paper');
+      if (element) {
+        setEditableContent(element.innerHTML);
+      }
+    }
+    setEditorMode(!editorMode);
+  };
+
+  // --- Gelişmiş PDF Export ---
+  const handleAdvancedPDFExport = () => {
+    if (!selectedCompany) return;
+    
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    
+    // Başlık
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FİYAT TEKLİFİ', pageWidth / 2, margin, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Ref: ${selectedCompany.refNo}`, pageWidth - margin, margin + 10, { align: 'right' });
+    doc.text(new Date().toLocaleDateString('tr-TR'), pageWidth - margin, margin + 15, { align: 'right' });
+    
+    // Firma Bilgileri
+    let yPos = margin + 30;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Sayın ${selectedCompany.contactName || ''} - ${selectedCompany.name} Yetkilisi,`, margin, yPos);
+    
+    yPos += 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const introText = `Tesisinize yönelik YG İşletme Sorumluluğu hizmeti fiyat teklifi, EMO ${params.year} yılı Ücret Tanımları esas alınarak sunulmuştur.`;
+    const splitText = doc.splitTextToSize(introText, pageWidth - 2 * margin);
+    doc.text(splitText, margin, yPos);
+    
+    yPos += splitText.length * 5 + 10;
+    
+    // Tablo
+    doc.autoTable({
+      startY: yPos,
+      head: [['Özellik', 'Değer']],
+      body: [
+        ['Toplam Kurulu Güç', `${selectedCompany.totalKVA} kVA`],
+        ['Tesis Tipi', selectedCompany.type === 'direk' ? 'Direk Tipi' : 'Bina Tipi'],
+        ['Bölge', selectedCompany.region || 'Belirtilmemiş'],
+        ['Sektör', selectedCompany.sector],
+        ['EMO Nominal Ücret', formatCurrency(selectedCompany.nominalFee)],
+        ['İskonto Oranı', `%${selectedCompany.appliedDiscountRate || params.discountRate}`],
+        ['İskonto Tutarı', formatCurrency(selectedCompany.discountAmount)],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [30, 58, 138] }
+    });
+    
+    // Nihai Teklif
+    yPos = doc.lastAutoTable.finalY + 15;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AYLIK TEKLİF FİYATI:', margin, yPos);
+    doc.text(`${formatCurrency(selectedCompany.offerPrice)} + KDV`, pageWidth - margin, yPos, { align: 'right' });
+    
+    // Footer
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('KOBİNERJİ Mühendislik ve Enerji Verimliliği Danışmanlık A.Ş.', pageWidth / 2, pageHeight - 15, { align: 'center' });
+    doc.text('T: +90 535 714 52 88 | W: www.kobinerji.com', pageWidth / 2, pageHeight - 10, { align: 'center' });
+    
+    // Kaydet
+    const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
+    doc.save(fileName);
   };
 
   // --- UI Components ---
-  const LLMOutputDisplay = ({ output, loading, feature, onRegenerate }) => {
-    if (!feature) return null;
-
-    const titleMap = {
-      summary: "✨ Teklif Sunum Özeti (E-posta İçin)",
-      analysis: "✨ Rekabetçi Konumlandırma Analizi"
-    };
-
-    return (
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-        <h3 className="font-bold text-lg mb-4 flex items-center justify-between text-blue-900">
-          {titleMap[feature]}
-          <button 
-            onClick={onRegenerate}
-            className="text-xs text-gray-500 hover:text-blue-600 flex items-center transition"
-            disabled={loading}
-            title="Tekrar Oluştur"
-          >
-             <RefreshCw className={`w-3 h-3 mr-1 ${loading ? 'animate-spin' : ''}`} />
-             Yenile
-          </button>
-        </h3>
-
-        {loading ? (
-          <div className="text-center py-8 text-blue-500 flex flex-col items-center">
-            <svg className="animate-spin h-5 w-5 text-blue-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p>Gemini analiz ediyor ve metni oluşturuyor...</p>
-          </div>
-        ) : (
-          <div className="prose max-w-none text-gray-700 leading-normal">
-            <pre className="whitespace-pre-wrap font-sans bg-gray-50 p-4 rounded-lg border text-sm">
-                {output}
-            </pre>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 font-sans">
+      <style>{`
+        @media print {
+          @page { 
+            margin: 0; 
+            size: A4 portrait; 
+          }
+          body * { 
+            visibility: hidden; 
+          }
+          #printable-paper, #printable-paper * { 
+            visibility: visible; 
+          }
+          * {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          #printable-paper {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background: white;
+            z-index: 9999;
+          }
+          #printable-paper > div {
+            box-shadow: none !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+          }
+          .page-break { 
+            page-break-before: always !important;
+            page-break-after: always !important;
+            margin: 0 !important;
+          }
+          .no-print, .no-print-border { 
+            display: none !important; 
+            border: none !important;
+          }
+        }
+        
+        /* PDF Export specific styles */
+        .pdf-page {
+          page-break-after: always;
+          page-break-inside: avoid;
+        }
+
+        /* PDF export quality tweaks (html2pdf) */
+        .pdf-exporting {
+          background: #ffffff !important;
+        }
+        .pdf-exporting#printable-paper {
+          width: 210mm !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+        }
+        .pdf-exporting .pdf-page {
+          box-shadow: none !important;
+          margin: 0 auto !important;
+          width: 210mm !important;
+          min-height: 297mm !important;
+          background: #ffffff !important;
+        }
+        .pdf-exporting .no-print,
+        .pdf-exporting .print-hide {
+          display: none !important;
+        }
+      `}</style>
       
       {/* Header */}
-      <header className="bg-blue-900 text-white shadow-lg">
+      <header className="bg-blue-900 text-white shadow-lg no-print">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <Calculator className="h-8 w-8 text-yellow-400" />
@@ -532,13 +937,19 @@ const App = () => {
               <p className="text-xs text-blue-200">Teklif Hazırlama Otomasyonu v2026</p>
             </div>
           </div>
-          <button 
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className="flex items-center space-x-2 bg-blue-800 hover:bg-blue-700 px-4 py-2 rounded-lg transition"
-          >
-            <Settings className="h-4 w-4" />
-            <span>Parametreler</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <div className="px-3 py-1 bg-blue-800 rounded-full text-xs text-blue-200 flex items-center">
+                <Sparkles className="w-3 h-3 mr-1 text-yellow-400"/>
+                Gemini AI Destekli
+            </div>
+            <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="flex items-center space-x-2 bg-blue-800 hover:bg-blue-700 px-4 py-2 rounded-lg transition"
+            >
+              <Settings className="h-4 w-4" />
+              <span>Parametreler</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -640,7 +1051,7 @@ const App = () => {
       <div className="container mx-auto px-6 py-8">
         
         {/* Tabs */}
-        <div className="flex space-x-2 bg-gray-200 p-1 rounded-xl w-fit mb-6">
+        <div className="flex space-x-2 bg-gray-200 p-1 rounded-xl w-fit mb-6 no-print">
           <button 
             onClick={() => setActiveTab('manual')}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'manual' ? 'bg-white shadow text-blue-700' : 'text-gray-600 hover:text-gray-900'}`}
@@ -804,57 +1215,121 @@ const App = () => {
         {activeTab === 'proposal' && selectedCompany && (
           <div className="flex gap-6 flex-col lg:flex-row">
             
-            {/* LLM Output Panel - Left Side */}
-            <div className="lg:w-1/3 space-y-4 print-hide">
+            {/* Sidebar (No Print) */}
+            <div className="lg:w-1/3 space-y-4 no-print">
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center">
                   <Lightbulb className="h-5 w-5 mr-2 text-yellow-500" />
-                  Gemini Destekli Teklif Araçları
+                  Gemini AI Asistanı
                 </h3>
-                
-                {/* PDF İndir Butonu */}
-                <button 
-                  onClick={handleDownloadPDF}
-                  className="w-full flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg mb-3 transition"
-                >
-                  <Download className="h-5 w-5" />
-                  <span>📄 PDF İndir</span>
-                </button>
 
-                {/* Word İndir Butonu */}
                 <button 
-                  onClick={handleDownloadWord}
-                  className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg mb-3 transition"
-                >
-                  <FileText className="h-5 w-5" />
-                  <span>📝 Word İndir</span>
-                </button>
-
-                {/* Teklif Özeti Oluşturucu */}
-                <button 
-                  onClick={() => handleGenerateSummary(selectedCompany)}
-                  disabled={llmLoading && llmFeature === 'summary'}
-                  className="w-full flex items-center justify-center space-x-2 bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg mb-3 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  onClick={() => handleGeminiCall('email')}
+                  disabled={aiLoading}
+                  className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-3 rounded-lg mb-3 transition shadow disabled:opacity-50"
                 >
                   <Mail className="h-5 w-5" />
-                  <span>✨ Teklif Özeti Oluştur</span>
+                  <span>✨ Teklif Sunum E-postası Yaz</span>
                 </button>
 
-                {/* Rekabetçi Analiz */}
                 <button 
-                  onClick={() => handleGenerateAnalysis(selectedCompany)}
-                  disabled={llmLoading && llmFeature === 'analysis'}
-                  className="w-full flex items-center justify-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg mb-3 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  onClick={() => handleGeminiCall('tips')}
+                  disabled={aiLoading}
+                  className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white py-3 rounded-lg mb-3 transition shadow disabled:opacity-50"
                 >
                   <TrendingDown className="h-5 w-5" />
-                  <span>✨ Rakip Analizi Ekle</span>
+                  <span>✨ Sektörel Enerji İpuçları</span>
                 </button>
+
+                {aiLoading && (
+                    <div className="text-center py-4 text-gray-500 text-sm animate-pulse">
+                        Gemini düşünüyor...
+                    </div>
+                )}
+
+                {aiOutput && (
+                    <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4 relative group">
+                        <button 
+                            onClick={copyToClipboard}
+                            className="absolute top-2 right-2 p-1 bg-white border rounded hover:bg-gray-100 text-gray-500 transition"
+                            title="Kopyala"
+                        >
+                            <Copy className="h-4 w-4" />
+                        </button>
+                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">
+                            {aiActiveFeature === 'email' ? 'E-posta Taslağı' : 'Sektörel Tavsiyeler'}
+                        </h4>
+                        <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans leading-relaxed">
+                            {aiOutput}
+                        </pre>
+                    </div>
+                )}
                 
+                {/* Export & Actions */}
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200 mt-4">
+                    <h3 className="font-bold text-gray-900 mb-3 flex items-center">
+                      <Download className="w-4 h-4 mr-2"/>
+                      Export & İşlemler
+                    </h3>
+                    
+                    {/* Editor Mode Toggle */}
+                    <button 
+                      onClick={toggleEditorMode}
+                      className="w-full flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      <span>{editorMode ? '📝 Düzenleme Modundan Çık' : '✏️ Düzenleme Modu'}</span>
+                    </button>
+                    
+                    {/* PDF Export */}
+                    <button 
+                      onClick={handleDownloadPDF}
+                      className="w-full flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <FileText className="h-4 w-4" />
+                      <span>📄 PDF İndir</span>
+                    </button>
+
+                    {/* Word Export */}
+                    <button 
+                      onClick={handleDownloadWord}
+                      className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <FileText className="h-4 w-4" />
+                      <span>📝 Word İndir</span>
+                    </button>
+
+                    {/* Excel Export */}
+                    <button 
+                      onClick={handleExcelExport}
+                      className="w-full flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <FileSpreadsheet className="h-4 w-4" />
+                      <span>📊 Excel İndir</span>
+                    </button>
+
+                    {/* Email Send */}
+                    <button 
+                      onClick={handleSendEmail}
+                      className="w-full flex items-center justify-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <Mail className="h-4 w-4" />
+                      <span>📧 E-posta Gönder</span>
+                    </button>
+
+                    {/* Print */}
+                    <button 
+                      onClick={handlePrint}
+                      className="w-full flex items-center justify-center space-x-2 bg-gray-700 hover:bg-gray-800 text-white py-2.5 rounded-lg transition"
+                    >
+                      <Printer className="h-4 w-4" />
+                      <span>🖨️ Yazdır</span>
+                    </button>
+                </div>
+
                 {/* Hızlı Düzenleme */}
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
                     <h3 className="font-bold text-blue-900 mb-2">Hızlı Düzenleme</h3>
-                    <p className="text-xs text-blue-600 mb-4">Bu firma için teklifi revize edin.</p>
-                    
                     <div className="mb-3">
                     <label className="text-xs font-bold text-blue-800 uppercase">Özel İskonto (%)</label>
                     <input 
@@ -866,69 +1341,170 @@ const App = () => {
                     </div>
                 </div>
               </div>
-
-              {/* LLM Output Display */}
-              <LLMOutputDisplay 
-                output={llmOutput} 
-                loading={llmLoading} 
-                feature={llmFeature}
-                onRegenerate={() => {
-                    if(llmFeature === 'summary') handleGenerateSummary(selectedCompany);
-                    if(llmFeature === 'analysis') handleGenerateAnalysis(selectedCompany);
-                }}
-              />
             </div>
             
 
             {/* Proposal Preview (A4 Paper Style) - Right Side */}
-            <div className="lg:w-2/3 bg-gray-200 p-8 rounded-xl overflow-auto lg:h-[calc(100vh-200px)] flex-grow print:bg-white print:p-0">
+            <div className="lg:w-2/3 bg-gray-200 p-8 rounded-xl overflow-auto lg:h-[calc(100vh-200px)] flex-grow flex justify-center">
               
-              {/* A4 Paper Structure */}
-              <div ref={proposalRef} className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[20mm] shadow-2xl relative text-[11pt] leading-relaxed text-gray-800 flex flex-col justify-between print-container print:shadow-none print:max-w-full">
-                <div>
-                    {/* Header */}
-                    <div className="flex justify-between items-start mb-8 border-b-2 border-gray-800 pb-4">
-                        {/* Top Left Logo */}
-                        <div className="w-1/3">
-                            <img src="/logo.png" alt="KOBİNERJİ LOGO" className="h-16 object-contain" />
-                        </div>
-                        <div className="text-right">
-                            <h1 className="text-xl font-bold text-blue-900 uppercase">FİYAT TEKLİFİ</h1>
-                            <p className="text-sm text-gray-500 mt-1">Ref: {params.year}-YG-{selectedCompany.id ? selectedCompany.id.toString().padStart(3, '0') : 'MANUEL'}</p>
-                            <p className="font-bold text-gray-800">{new Date().toLocaleDateString('tr-TR')}</p>
-                        </div>
+              {/* Editor Mode Banner */}
+              {editorMode && (
+                <div className="mb-4 space-y-2">
+                  <div className="bg-indigo-600 text-white px-4 py-3 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Edit3 className="w-5 h-5 mr-2"/>
+                      <span className="font-semibold">Düzenleme Modu Aktif - Metinleri doğrudan düzenleyebilirsiniz</span>
                     </div>
+                    <button 
+                      onClick={toggleEditorMode}
+                      className="bg-white text-indigo-600 px-4 py-1 rounded hover:bg-indigo-50 transition"
+                    >
+                      Kaydet ve Çık
+                    </button>
+                  </div>
+                  
+                  {/* Formatting Toolbar */}
+                  <div className="bg-white border border-gray-300 rounded-lg p-3 flex flex-wrap items-center gap-2">
+                    <button 
+                      onClick={() => document.execCommand('bold')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Kalın"
+                    >
+                      <Bold className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('italic')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="İtalik"
+                    >
+                      <Italic className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('underline')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Altı Çizili"
+                    >
+                      <Type className="w-4 h-4"/>
+                    </button>
+                    <div className="w-px h-6 bg-gray-300"></div>
+                    <select 
+                      onChange={(e) => document.execCommand('fontSize', false, e.target.value)}
+                      className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="">Yazı Boyutu</option>
+                      <option value="1">Çok Küçük</option>
+                      <option value="2">Küçük</option>
+                      <option value="3">Normal</option>
+                      <option value="4">Büyük</option>
+                      <option value="5">Çok Büyük</option>
+                      <option value="6">Dev</option>
+                    </select>
+                    <select 
+                      onChange={(e) => document.execCommand('foreColor', false, e.target.value)}
+                      className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="">Renk</option>
+                      <option value="#000000">Siyah</option>
+                      <option value="#1E3A8A">Mavi</option>
+                      <option value="#DC2626">Kırmızı</option>
+                      <option value="#059669">Yeşil</option>
+                      <option value="#D97706">Turuncu</option>
+                    </select>
+                    <div className="w-px h-6 bg-gray-300"></div>
+                    <button 
+                      onClick={() => document.execCommand('justifyLeft')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Sola Hizala"
+                    >
+                      <AlignLeft className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('justifyCenter')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Ortala"
+                    >
+                      <AlignCenter className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('justifyRight')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Sağa Hizala"
+                    >
+                      <AlignRight className="w-4 h-4"/>
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* A4 Paper Structure (Yazdırılacak Alan) */}
+              <div 
+                id="printable-paper"
+                contentEditable={editorMode}
+                suppressContentEditableWarning={true}
+                className={editorMode ? 'outline-2 outline-dashed outline-indigo-400' : ''}
+                style={editorMode ? { minHeight: '297mm' } : {}}
+              >
+                  
+                  {/* SAYFA 1 */}
+                  <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 pdf-page" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
+                    <div>
+                        {/* Header */}
+                        <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
+                            {/* Top Left Logo */}
+                            <div className="w-1/3 flex items-center h-16">
+                                {logo ? (
+                                    <img src={logo} alt="Firma Logosu" className="h-16 object-contain" />
+                                ) : (
+                                    <div className="w-full h-full">
+                                        {/* Logo Upload Area - Only visible when not printing */}
+                                        <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50 transition no-print">
+                                            <div className="text-center text-gray-400 text-xs flex flex-col items-center">
+                                                <UploadCloud className="w-6 h-6 mb-1"/>
+                                                <span>Logo Yükle</span>
+                                            </div>
+                                            <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                                        </label>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="text-right">
+                                <h1 className="text-lg font-bold text-gray-800 tracking-wide uppercase">FİYAT TEKLİFİ</h1>
+                                <p className="text-[9pt] text-gray-500 mt-2">Referans No: {selectedCompany.refNo}</p>
+                                <p className="text-[9pt] text-gray-600 mt-0.5">{new Date().toLocaleDateString('tr-TR', {day: '2-digit', month: 'long', year: 'numeric'})}</p>
+                            </div>
+                        </div>
 
-                    {/* Body Content */}
-                    <p className="mb-4">
-                      <strong>Sayın {selectedCompany.contactName ? `${selectedCompany.contactName} - ` : ''}{selectedCompany.name} Yetkilisi,</strong>
-                    </p>
-                    <p className="mb-4 text-justify">
+                        {/* Body Content */}
+                        <p className="mb-4 text-[9.5pt] leading-tight">
+                          <strong>Sayın {selectedCompany.contactName ? `${selectedCompany.contactName} - ` : ''}{selectedCompany.name} Yetkilisi,</strong>
+                        </p>
+                    <p className="mb-4 text-justify text-[9.5pt] leading-tight">
                       Tesisinize yönelik <strong>YG İşletme Sorumluluğu</strong> hizmeti fiyat teklifi, talep ettiğiniz trafo kurulu gücü ve 
                       TMMOB Elektrik Mühendisleri Odası'nın (EMO) {params.year} yılı Ücret Tanımları (KISIM III) esas alınarak, 
                       rekabetçi piyasa koşulları doğrultusunda önceki tekliflerimizde uyguladığımız indirim oranıyla aşağıda sunulmuştur.
                     </p>
 
-                    <h3 className="text-lg font-bold text-blue-900 mt-6 mb-3 border-l-4 border-blue-500 pl-3">1. Tesis Bilgileri ve Toplam Kurulu Güç</h3>
-                    <p className="mb-2">Tesisinizde bulunan transformatörlerin toplam kurulu gücü (Yüksek Gerilim Tesisleri) aşağıdaki gibidir:</p>
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
-                      <ul className="list-disc list-inside">
+                    <h3 className="text-[10pt] font-bold text-gray-800 mt-5 mb-2 uppercase tracking-wide">1. Tesis Bilgileri ve Toplam Kurulu Güç</h3>
+                    <p className="mb-2 text-[9.5pt] leading-tight">Tesisinizde bulunan transformatörlerin toplam kurulu gücü (Yüksek Gerilim Tesisleri) aşağıdaki gibidir:</p>
+                    <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-3">
+                      <ul className="list-disc list-inside text-[9.5pt] leading-tight">
                         <li>Trafo Güçleri Dağılımı: <strong>{selectedCompany.powerStr} kVA</strong></li>
-                        <li>Toplam Kurulu Güç: <strong>{selectedCompany.totalKVA} kVA ({selectedCompany.totalKVA / 1000} MVA)</strong></li>
+                        <li>Toplam Kurulu Güç: <strong>{selectedCompany.totalKVA} kVA ({(selectedCompany.totalKVA / 1000).toFixed(2)} MVA)</strong></li>
                         <li>Tesis Tipi: <strong>{selectedCompany.type === 'direk' ? 'Direk Tipi Trafo Merkezi' : 'Bina Tipi Trafo Merkezi'}</strong></li>
+                        <li>Bölge/Katsayı: <strong>{selectedCompany.region || 'Belirtilmemiş'} (x{selectedCompany.regionCoeff.toFixed(2)})</strong></li>
                         <li>Sektör: <strong>{selectedCompany.sector}</strong></li>
                       </ul>
                     </div>
 
-                    <h3 className="text-lg font-bold text-blue-900 mt-6 mb-3 border-l-4 border-blue-500 pl-3">2. EMO {params.year} Yılı Aylık Asgari Ücret Hesaplaması</h3>
-                    <p className="mb-2">EMO {params.year} Yılı Ücret Tanımları'nda (Kısım III), bina ve direk tipi trafo merkezleri için aylık işletme sorumluluğu bedelleri kapasiteye göre belirlenmektedir.</p>
+                    <h3 className="text-[10pt] font-bold text-gray-800 mt-5 mb-2 uppercase tracking-wide">2. EMO {params.year} Yılı Aylık Asgari Ücret Hesaplaması</h3>
+                    <p className="mb-2 text-[9.5pt] leading-tight">EMO {params.year} Yılı Ücret Tanımları'nda (Kısım III), bina ve direk tipi trafo merkezleri için aylık işletme sorumluluğu bedelleri kapasiteye göre belirlenmektedir.</p>
                     
-                    <table className="w-full text-sm border-collapse border border-gray-300 mb-4">
-                      <thead className="bg-gray-100">
+                    <table className="w-full text-[9pt] border-collapse border border-gray-300 mb-3">
+                      <thead style={{backgroundColor: '#bbdefb'}}>
                         <tr>
-                          <th className="border border-gray-300 p-2 text-left">Kapasite Aralığı</th>
-                          <th className="border border-gray-300 p-2 text-left">Birim Fiyat</th>
-                          <th className="border border-gray-300 p-2 text-right">Tutar (TL)</th>
+                          <th className="border border-gray-300 p-2 text-left font-semibold text-[9pt]" style={{color: '#1565c0'}}>Kapasite Aralığı</th>
+                          <th className="border border-gray-300 p-2 text-left font-semibold text-[9pt]" style={{color: '#1565c0'}}>Birim Fiyat</th>
+                          <th className="border border-gray-300 p-2 text-right font-semibold text-[9pt]" style={{color: '#1565c0'}}>Tutar (TL)</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -985,42 +1561,42 @@ const App = () => {
                         )}
                         
                         {(selectedCompany.regionCoeff || params.regionCoeff) !== 1 && (
-                          <tr className="bg-yellow-50">
+                          <tr style={{backgroundColor: '#d4f5d4'}}>
                             <td className="border border-gray-300 p-2" colSpan="2">Bölgesel Azaltma Katsayısı (x {(selectedCompany.regionCoeff || params.regionCoeff)})</td>
-                            <td className="border border-gray-300 p-2 text-right text-yellow-700 font-bold">
+                            <td className="border border-gray-300 p-2 text-right font-bold" style={{color: '#2e7d32'}}>
                                 {(selectedCompany.regionCoeff || params.regionCoeff) < 1 ? '-' : '+'}{formatCurrency(Math.abs(selectedCompany.nominalFee - (selectedCompany.nominalFee / (selectedCompany.regionCoeff || params.regionCoeff))))} TL
                             </td>
                           </tr>
                         )}
 
-                        <tr className="bg-blue-50 font-bold">
+                        <tr className="font-bold" style={{backgroundColor: '#c8f0c8'}}>
                           <td className="border border-gray-300 p-2" colSpan="2">EMO {params.year} TOPLAM NOMİNAL TARİFE (KDV Hariç)</td>
                           <td className="border border-gray-300 p-2 text-right">{formatCurrency(selectedCompany.nominalFee)} TL</td>
                         </tr>
                       </tbody>
                     </table>
 
-                    <h3 className="text-lg font-bold text-blue-900 mt-6 mb-3 border-l-4 border-blue-500 pl-3">3. Uygulanan İskonto ve Nihai Teklif</h3>
-                    <p className="mb-4">Piyasa koşullarına uyum sağlamak amacıyla, işletmenize özel <strong>%{selectedCompany.appliedDiscountRate || params.discountRate}</strong> iskonto uygulanmıştır.</p>
+                    <h3 className="text-[10pt] font-bold text-gray-800 mt-5 mb-2 uppercase tracking-wide">3. Uygulanan İskonto ve Nihai Teklif</h3>
+                    <p className="mb-4 text-[9.5pt] leading-tight">Piyasa koşullarına uyum sağlamak amacıyla, işletmenize özel <strong>%{selectedCompany.appliedDiscountRate || params.discountRate}</strong> iskonto uygulanmıştır.</p>
                     
-                    <div className="bg-blue-900 text-white rounded-lg p-6 shadow-lg mb-8">
-                      <div className="flex justify-between items-center mb-2 opacity-80">
+                    <div className="rounded p-4 border-2 mb-1" style={{backgroundColor: '#c8e6c9', borderColor: '#81c784'}}>
+                      <div className="flex justify-between items-center mb-1.5 text-[9.5pt]" style={{color: '#2e7d32'}}>
                         <span>EMO Nominal Tarife:</span>
                         <span>{formatCurrency(selectedCompany.nominalFee)}</span>
                       </div>
-                      <div className="flex justify-between items-center mb-4 text-red-300">
+                      <div className="flex justify-between items-center mb-3 text-[9.5pt]" style={{color: '#2e7d32'}}>
                         <span>İskonto Tutarı (%{selectedCompany.appliedDiscountRate || params.discountRate}):</span>
                         <span>- {formatCurrency(selectedCompany.discountAmount)}</span>
                       </div>
-                      <div className="border-t border-blue-700 pt-4 flex justify-between items-center text-2xl font-bold">
+                      <div className="pt-3 flex justify-between items-center text-[11pt] font-bold" style={{borderTop: '1px solid #66bb6a', color: '#1b5e20'}}>
                         <span>AYLIK TEKLİF FİYATI:</span>
                         <span>{formatCurrency(selectedCompany.offerPrice)} + KDV</span>
                       </div>
                     </div>
 
-                    <div className="text-sm text-gray-600 border-t pt-4 mt-8">
-                      <h4 className="font-bold mb-2">Açıklamalar:</h4>
-                      <ul className="list-disc list-inside space-y-1">
+                    <div className="text-[9pt] text-gray-600 border-t pt-1 mt-0" style={{pageBreakInside: 'avoid'}}>
+                      <h4 className="font-bold mb-1 text-[9.5pt]">Açıklamalar:</h4>
+                      <ul className="list-disc list-inside space-y-0.5 text-[9pt] leading-tight">
                         <li>1. Bu teklif {params.year} yılı boyunca geçerli olmak üzere aylık periyotlarla hazırlanmıştır.</li>
                         <li>2. İşletme sorumluluğu hizmetinin SMM tarafından üstlenilmesi halinde YG tesisi en az ayda bir kez denetlenmelidir.</li>
                         <li>3. Enerji tüketiminin izlenmesi ve kompanzasyon tesisinin sağlıklı çalışıp çalışmadığının denetlenmesi bu hizmetin SORUMLULUK KAPSAMINDADIR.</li>
@@ -1028,21 +1604,122 @@ const App = () => {
                         <li>5. İşveren olarak sizin yükümlülüğünüz, İşletme Sorumlusunun görevlerini yerine getirebilmesi için gerekli imalatları/hizmetleri sağlamak, talep edilen güvenlik malzemelerini almak ve uyarılarına riayet etmektir.</li>
                       </ul>
                     </div>
-                </div>
-
-                {/* Footer */}
-                <div className="mt-8 border-t pt-4">
-                    <div className="flex justify-between items-end">
-                        {/* Bottom Left Logo/Antet */}
-                        <div className="w-2/3">
-                            <img src="/antet.png" alt="KOBİNERJİ ANTET" className="h-24 object-contain" />
-                        </div>
-                        <div className="w-1/3 text-right text-xs text-gray-500">
-                            <p className="font-bold">KOBİNERJİ MÜHENDİSLİK VE<br/>ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.</p>
+                    
+                    {/* Footer - Page 1 - Always at bottom */}
+                    <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-2" style={{pageBreakInside: 'avoid'}}>
+                        <div className="flex justify-between items-end">
+                            {/* Bottom Left Logo/Antet */}
+                            <div className="w-2/3">
+                                <div className="text-[9pt] text-gray-600">
+                                    <p className="font-bold text-gray-800 text-[9.5pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                                    <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                                    <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                                </div>
+                            </div>
+                            {/* Bottom Right - Page Number */}
+                            <div className="text-right">
+                                <p className="text-[9pt] text-gray-500">Sayfa 1/2</p>
+                            </div>
                         </div>
                     </div>
-                </div>
+                    </div>
+                  </div>
+                  
+                  {/* SAYFA 2 - Ücretsiz Ek Hizmetler */}
+                  <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl relative text-[9.5pt] leading-tight text-gray-800 page-break pdf-page" style={{pageBreakBefore: 'always', pageBreakInside: 'avoid', pageBreakAfter: 'auto'}}>
+                    <div>
+                      <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
+                            {/* Page 2 Header - Logo */}
+                            <div className="w-1/3 flex items-center h-16">
+                              {logo ? (
+                                  <img src={logo} alt="Firma Logosu" className="h-16 object-contain" />
+                              ) : (
+                                  <div className="text-sm font-bold text-blue-900">
+                                      <p className="text-lg">KOBİNERJİ</p>
+                                      <p className="text-xs text-gray-600">Mühendislik ve Enerji Verimliliği</p>
+                                  </div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                            </div>
+                      </div>
+
+                      <h3 className="text-[10pt] font-bold text-gray-800 mb-2 uppercase tracking-wide border-b border-gray-300 pb-2">Kobinerji Mühendislik İçin Artı Değer Katacak Ücretsiz Hizmetler</h3>
+                      <p className="mb-3 text-justify text-[9.5pt] leading-tight">
+                        YG İşletme Sorumluluğu hizmeti kapsamında enerji tüketiminin izlenmesi ve kompanzasyon tesisinin sağlıklı çalışıp çalışmadığının denetlenmesi sorumluğunuzun dışında tutulmuştur. Ancak, Kobinerji Mühendislik olarak satın alma birimi için maliyet kontrolü ve operasyonel güvenliği artıracak bu kritik alanlarda ücretsiz ek hizmetler sunabiliriz:
+                      </p>
+
+                      <div className="space-y-2 pb-8">
+                          <div className="bg-gray-50 p-2.5 rounded border-l-2 border-gray-400">
+                            <h4 className="font-bold text-gray-800 text-[9.5pt] mb-1">1. Arıza Önleme Odaklı Termal Görüntüleme</h4>
+                            <p className="text-[9pt] text-gray-600 mb-0.5 leading-tight">
+                              Üretim sürekliliğinin kritik olduğu büyük tesislerde, YG tesisatında (trafolar, OG hücreleri ve bara bağlantıları) meydana gelebilecek gevşek bağlantılar, aşırı ısınmaya ve ciddi arızalara neden olabilir.
+                            </p>
+                            <ul className="list-disc list-inside text-[9pt] text-gray-600 pl-2 space-y-0.5 leading-tight">
+                              <li><strong>Ücretsiz Hizmet:</strong> Yıl içinde 12 kez (Örneğin aylık periyotlarla) transformatörlerin ve yüksek gerilim hücrelerinin termal kamera ile kontrol edilmesi ve bu kontrollerin raporlanması.</li>
+                              <li><strong>Artı Değer:</strong> Bu denetim, YG ekipmanlarında arıza potansiyeli olan aşırı ısınmaları ve kontak gevşekliklerini (seri ark) erkenden belirleyerek, üretim kesintisi kaynaklı büyük ekonomik kayıpların önüne geçer.</li>
+                            </ul>
+                          </div>
+
+                          <div className="bg-gray-50 p-2.5 rounded border-l-2 border-gray-400">
+                            <h4 className="font-bold text-gray-800 text-[9.5pt] mb-1">2. Reaktif Güç ve Enerji Kalitesi Takibi</h4>
+                            <p className="text-[9pt] text-gray-600 mb-0.5 leading-tight">
+                              Yüksek enerji tüketicisi olan sanayi firmaları için reaktif güç cezaları önemli bir maliyet kalemidir. EMO yönetmelikleri bu takibi kapsamaz.
+                            </p>
+                            <ul className="list-disc list-inside text-[9pt] text-gray-600 pl-2 space-y-0.5 leading-tight">
+                              <li><strong>Ücretsiz Hizmet:</strong> Tesisin reaktif güç durumunun ve güç faktörünün (PF) uzaktan izlenmesi ve çeyreklik dönemlerde (her ayda bir) kompanzasyon sisteminin durumu ve olası ceza riskleri hakkında özet rapor sunulması.</li>
+                              <li><strong>Artı Değer:</strong> Yasal sınırların (genellikle 0.95 seviyesine yakın) dışına çıkılmasını önleyerek, yüksek kompanzasyon cezası riskini ortadan kaldırmaya yardımcı olur ve görünür güç talebini iyileştirir.</li>
+                            </ul>
+                          </div>
+
+                          <div className="bg-gray-50 p-2.5 rounded border-l-2 border-gray-400">
+                            <h4 className="font-bold text-gray-800 text-[9.5pt] mb-1">3. Enerji Verimliliği ve Sürdürülebilirlik Ön Analizi</h4>
+                            <p className="text-[9pt] text-gray-600 mb-0.5 leading-tight">
+                              Büyük firmalar GES ve enerji verimliliği (IE3/IE4 motorlar, VSD uygulamaları) konusunda aktif yatırımlar yapmaktadır.
+                            </p>
+                            <ul className="list-disc list-inside text-[9pt] text-gray-600 pl-2 space-y-0.5 leading-tight">
+                              <li><strong>Ücretsiz Hizmet:</strong> Tesisinizdeki enerji yoğun alanların (fanlar, pompalar, motorlar) ön analizi ve Yüksek Verimli Motorlar (IE3/IE4/IE5) veya Değişken Hızlı Sürücü (VSD) kullanım potansiyelinin belirlenmesi için başlangıç danışmanlığı.</li>
+                              <li><strong>Artı Değer:</strong> Enerji (kW) tüketimini ve karbon ayak izini azaltma hedeflerine ulaşılmasına yardımcı olurken, aynı zamanda motorların daha iyi güç faktörleri (PF) ile çalışmasını sağlayarak trafo üzerindeki reaktif yükü azaltır ve kapasiteyi daha etkin kullanır.</li>
+                            </ul>
+                          </div>
+
+                          <div className="bg-gray-50 p-2.5 rounded border-l-2 border-gray-400">
+                            <h4 className="font-bold text-gray-800 text-[9.5pt] mb-1">4. Yedek Malzeme ve Kritik Stok Listesi Danışmanlığı</h4>
+                            <p className="text-[9pt] text-gray-600 mb-0.5 leading-tight">
+                              Gıda sanayinde kritik arızalara hızlı müdahale esastır. Yedek parça yönetimi, arıza süresini (downtime) doğrudan etkiler.
+                            </p>
+                            <ul className="list-disc list-inside text-[9pt] text-gray-600 pl-2 space-y-0.5 leading-tight">
+                              <li><strong>Ücretsiz Hizmet:</strong> Tesisinizdeki YG ve AG kritik ekipmanlar (trafo buşingleri, parafudr, sekonder koruma röleleri, OG hücre mekanizmaları vb.) için risk ve tedarik sürelerine dayalı acil durum yedek parça listesi ve önerilen minimum stok seviyelerinin belirlenmesi konusunda danışmanlık sağlanması.</li>
+                              <li><strong>Artı Değer:</strong> Arıza durumunda gerekli yedek parçaların hızlı teminini sağlayarak arıza onarım süresini (MTTR) minimize eder ve işletme sürekliliğini destekler.</li>
+                            </ul>
+                          </div>
+                      </div>
+                      
+                      <p className="mt-2 mb-16 text-[9pt] italic text-gray-600 border-t border-gray-300 pt-2 leading-tight">
+                        Bu ücretsiz ek hizmetler, Kobinerji Mühendislik'in sadece yasal zorunlulukları karşılayan bir tedarikçi değil, aynı zamanda maliyet optimizasyonuna ve operasyonel güvenliğe odaklanan stratejik bir çözüm ortağı olduğunu göstermektedir.
+                      </p>
+                    </div>
+
+                    {/* Footer - Page 2 - Always at bottom */}
+                    <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-2" style={{pageBreakInside: 'avoid'}}>
+                        <div className="flex justify-between items-end">
+                            {/* Bottom Left Logo/Antet */}
+                            <div className="w-2/3">
+                                <div className="text-[9pt] text-gray-600">
+                                    <p className="font-bold text-gray-800 text-[9.5pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                                    <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                                    <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                                </div>
+                            </div>
+                            {/* Bottom Right - Page Number */}
+                            <div className="text-right">
+                                <p className="text-[9pt] text-gray-500">Sayfa 2/2</p>
+                            </div>
+                        </div>
+                    </div>
+                  </div>
               </div>
+
             </div>
 
           </div>
