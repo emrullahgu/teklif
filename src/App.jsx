@@ -101,6 +101,39 @@ const REGION_LIST = [
   { name: "Diğer (Varsayılan)", coeff: 1.00 }
 ];
 
+// EMO 2026 Periyodik Kontrol Fiyat Sabitleri (Kısım V - Test ve Ölçüm Hizmetleri)
+const PERIODIC_PRICES = {
+  // YG/TM Gözle Kontrol (Kısım V, Sıra 16) - Bina Tipi 2 Hücreli Baz Alındı
+  yg_base_limit: 400, // kVA
+  yg_base_price: 53997.00,
+  yg_tier1_limit: 5000, // kVA
+  yg_tier1_increment: 16.37, // 401-5000 arası artış
+  yg_tier2_increment: 7.27,  // 5000 üzeri artış
+
+  // AG İç Tesisat (Kısım V, Sıra 1.5 - 5. Sınıf Yapılar)
+  ag_area_limit: 500, // m2
+  ag_base_price: 42748.00,
+  ag_increment: 7.89, // m2 başına artış
+
+  // Topraklama (Kısım V, Sıra 2.2 - AG Tesisleri)
+  topraklama_base_limit: 3, // nokta
+  topraklama_base_price: 7041.00,
+  topraklama_increment: 645.00, // nokta başına (50'ye kadar)
+
+  // Yıldırımdan Korunma (Kısım V, Sıra 11)
+  paratoner_base_limit: 1, // tesisat
+  paratoner_base_price: 10832.00,
+  paratoner_increment: 5282.00,
+
+  // RCD Testleri (Kısım V, Sıra 9)
+  rcd_base_limit: 3, // adet
+  rcd_base_price: 6960.00,
+  rcd_increment: 410.00, 
+
+  // Keşif Bedeli
+  kesif_bedeli: 6500.00
+};
+
 const App = () => {
   // --- State Definitions ---
   const [activeTab, setActiveTab] = useState('manual');
@@ -162,12 +195,137 @@ const App = () => {
     year: 2026
   });
 
+  // Periyodik Kontrol States
+  const [periodicCustomer, setPeriodicCustomer] = useState({
+    name: '',
+    city: '',
+    contactName: '',
+    date: new Date().toLocaleDateString('tr-TR')
+  });
+
+  const [periodicInputs, setPeriodicInputs] = useState({
+    trafoGucu: 0,
+    yapiAlani: 0,
+    topraklamaAdet: 0,
+    paratonerAdet: 0,
+    rcdAdet: 0,
+    iskonto: 70
+  });
+
+  const [periodicResults, setPeriodicResults] = useState({
+    yg: { total: 0, desc: "" },
+    ag: { total: 0, desc: "" },
+    topraklama: { total: 0, desc: "" },
+    paratoner: { total: 0, desc: "" },
+    rcd: { total: 0, desc: "" },
+    subTotal: 0,
+    kesif: PERIODIC_PRICES.kesif_bedeli,
+    grandTotal: 0,
+    discountAmount: 0,
+    finalPrice: 0
+  });
+
+  // Periyodik Kontrol Edit Mode
+  const [periodicEditorMode, setPeriodicEditorMode] = useState(false);
+  const [periodicEditableContent, setPeriodicEditableContent] = useState('');
+
   // --- Helpers ---
 
   // Helper to parse power string "2000+2000+1600" -> 5600
   const parsePower = (str) => {
     if (!str) return 0;
     return str.toString().split('+').reduce((acc, curr) => acc + parseInt(curr.trim() || 0), 0);
+  };
+
+  // Periyodik Kontrol Hesaplama Motoru
+  const calculatePeriodicPrices = () => {
+    // 1. YG/TM Kontrolü
+    let ygTotal = 0;
+    let ygDesc = "";
+    if (periodicInputs.trafoGucu <= PERIODIC_PRICES.yg_base_limit) {
+      ygTotal = PERIODIC_PRICES.yg_base_price;
+      ygDesc = `${PERIODIC_PRICES.yg_base_limit} kVA'ya kadar sabit.`;
+    } else {
+      ygTotal = PERIODIC_PRICES.yg_base_price;
+      let remaining = periodicInputs.trafoGucu - PERIODIC_PRICES.yg_base_limit;
+      
+      if (periodicInputs.trafoGucu <= PERIODIC_PRICES.yg_tier1_limit) {
+        ygTotal += remaining * PERIODIC_PRICES.yg_tier1_increment;
+        ygDesc = `Sabit + (${remaining} kVA x ${PERIODIC_PRICES.yg_tier1_increment} TL)`;
+      } else {
+        const tier1Amount = (PERIODIC_PRICES.yg_tier1_limit - PERIODIC_PRICES.yg_base_limit);
+        ygTotal += tier1Amount * PERIODIC_PRICES.yg_tier1_increment;
+        const tier2Amount = periodicInputs.trafoGucu - PERIODIC_PRICES.yg_tier1_limit;
+        ygTotal += tier2Amount * PERIODIC_PRICES.yg_tier2_increment;
+        ygDesc = `Sabit + (4600 kVA x ${PERIODIC_PRICES.yg_tier1_increment}) + (${tier2Amount} kVA x ${PERIODIC_PRICES.yg_tier2_increment})`;
+      }
+    }
+
+    // 2. AG İç Tesisat
+    let agTotal = 0;
+    let agDesc = "";
+    if (periodicInputs.yapiAlani <= PERIODIC_PRICES.ag_area_limit) {
+      agTotal = PERIODIC_PRICES.ag_base_price;
+      agDesc = `${PERIODIC_PRICES.ag_area_limit} m²'ye kadar sabit.`;
+    } else {
+      const extraArea = periodicInputs.yapiAlani - PERIODIC_PRICES.ag_area_limit;
+      agTotal = PERIODIC_PRICES.ag_base_price + (extraArea * PERIODIC_PRICES.ag_increment);
+      agDesc = `Sabit + (${extraArea} m² x ${PERIODIC_PRICES.ag_increment} TL)`;
+    }
+
+    // 3. Topraklama
+    let topTotal = 0;
+    let topDesc = "";
+    if (periodicInputs.topraklamaAdet <= PERIODIC_PRICES.topraklama_base_limit) {
+      topTotal = PERIODIC_PRICES.topraklama_base_price;
+      topDesc = `${PERIODIC_PRICES.topraklama_base_limit} noktaya kadar sabit.`;
+    } else {
+      const extraPoints = periodicInputs.topraklamaAdet - PERIODIC_PRICES.topraklama_base_limit;
+      topTotal = PERIODIC_PRICES.topraklama_base_price + (extraPoints * PERIODIC_PRICES.topraklama_increment);
+      topDesc = `Sabit + (${extraPoints} nokta x ${PERIODIC_PRICES.topraklama_increment} TL)`;
+    }
+
+    // 4. Paratoner
+    let paraTotal = 0;
+    let paraDesc = "";
+    if (periodicInputs.paratonerAdet <= PERIODIC_PRICES.paratoner_base_limit) {
+      paraTotal = PERIODIC_PRICES.paratoner_base_price;
+      paraDesc = "1 tesisat sabit.";
+    } else {
+      const extraPara = periodicInputs.paratonerAdet - PERIODIC_PRICES.paratoner_base_limit;
+      paraTotal = PERIODIC_PRICES.paratoner_base_price + (extraPara * PERIODIC_PRICES.paratoner_increment);
+      paraDesc = `Sabit + (${extraPara} tesisat x ${PERIODIC_PRICES.paratoner_increment} TL)`;
+    }
+
+    // 5. RCD Testleri
+    let rcdTotal = 0;
+    let rcdDesc = "";
+    if (periodicInputs.rcdAdet <= PERIODIC_PRICES.rcd_base_limit) {
+      rcdTotal = PERIODIC_PRICES.rcd_base_price;
+      rcdDesc = `${PERIODIC_PRICES.rcd_base_limit} adete kadar sabit.`;
+    } else {
+      const extraRcd = periodicInputs.rcdAdet - PERIODIC_PRICES.rcd_base_limit;
+      rcdTotal = PERIODIC_PRICES.rcd_base_price + (extraRcd * PERIODIC_PRICES.rcd_increment);
+      rcdDesc = `Sabit + (${extraRcd} adet x ${PERIODIC_PRICES.rcd_increment} TL)`;
+    }
+
+    const subTotal = ygTotal + agTotal + topTotal + paraTotal + rcdTotal;
+    const grandTotal = subTotal + PERIODIC_PRICES.kesif_bedeli;
+    const discountVal = (grandTotal * periodicInputs.iskonto) / 100;
+    const final = grandTotal - discountVal;
+
+    setPeriodicResults({
+      yg: { total: ygTotal, desc: ygDesc },
+      ag: { total: agTotal, desc: agDesc },
+      topraklama: { total: topTotal, desc: topDesc },
+      paratoner: { total: paraTotal, desc: paraDesc },
+      rcd: { total: rcdTotal, desc: rcdDesc },
+      subTotal: subTotal,
+      kesif: PERIODIC_PRICES.kesif_bedeli,
+      grandTotal: grandTotal,
+      discountAmount: discountVal,
+      finalPrice: final
+    });
   };
 
   const formatCurrency = (val) => {
@@ -782,6 +940,96 @@ const App = () => {
     setEditorMode(!editorMode);
   };
 
+  // Periyodik Kontrol Edit Mode Toggle
+  const togglePeriodicEditorMode = () => {
+    if (!periodicEditorMode) {
+      const element = document.getElementById('periodic-proposal-area');
+      if (element) {
+        setPeriodicEditableContent(element.innerHTML);
+      }
+    }
+    setPeriodicEditorMode(!periodicEditorMode);
+  };
+
+  // Periyodik Kontrol PDF Export
+  const handlePeriodicPDFExport = async () => {
+    if (!periodicCustomer.name) {
+      alert('Lütfen müşteri bilgilerini doldurun.');
+      return;
+    }
+    
+    const pages = document.querySelectorAll('.periodic-pdf-page');
+    if (!pages || pages.length === 0) {
+      alert('İçerik bulunamadı.');
+      return;
+    }
+    
+    const fileName = `Periyodik_Kontrol_Teklif_${periodicCustomer.name.replace(/[^a-z0-9ğüşıöçĞÜŞİÖÇ]/gi, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
+    const targetWidthPx = 793;
+    const SCALE_FACTOR = 2;
+
+    try {
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      });
+
+      // Her sayfayı ayrı yakalayıp PDF'e ekle
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        
+        // Geçici stil ayarları
+        const originalWidth = page.style.width;
+        const originalMargin = page.style.margin;
+        const originalBoxShadow = page.style.boxShadow;
+        
+        page.style.width = '210mm';
+        page.style.margin = '0 auto';
+        page.style.boxShadow = 'none';
+        page.classList.add('pdf-exporting');
+
+        // html2canvas ile yakalama
+        const canvas = await html2canvas(page, {
+          scale: SCALE_FACTOR,
+          width: targetWidthPx,
+          windowWidth: targetWidthPx,
+          useCORS: true,
+          allowTaint: false,
+          letterRendering: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const imgWidth = 210; // A4 genişlik mm
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        // İlk sayfa için yeni sayfa ekleme
+        if (i > 0) {
+          pdf.addPage();
+        }
+
+        // Görseli PDF'e ekle
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+
+        // Stil ayarlarını geri al
+        page.style.width = originalWidth;
+        page.style.margin = originalMargin;
+        page.style.boxShadow = originalBoxShadow;
+        page.classList.remove('pdf-exporting');
+      }
+
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('PDF oluşturma hatası:', error);
+      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+    }
+  };
+
   // --- Gelişmiş PDF Export ---
   const handleAdvancedPDFExport = () => {
     if (!selectedCompany) return;
@@ -1057,7 +1305,14 @@ const App = () => {
             className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'manual' ? 'bg-white shadow text-blue-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
             <UserPlus className="w-4 h-4 mr-2"/>
-            Teklif Bilgileri
+            YG İşletme Sorumluluğu
+          </button>
+          <button 
+            onClick={() => setActiveTab('periodic')}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'periodic' ? 'bg-white shadow text-green-700' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            <RefreshCw className="w-4 h-4 mr-2"/>
+            Periyodik Kontrol
           </button>
           <button 
             onClick={() => setActiveTab('proposal')}
@@ -1209,6 +1464,383 @@ const App = () => {
 
              </form>
            </div>
+        )}
+
+        {/* Tab Content: Periyodik Kontrol */}
+        {activeTab === 'periodic' && (
+          <div className="flex gap-6 flex-col lg:flex-row">
+            
+            {/* Sol Panel: Veri Girişi */}
+            <div className="lg:w-1/3 bg-white p-6 rounded-xl shadow-lg border border-gray-200 overflow-y-auto">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <RefreshCw className="text-green-600" />
+                Periyodik Kontrol Teklif Robotu
+              </h2>
+              
+              <div className="space-y-4">
+                {/* Müşteri Bilgileri */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                  <h3 className="text-sm font-semibold text-blue-800 mb-2">Müşteri Bilgileri</h3>
+                  <div className="grid gap-3">
+                    <input 
+                      type="text" 
+                      placeholder="Firma Adı" 
+                      value={periodicCustomer.name} 
+                      onChange={e => setPeriodicCustomer({...periodicCustomer, name: e.target.value})} 
+                      className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Şehir / Lokasyon" 
+                      value={periodicCustomer.city} 
+                      onChange={e => setPeriodicCustomer({...periodicCustomer, city: e.target.value})} 
+                      className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Yetkili Kişi" 
+                      value={periodicCustomer.contactName} 
+                      onChange={e => setPeriodicCustomer({...periodicCustomer, contactName: e.target.value})} 
+                      className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                    />
+                  </div>
+                </div>
+
+                {/* Teknik Veriler */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Tesis Verileri (EMO 2026)</h3>
+                  
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Toplam Trafo Gücü (kVA)</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.trafoGucu} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, trafoGucu: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Kapalı Alan (m²)</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.yapiAlani} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, yapiAlani: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Topraklama Ölçüm Sayısı</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.topraklamaAdet} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, topraklamaAdet: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Paratoner Tesisat Sayısı</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.paratonerAdet} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, paratonerAdet: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+
+                  <label className="block text-xs font-medium text-gray-600 mb-1">RCD Test Sayısı</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.rcdAdet} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, rcdAdet: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+                </div>
+
+                {/* İskonto Ayarı */}
+                <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                  <h3 className="text-sm font-semibold text-green-800 mb-2">Fiyatlandırma</h3>
+                  <label className="block text-xs font-medium text-green-700 mb-1">İskonto Oranı (%)</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="95" 
+                      step="1" 
+                      value={periodicInputs.iskonto} 
+                      onChange={e => setPeriodicInputs({...periodicInputs, iskonto: Number(e.target.value)})} 
+                      className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <span className="font-bold text-green-800 w-12 text-right">%{periodicInputs.iskonto}</span>
+                  </div>
+                </div>
+
+                {/* Hesapla Butonu */}
+                <button 
+                  onClick={calculatePeriodicPrices}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold transition shadow-md flex justify-center items-center gap-2"
+                >
+                  <Calculator className="h-5 w-5"/>
+                  Hesapla
+                </button>
+
+                {/* İşlem Butonları */}
+                <div className="space-y-3">
+                  <button 
+                    onClick={togglePeriodicEditorMode}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold transition shadow-md flex justify-center items-center gap-2"
+                  >
+                    <Edit3 className="h-4 w-4"/>
+                    {periodicEditorMode ? 'Düzenleme Modundan Çık' : 'Düzenleme Modu'}
+                  </button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => window.print()} 
+                      className="bg-gray-700 text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition shadow-md flex justify-center items-center gap-2"
+                    >
+                      <Printer className="h-4 w-4"/>
+                      Yazdır
+                    </button>
+                    <button 
+                      onClick={handlePeriodicPDFExport} 
+                      className="bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md flex justify-center items-center gap-2"
+                    >
+                      <Download className="h-4 w-4"/>
+                      PDF İndir
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-6 text-xs text-gray-400">
+                * Hesaplamalar EMO 2026 Kısım V Test ve Ölçüm Hizmetleri tarifesine göre yapılmaktadır. KDV Hariçtir.
+              </div>
+            </div>
+
+            {/* Sağ Panel: Teklif Önizleme */}
+            <div className="lg:w-2/3 bg-gray-200 p-8 rounded-xl overflow-auto">
+              {/* Editor Mode Banner */}
+              {periodicEditorMode && (
+                <div className="mb-4 bg-indigo-600 text-white p-4 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Edit3 className="h-5 w-5"/>
+                    <span className="font-bold">Düzenleme Modu Aktif - Metinleri doğrudan düzenleyebilirsiniz</span>
+                  </div>
+                  <button 
+                    onClick={togglePeriodicEditorMode}
+                    className="bg-white text-indigo-600 px-4 py-2 rounded hover:bg-gray-100 transition font-bold flex items-center gap-2"
+                  >
+                    <X className="h-4 w-4"/>
+                    Kapat
+                  </button>
+                </div>
+              )}
+              
+              {/* Periyodik Kontrol Paper Structure */}
+              <div 
+                id="periodic-printable-paper"
+                contentEditable={periodicEditorMode}
+                suppressContentEditableWarning={true}
+                className={periodicEditorMode ? 'outline-2 outline-dashed outline-indigo-400' : ''}
+                style={periodicEditorMode ? { minHeight: '297mm' } : {}}
+              >
+                
+                {/* SAYFA 1 */}
+                <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 periodic-pdf-page" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
+                  <div>
+                
+                {/* Header */}
+                <div className="flex justify-between items-start border-b pb-6 mb-6">
+                  {/* Logo Area */}
+                  <div className="flex items-center justify-start min-w-[150px]">
+                    <div className="h-16 flex items-center justify-start">
+                      {logo ? (
+                        <img src={logo} alt="Firma Logosu" className="h-16 max-w-[140px] object-contain" />
+                      ) : (
+                        <div className="w-32 h-full">
+                          {/* Logo Upload Area - Only visible when not printing */}
+                          <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50 transition no-print">
+                            <div className="text-center text-gray-400 text-xs flex flex-col items-center">
+                              <UploadCloud className="w-6 h-6 mb-1"/>
+                              <span>Logo Yükle</span>
+                            </div>
+                            <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-center flex-1">
+                    <h1 className="text-2xl font-bold text-gray-800">TEKLİF MEKTUBU</h1>
+                    <p className="text-gray-500 text-sm mt-1">Periyodik Kontrol ve Test Hizmetleri</p>
+                  </div>
+                  <div className="text-right w-48">
+                    <h2 className="text-lg font-bold text-blue-900">KOBİNERJİ MÜHENDİSLİK</h2>
+                    <p className="text-xs text-gray-500">İzmir, Türkiye</p>
+                    <p className="text-xs text-gray-500 mt-1">Tarih: {periodicCustomer.date}</p>
+                  </div>
+                </div>
+
+                {/* Müşteri Başlığı */}
+                <div className="mb-8">
+                  <h3 className="text-md font-bold text-gray-800 mb-2">
+                    Sayın {periodicCustomer.contactName ? `${periodicCustomer.contactName} - ` : ''}{periodicCustomer.name || '[Firma Adı]'} Yetkilisi,
+                  </h3>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    İşletmenizde talep edilen tüm elektrik sistemleri periyodik kontrol ve yasal test hizmetlerine yönelik fiyat teklifimiz, 
+                    <strong> TMMOB Elektrik Mühendisleri Odası (EMO) 2026 yılı Ücret Tanımları</strong> esas alınarak aşağıda sunulmuştur.
+                  </p>
+                </div>
+
+                {/* Tesis Bilgileri Özeti */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-gray-700 border-b border-gray-200 mb-2 pb-1">1. Tesis Bilgileri</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="p-2 bg-gray-50 rounded">
+                      <span className="text-gray-500 block text-xs">Kurulu Trafo Gücü</span>
+                      <span className="font-semibold text-gray-800">{periodicInputs.trafoGucu} kVA</span>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded">
+                      <span className="text-gray-500 block text-xs">Kapalı Alan</span>
+                      <span className="font-semibold text-gray-800">{periodicInputs.yapiAlani} m²</span>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded">
+                      <span className="text-gray-500 block text-xs">Tesis Yeri</span>
+                      <span className="font-semibold text-gray-800">{periodicCustomer.city || '[Şehir]'}</span>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded">
+                      <span className="text-gray-500 block text-xs">Kapsam</span>
+                      <span className="font-semibold text-gray-800">Yıllık Yasal Periyodik Kontrol</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fiyat Tablosu */}
+                <div className="mb-8">
+                  <h4 className="text-sm font-bold text-gray-700 border-b border-gray-200 mb-2 pb-1">2. Hizmet Bedelleri (EMO 2026 Kısım V)</h4>
+                  <table className="w-full text-sm text-left">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-600">
+                        <th className="p-2 rounded-l">Hizmet Kalemi</th>
+                        <th className="p-2">Detay / Hesaplama</th>
+                        <th className="p-2 text-right rounded-r">Nominal Bedel (TL)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      <tr>
+                        <td className="p-2 font-medium">1. YG/TM Gözle Kontrolü</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.yg.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.yg.total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">2. AG İç Tesisat Kontrolü</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.ag.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.ag.total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">3. Topraklama Ölçümü</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.topraklama.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.topraklama.total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">4. Yıldırımdan Korunma</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.paratoner.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.paratoner.total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">5. RCD Testleri</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.rcd.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.rcd.total)}</td>
+                      </tr>
+                      <tr className="bg-gray-50 font-semibold text-gray-700">
+                        <td className="p-2" colSpan="2">Ara Toplam (Hizmetler)</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.subTotal)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">Test Ölçüm Keşif Bedeli</td>
+                        <td className="p-2 text-xs text-gray-500">Sabit Bedel</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.kesif)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Toplam ve İskonto Alanı */}
+                <div className="flex justify-end mb-8">
+                  <div className="w-full md:w-1/2 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <div className="flex justify-between text-sm text-gray-600 mb-2">
+                      <span>EMO Liste Fiyatı Toplamı:</span>
+                      <span className="font-semibold line-through decoration-red-500">{formatCurrency(periodicResults.grandTotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-green-700 mb-3 pb-3 border-b border-blue-200">
+                      <span>Uygulanan İskonto (%{periodicInputs.iskonto}):</span>
+                      <span>- {formatCurrency(periodicResults.discountAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-bold text-blue-900 pt-1">
+                      <span>TEKLİF EDİLEN TOPLAM:</span>
+                      <span>{formatCurrency(periodicResults.finalPrice)}</span>
+                    </div>
+                    <div className="text-right text-xs text-gray-500 mt-1">+ KDV</div>
+                  </div>
+                </div>
+
+                {/* İndirim Gerekçesi */}
+                <div className="mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border border-blue-200">
+                  <h4 className="text-[9pt] font-bold text-blue-900 mb-2 flex items-center">
+                    <CheckCircle className="h-4 w-4 mr-1"/>
+                    İndirim Uygulamasının Gerekçesi ve Katma Değer
+                  </h4>
+                  <p className="text-[8pt] text-gray-700 leading-tight mb-2">
+                    Bu hizmetler normalde EMO'nun asgari ücret yönetmeliğine tabi olsa da, Kobinerji olarak size sağladığımız rekabetçi avantajlar ve taahhütlerimiz şunlardır:
+                  </p>
+                  <div className="space-y-2">
+                    <div className="bg-white p-2 rounded border-l-3 border-blue-500">
+                      <h5 className="text-[8pt] font-bold text-gray-800 mb-0.5">1. Stratejik Müşteri Ölçeği</h5>
+                      <p className="text-[8pt] text-gray-600 leading-tight">
+                        {periodicCustomer.name || 'Müşteriniz'}, sanayi tesisi olarak büyük bir potansiyele sahiptir. Kobinerji'nin {periodicCustomer.city || 'bölgedeki'} konumlanması ve bölgedeki büyük endüstriyel müşterilere odaklanma hedefi, bu ölçekteki bir firmayla uzun vadeli iş birliği için yüksek indirim oranını haklı kılmaktadır.
+                      </p>
+                    </div>
+                    <div className="bg-white p-2 rounded border-l-3 border-green-500">
+                      <h5 className="text-[8pt] font-bold text-gray-800 mb-0.5">2. Yasal Uyum ve Güvenlik</h5>
+                      <p className="text-[8pt] text-gray-600 leading-tight">
+                        Teklif kapsamındaki tüm hizmetler (Topraklama, RCD Testleri, Yıldırımdan Korunma ve İç Tesisat Gözle Kontrolü), İş Ekipmanlarının Kullanımında Sağlık ve Güvenlik Şartları Yönetmeliği uyarınca zorunlu olan yıllık periyodik kontrol gerekliliklerini eksiksiz yerine getirecektir.
+                      </p>
+                    </div>
+                    <div className="bg-white p-2 rounded border-l-3 border-purple-500">
+                      <h5 className="text-[8pt] font-bold text-gray-800 mb-0.5">3. Tekrar Eden Hizmet Olanakları</h5>
+                      <p className="text-[8pt] text-gray-600 leading-tight">
+                        EMO mevzuatı, tekrarlanan ölçüm ve denetim hizmetlerinde bedellerin %50'sinin uygulanabileceğini belirtmektedir. Sizin talep ettiğiniz %{periodicInputs.iskonto} iskonto oranı, bu yasal alt sınırın çok üzerinde, Kobinerji'nin rekabetçi konumlanmasını göstermektedir.
+                      </p>
+                    </div>
+                    <div className="bg-white p-2 rounded border-l-3 border-yellow-500">
+                      <h5 className="text-[8pt] font-bold text-gray-800 mb-0.5">4. Enerji Verimliliği Odaklı Yaklaşım</h5>
+                      <p className="text-[8pt] text-gray-600 leading-tight">
+                        Kobinerji'nin temel uzmanlığı enerji verimliliği ve sanayideki bu potansiyeli ortaya çıkarmaktır. Fabrikanızda yapılacak bu kontroller, sadece yasal zorunluluğu değil, aynı zamanda enerji tasarruf potansiyeli olan alanların belirlenmesine de ön ayak olacaktır, zira Kobinerji bu alanda Enerji Bakanlığı'na bağlı olarak enerji etütleri yapmaktadır.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Alt Bilgi */}
+                <div className="text-xs text-gray-500 border-t pt-4">
+                  <p className="mb-2"><strong>Notlar:</strong></p>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li>Fiyatlara KDV dahil değildir.</li>
+                    <li>Tüm hizmetler EMO dokümanlarına (ZPKK01, ZPKK03, vb.) uygun raporlanacaktır.</li>
+                    <li>Kobinerji Mühendislik, MÜSİAD Enerji ve Çevre Sektör Kurulu üyesidir.</li>
+                    <li>Enerji Yönetim Sistemi (ISO 50001) ve VAP konularında ayrıca destek sağlanabilir.</li>
+                  </ul>
+                </div>
+
+                {/* Footer */}
+                <div className="mt-8 text-center text-xs text-gray-500 border-t pt-4">
+                  <p className="font-bold text-gray-800">KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.</p>
+                  <p>Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                  <p>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                </div>
+
+                  </div>
+                </div>
+                {/* SAYFA 1 SONU */}
+
+              </div>
+            </div>
+
+          </div>
         )}
 
         {/* Proposal View */}
