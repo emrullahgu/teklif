@@ -2101,20 +2101,7 @@ const App = () => {
                         <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
                             {/* Top Left Logo */}
                             <div className="w-1/3 flex items-center h-16">
-                                {logo ? (
-                                    <img src={logo} alt="Firma Logosu" className="h-16 object-contain" />
-                                ) : (
-                                    <div className="w-full h-full">
-                                        {/* Logo Upload Area - Only visible when not printing */}
-                                        <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50 transition no-print">
-                                            <div className="text-center text-gray-400 text-xs flex flex-col items-center">
-                                                <UploadCloud className="w-6 h-6 mb-1"/>
-                                                <span>Logo Yükle</span>
-                                            </div>
-                                            <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
-                                        </label>
-                                    </div>
-                                )}
+                                <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
                             </div>
                             <div className="text-right">
                                 <h1 className="text-lg font-bold text-gray-800 tracking-wide uppercase">FİYAT TEKLİFİ</h1>
