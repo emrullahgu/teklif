@@ -1648,7 +1648,7 @@ const App = () => {
                   {/* Logo Area */}
                   <div className="flex items-center justify-start min-w-[150px]">
                     <div className="h-16 flex items-center justify-start">
-                      <img src="/kobinerji-logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
+                      <img src="/logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
                     </div>
                   </div>
                   <div className="text-center flex-1">
@@ -1786,7 +1786,7 @@ const App = () => {
                 <div className="flex justify-between items-start border-b pb-6 mb-6">
                   <div className="flex items-center justify-start min-w-[150px]">
                     <div className="h-16 flex items-center justify-start">
-                      <img src="/kobinerji-logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
+                      <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
                     </div>
                   </div>
                   <div className="text-right">
