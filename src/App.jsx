@@ -417,6 +417,42 @@ const App = () => {
     const SCALE_FACTOR = 2;
 
     try {
+      // Logo yükle ve base64'e çevir (boyutlarıyla birlikte)
+      const loadLogo = async () => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve({
+              data: canvas.toDataURL('image/png'),
+              width: img.width,
+              height: img.height
+            });
+          };
+          img.onerror = reject;
+          img.src = '/fatura_logo.png';
+        });
+      };
+
+      const logoInfo = await loadLogo();
+      
+      // Logo boyutlarını hesapla (aspect ratio koruyarak)
+      const maxLogoWidth = 60; // mm (1.5x)
+      const maxLogoHeight = 24; // mm (1.5x)
+      const logoAspectRatio = logoInfo.width / logoInfo.height;
+      let logoWidth = maxLogoWidth;
+      let logoHeight = logoWidth / logoAspectRatio;
+      
+      if (logoHeight > maxLogoHeight) {
+        logoHeight = maxLogoHeight;
+        logoWidth = logoHeight * logoAspectRatio;
+      }
+
       const pdf = new jsPDF({
         unit: 'mm',
         format: 'a4',
@@ -427,6 +463,10 @@ const App = () => {
       // Her sayfayı ayrı yakalayıp PDF'e ekle
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
+        
+        // Logoları gizle
+        const logos = page.querySelectorAll('img[src="/fatura_logo.png"]');
+        logos.forEach(logo => { logo.style.visibility = 'hidden'; });
         
         // Geçici stil ayarları
         const originalWidth = page.style.width;
@@ -463,6 +503,12 @@ const App = () => {
 
         // Görseli PDF'e ekle
         pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+        
+        // Logoyu yüksek kalitede ekle (sol üst köşe, aspect ratio korunarak)
+        pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
+
+        // Logoları tekrar göster
+        logos.forEach(logo => { logo.style.visibility = 'visible'; });
 
         // Stil ayarlarını geri al
         page.style.width = originalWidth;
@@ -969,6 +1015,42 @@ const App = () => {
     const SCALE_FACTOR = 2;
 
     try {
+      // Logo yükle ve base64'e çevir (boyutlarıyla birlikte)
+      const loadLogo = async () => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve({
+              data: canvas.toDataURL('image/png'),
+              width: img.width,
+              height: img.height
+            });
+          };
+          img.onerror = reject;
+          img.src = '/fatura_logo.png';
+        });
+      };
+
+      const logoInfo = await loadLogo();
+      
+      // Logo boyutlarını hesapla (aspect ratio koruyarak)
+      const maxLogoWidth = 60; // mm (1.5x)
+      const maxLogoHeight = 24; // mm (1.5x)
+      const logoAspectRatio = logoInfo.width / logoInfo.height;
+      let logoWidth = maxLogoWidth;
+      let logoHeight = logoWidth / logoAspectRatio;
+      
+      if (logoHeight > maxLogoHeight) {
+        logoHeight = maxLogoHeight;
+        logoWidth = logoHeight * logoAspectRatio;
+      }
+
       const pdf = new jsPDF({
         unit: 'mm',
         format: 'a4',
@@ -979,6 +1061,10 @@ const App = () => {
       // Her sayfayı ayrı yakalayıp PDF'e ekle
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
+        
+        // Logoları gizle
+        const logos = page.querySelectorAll('img[src="/fatura_logo.png"]');
+        logos.forEach(logo => { logo.style.visibility = 'hidden'; });
         
         // Geçici stil ayarları
         const originalWidth = page.style.width;
@@ -1015,6 +1101,12 @@ const App = () => {
 
         // Görseli PDF'e ekle
         pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+        
+        // Logoyu yüksek kalitede ekle (sol üst köşe, aspect ratio korunarak)
+        pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
+
+        // Logoları tekrar göster
+        logos.forEach(logo => { logo.style.visibility = 'visible'; });
 
         // Stil ayarlarını geri al
         page.style.width = originalWidth;
@@ -1644,19 +1736,16 @@ const App = () => {
                   <div>
                 
                 {/* Header */}
-                <div className="flex justify-between items-start border-b pb-6 mb-6">
+                <div className="flex justify-between items-center border-b pb-6 mb-6">
                   {/* Logo Area */}
-                  <div className="flex items-center justify-start min-w-[150px]">
-                    <div className="h-16 flex items-center justify-start">
-                      <img src="/logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
-                    </div>
+                  <div className="flex items-start justify-start min-w-[150px]">
+                    <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
                   </div>
                   <div className="text-center flex-1">
                     <h1 className="text-2xl font-bold text-gray-800">TEKLİF MEKTUBU</h1>
                     <p className="text-gray-500 text-sm mt-1">Periyodik Kontrol ve Test Hizmetleri</p>
                   </div>
                   <div className="text-right w-48">
-                    <h2 className="text-lg font-bold text-blue-900">KOBİNERJİ MÜHENDİSLİK</h2>
                     <p className="text-xs text-gray-500">İzmir, Türkiye</p>
                     <p className="text-xs text-gray-500 mt-1">Tarih: {periodicCustomer.date}</p>
                   </div>
@@ -1784,13 +1873,8 @@ const App = () => {
 
                 {/* Header - Sayfa 2 */}
                 <div className="flex justify-between items-start border-b pb-6 mb-6">
-                  <div className="flex items-center justify-start min-w-[150px]">
-                    <div className="h-16 flex items-center justify-start">
-                      <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <h2 className="text-sm font-bold text-blue-900">KOBİNERJİ MÜHENDİSLİK</h2>
+                  <div className="flex items-start justify-start min-w-[150px]">
+                    <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
                   </div>
                 </div>
 
@@ -2100,8 +2184,8 @@ const App = () => {
                         {/* Header */}
                         <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
                             {/* Top Left Logo */}
-                            <div className="w-1/3 flex items-center h-16">
-                                <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
+                            <div className="w-1/3 flex items-start">
+                                <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
                             </div>
                             <div className="text-right">
                                 <h1 className="text-lg font-bold text-gray-800 tracking-wide uppercase">FİYAT TEKLİFİ</h1>
@@ -2266,15 +2350,8 @@ const App = () => {
                     <div>
                       <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
                             {/* Page 2 Header - Logo */}
-                            <div className="w-1/3 flex items-center h-16">
-                              {logo ? (
-                                  <img src={logo} alt="Firma Logosu" className="h-16 object-contain" />
-                              ) : (
-                                  <div className="text-sm font-bold text-blue-900">
-                                      <p className="text-lg">KOBİNERJİ</p>
-                                      <p className="text-xs text-gray-600">Mühendislik ve Enerji Verimliliği</p>
-                                  </div>
-                              )}
+                            <div className="w-1/3 flex items-start">
+                              <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
                             </div>
                             <div className="text-right">
                             </div>
