@@ -1648,20 +1648,7 @@ const App = () => {
                   {/* Logo Area */}
                   <div className="flex items-center justify-start min-w-[150px]">
                     <div className="h-16 flex items-center justify-start">
-                      {logo ? (
-                        <img src={logo} alt="Firma Logosu" className="h-16 max-w-[140px] object-contain" />
-                      ) : (
-                        <div className="w-32 h-full">
-                          {/* Logo Upload Area - Only visible when not printing */}
-                          <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50 transition no-print">
-                            <div className="text-center text-gray-400 text-xs flex flex-col items-center">
-                              <UploadCloud className="w-6 h-6 mb-1"/>
-                              <span>Logo Yükle</span>
-                            </div>
-                            <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
-                          </label>
-                        </div>
-                      )}
+                      <img src="/kobinerji-logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
                     </div>
                   </div>
                   <div className="text-center flex-1">
@@ -1764,13 +1751,14 @@ const App = () => {
                   <div className="w-full md:w-1/2 bg-blue-50 p-4 rounded-lg border border-blue-100">
                     <div className="flex justify-between text-sm text-gray-600 mb-2">
                       <span>EMO Liste Fiyatı Toplamı:</span>
-                      <span className="font-semibold line-through decoration-red-500">{formatCurrency(periodicResults.grandTotal)}</span>
+                      <span className="font-semibold">{formatCurrency(periodicResults.grandTotal)}</span>
                     </div>
-                    <div className="flex justify-between text-sm text-green-700 mb-3 pb-3 border-b border-blue-200">
+                    <div className="flex justify-between text-sm text-green-700 mb-2">
                       <span>Uygulanan İskonto (%{periodicInputs.iskonto}):</span>
                       <span>- {formatCurrency(periodicResults.discountAmount)}</span>
                     </div>
-                    <div className="flex justify-between text-lg font-bold text-blue-900 pt-1">
+                    <div className="border-t-2 border-blue-300 my-3"></div>
+                    <div className="flex justify-between text-lg font-bold text-blue-900">
                       <span>TEKLİF EDİLEN TOPLAM:</span>
                       <span>{formatCurrency(periodicResults.finalPrice)}</span>
                     </div>
@@ -1778,37 +1766,65 @@ const App = () => {
                   </div>
                 </div>
 
+                {/* Footer - Sayfa 1 */}
+                <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] text-center text-[8pt] text-gray-500 border-t pt-2">
+                  <p className="font-bold text-gray-800">KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.</p>
+                  <p>Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                  <p>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                  <p className="mt-1 text-gray-400">Sayfa 1/2</p>
+                </div>
+
+                  </div>
+                </div>
+                {/* SAYFA 1 SONU */}
+
+                {/* SAYFA 2 */}
+                <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 periodic-pdf-page" style={{pageBreakBefore: 'always', pageBreakInside: 'avoid', pageBreakAfter: 'auto'}}>
+                  <div>
+
+                {/* Header - Sayfa 2 */}
+                <div className="flex justify-between items-start border-b pb-6 mb-6">
+                  <div className="flex items-center justify-start min-w-[150px]">
+                    <div className="h-16 flex items-center justify-start">
+                      <img src="/kobinerji-logo.png" alt="Kobinerji Logo" className="h-16 max-w-[140px] object-contain" />
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <h2 className="text-sm font-bold text-blue-900">KOBİNERJİ MÜHENDİSLİK</h2>
+                  </div>
+                </div>
+
                 {/* İndirim Gerekçesi */}
-                <div className="mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border border-blue-200">
-                  <h4 className="text-[9pt] font-bold text-blue-900 mb-2 flex items-center">
-                    <CheckCircle className="h-4 w-4 mr-1"/>
+                <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                  <h4 className="text-[10pt] font-bold text-blue-900 mb-3 flex items-center">
+                    <CheckCircle className="h-5 w-5 mr-2"/>
                     İndirim Uygulamasının Gerekçesi ve Katma Değer
                   </h4>
-                  <p className="text-[8pt] text-gray-700 leading-tight mb-2">
+                  <p className="text-[9pt] text-gray-700 leading-tight mb-3">
                     Bu hizmetler normalde EMO'nun asgari ücret yönetmeliğine tabi olsa da, Kobinerji olarak size sağladığımız rekabetçi avantajlar ve taahhütlerimiz şunlardır:
                   </p>
-                  <div className="space-y-2">
-                    <div className="bg-white p-2 rounded border-l-3 border-blue-500">
-                      <h5 className="text-[8pt] font-bold text-gray-800 mb-0.5">1. Stratejik Müşteri Ölçeği</h5>
-                      <p className="text-[8pt] text-gray-600 leading-tight">
+                  <div className="space-y-3">
+                    <div className="bg-white p-3 rounded border-l-4 border-blue-500">
+                      <h5 className="text-[9pt] font-bold text-gray-800 mb-1">1. Stratejik Müşteri Ölçeği</h5>
+                      <p className="text-[9pt] text-gray-600 leading-tight">
                         {periodicCustomer.name || 'Müşteriniz'}, sanayi tesisi olarak büyük bir potansiyele sahiptir. Kobinerji'nin {periodicCustomer.city || 'bölgedeki'} konumlanması ve bölgedeki büyük endüstriyel müşterilere odaklanma hedefi, bu ölçekteki bir firmayla uzun vadeli iş birliği için yüksek indirim oranını haklı kılmaktadır.
                       </p>
                     </div>
-                    <div className="bg-white p-2 rounded border-l-3 border-green-500">
-                      <h5 className="text-[8pt] font-bold text-gray-800 mb-0.5">2. Yasal Uyum ve Güvenlik</h5>
-                      <p className="text-[8pt] text-gray-600 leading-tight">
+                    <div className="bg-white p-3 rounded border-l-4 border-green-500">
+                      <h5 className="text-[9pt] font-bold text-gray-800 mb-1">2. Yasal Uyum ve Güvenlik</h5>
+                      <p className="text-[9pt] text-gray-600 leading-tight">
                         Teklif kapsamındaki tüm hizmetler (Topraklama, RCD Testleri, Yıldırımdan Korunma ve İç Tesisat Gözle Kontrolü), İş Ekipmanlarının Kullanımında Sağlık ve Güvenlik Şartları Yönetmeliği uyarınca zorunlu olan yıllık periyodik kontrol gerekliliklerini eksiksiz yerine getirecektir.
                       </p>
                     </div>
-                    <div className="bg-white p-2 rounded border-l-3 border-purple-500">
-                      <h5 className="text-[8pt] font-bold text-gray-800 mb-0.5">3. Tekrar Eden Hizmet Olanakları</h5>
-                      <p className="text-[8pt] text-gray-600 leading-tight">
+                    <div className="bg-white p-3 rounded border-l-4 border-purple-500">
+                      <h5 className="text-[9pt] font-bold text-gray-800 mb-1">3. Tekrar Eden Hizmet Olanakları</h5>
+                      <p className="text-[9pt] text-gray-600 leading-tight">
                         EMO mevzuatı, tekrarlanan ölçüm ve denetim hizmetlerinde bedellerin %50'sinin uygulanabileceğini belirtmektedir. Sizin talep ettiğiniz %{periodicInputs.iskonto} iskonto oranı, bu yasal alt sınırın çok üzerinde, Kobinerji'nin rekabetçi konumlanmasını göstermektedir.
                       </p>
                     </div>
-                    <div className="bg-white p-2 rounded border-l-3 border-yellow-500">
-                      <h5 className="text-[8pt] font-bold text-gray-800 mb-0.5">4. Enerji Verimliliği Odaklı Yaklaşım</h5>
-                      <p className="text-[8pt] text-gray-600 leading-tight">
+                    <div className="bg-white p-3 rounded border-l-4 border-yellow-500">
+                      <h5 className="text-[9pt] font-bold text-gray-800 mb-1">4. Enerji Verimliliği Odaklı Yaklaşım</h5>
+                      <p className="text-[9pt] text-gray-600 leading-tight">
                         Kobinerji'nin temel uzmanlığı enerji verimliliği ve sanayideki bu potansiyeli ortaya çıkarmaktır. Fabrikanızda yapılacak bu kontroller, sadece yasal zorunluluğu değil, aynı zamanda enerji tasarruf potansiyeli olan alanların belirlenmesine de ön ayak olacaktır, zira Kobinerji bu alanda Enerji Bakanlığı'na bağlı olarak enerji etütleri yapmaktadır.
                       </p>
                     </div>
@@ -1816,9 +1832,9 @@ const App = () => {
                 </div>
 
                 {/* Alt Bilgi */}
-                <div className="text-xs text-gray-500 border-t pt-4">
+                <div className="text-[9pt] text-gray-500 border-t pt-4 mb-6">
                   <p className="mb-2"><strong>Notlar:</strong></p>
-                  <ul className="list-disc pl-4 space-y-1">
+                  <ul className="list-disc pl-5 space-y-1">
                     <li>Fiyatlara KDV dahil değildir.</li>
                     <li>Tüm hizmetler EMO dokümanlarına (ZPKK01, ZPKK03, vb.) uygun raporlanacaktır.</li>
                     <li>Kobinerji Mühendislik, MÜSİAD Enerji ve Çevre Sektör Kurulu üyesidir.</li>
@@ -1826,16 +1842,17 @@ const App = () => {
                   </ul>
                 </div>
 
-                {/* Footer */}
-                <div className="mt-8 text-center text-xs text-gray-500 border-t pt-4">
+                {/* Footer - Sayfa 2 */}
+                <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] text-center text-[8pt] text-gray-500 border-t pt-2">
                   <p className="font-bold text-gray-800">KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.</p>
                   <p>Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
                   <p>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                  <p className="mt-1 text-gray-400">Sayfa 2/2</p>
                 </div>
 
                   </div>
                 </div>
-                {/* SAYFA 1 SONU */}
+                {/* SAYFA 2 SONU */}
 
               </div>
             </div>
