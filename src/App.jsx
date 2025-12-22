@@ -152,6 +152,14 @@ const App = () => {
   // Teklif Sayacı ve Sabit Sicil No
   const [proposalCount, setProposalCount] = useState(1);
   const ODA_SICIL_NO = "92558";
+  
+  // Para Birimi Seçeneği
+  const [currency, setCurrency] = useState('TRY'); // 'TRY', 'USD', 'EUR'
+  const [previousCurrency, setPreviousCurrency] = useState('TRY');
+  const [exchangeRates, setExchangeRates] = useState({
+    USD: 40.00, // TL/USD
+    EUR: 49.00  // TL/EUR
+  });
 
   const apiKey = "AIzaSyBMTNck0O4t_zFGoojvqseM1KX3OSxCy2s"; // Gemini API key
   
@@ -328,10 +336,58 @@ const App = () => {
     });
   };
 
+  // Para birimi değişikliği işleyicisi
+  const handleCurrencyChange = (newCurrency) => {
+    if (newCurrency === previousCurrency) return;
+    
+    // Dönüşüm oranını hesapla
+    let conversionRate = 1;
+    if (previousCurrency === 'TRY' && newCurrency === 'USD') {
+      conversionRate = 1 / exchangeRates.USD;
+    } else if (previousCurrency === 'TRY' && newCurrency === 'EUR') {
+      conversionRate = 1 / exchangeRates.EUR;
+    } else if (previousCurrency === 'USD' && newCurrency === 'TRY') {
+      conversionRate = exchangeRates.USD;
+    } else if (previousCurrency === 'EUR' && newCurrency === 'TRY') {
+      conversionRate = exchangeRates.EUR;
+    } else if (previousCurrency === 'USD' && newCurrency === 'EUR') {
+      conversionRate = exchangeRates.USD / exchangeRates.EUR;
+    } else if (previousCurrency === 'EUR' && newCurrency === 'USD') {
+      conversionRate = exchangeRates.EUR / exchangeRates.USD;
+    }
+    
+    // Tüm params fiyatlarını dönüştür
+    setParams(prev => ({
+      ...prev,
+      baseFee: parseFloat((prev.baseFee * conversionRate).toFixed(2)),
+      rate1: parseFloat((prev.rate1 * conversionRate).toFixed(2)),
+      rate2: parseFloat((prev.rate2 * conversionRate).toFixed(2)),
+      poleFee1: parseFloat((prev.poleFee1 * conversionRate).toFixed(2)),
+      poleFee2: parseFloat((prev.poleFee2 * conversionRate).toFixed(2)),
+      poleFee3: parseFloat((prev.poleFee3 * conversionRate).toFixed(2))
+    }));
+    
+    // Eğer seçili firma varsa, onun fiyatlarını da güncelle
+    if (selectedCompany) {
+      setSelectedCompany(prev => ({
+        ...prev,
+        nominalFee: parseFloat((prev.nominalFee * conversionRate).toFixed(2)),
+        discountAmount: parseFloat((prev.discountAmount * conversionRate).toFixed(2)),
+        offerPrice: parseFloat((prev.offerPrice * conversionRate).toFixed(2))
+      }));
+    }
+    
+    setPreviousCurrency(newCurrency);
+    setCurrency(newCurrency);
+  };
+  
   const formatCurrency = (val) => {
-    if (val === null || val === undefined || isNaN(val)) return "0,00 TL";
-    if (val < 100) return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
-    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
+    if (val === null || val === undefined || isNaN(val)) return "0,00";
+    const currencySymbols = { 'TRY': 'TL', 'USD': '$', 'EUR': '€' };
+    const symbol = currencySymbols[currency] || 'TL';
+    if (val < 100) return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val) + ' ' + symbol;
+    const formatted = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+    return formatted + ' ' + symbol;
   };
   
   const formatNumber = (val) => {
@@ -1364,6 +1420,51 @@ const App = () => {
                   <span className="absolute right-3 top-2 text-gray-400 text-sm">%</span>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Para Birimi</label>
+                <select 
+                  value={currency} 
+                  onChange={(e) => handleCurrencyChange(e.target.value)}
+                  className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-blue-700"
+                >
+                  <option value="TRY">🇹🇷 Türk Lirası (TL)</option>
+                  <option value="USD">🇺🇸 Dolar ($)</option>
+                  <option value="EUR">🇪🇺 Euro (€)</option>
+                </select>
+              </div>
+              {/* Kur Oranları */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-600 mb-2">💱 Kur Oranları (1 TL = ? Yabancı Para)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500">USD Kuru</label>
+                    <div className="relative">
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={exchangeRates.USD} 
+                        onChange={(e) => setExchangeRates({...exchangeRates, USD: parseFloat(e.target.value) || 1})}
+                        className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                      />
+                      <span className="absolute right-3 top-2 text-gray-400 text-xs">TL/$</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">EUR Kuru</label>
+                    <div className="relative">
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={exchangeRates.EUR} 
+                        onChange={(e) => setExchangeRates({...exchangeRates, EUR: parseFloat(e.target.value) || 1})}
+                        className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                      />
+                      <span className="absolute right-3 top-2 text-gray-400 text-xs">TL/€</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-yellow-600 mt-1">⚠️ Para birimini değiştirdiğinizde tüm fiyatlar otomatik dönüştürülecektir.</p>
+              </div>
               {/* Direk Tipi Ayarları */}
               <div className="md:col-span-3 border-t pt-4 mt-2">
                  <p className="text-xs font-bold text-gray-500 mb-2">DİREK TİPİ TRAFOLAR (EMO Madde 3.1)</p>
@@ -2063,6 +2164,22 @@ const App = () => {
                 {/* Hızlı Düzenleme */}
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
                     <h3 className="font-bold text-blue-900 mb-2">Hızlı Düzenleme</h3>
+                    
+                    {/* Para Birimi Seçici */}
+                    <div className="mb-3">
+                      <label className="text-xs font-bold text-blue-800 uppercase">💱 Para Birimi</label>
+                      <select 
+                        value={currency} 
+                        onChange={(e) => handleCurrencyChange(e.target.value)}
+                        className="w-full mt-1 p-2 border border-blue-200 rounded text-sm font-semibold text-blue-700"
+                      >
+                        <option value="TRY">🇹🇷 Türk Lirası (TL)</option>
+                        <option value="USD">🇺🇸 Dolar ($)</option>
+                        <option value="EUR">🇪🇺 Euro (€)</option>
+                      </select>
+                      <p className="text-xs text-blue-600 mt-1">Tüm fiyatlar otomatik dönüştürülür</p>
+                    </div>
+                    
                     <div className="mb-3">
                     <label className="text-xs font-bold text-blue-800 uppercase">Özel İskonto (%)</label>
                     <input 
@@ -2233,15 +2350,15 @@ const App = () => {
                           <>
                             <tr>
                               <td className="border border-gray-300 p-2">İlk 400 kVA (Sabit)</td>
-                              <td className="border border-gray-300 p-2">{formatCurrency(params.baseFee)} TL</td>
-                              <td className="border border-gray-300 p-2 text-right">{formatCurrency(params.baseFee)} TL</td>
+                              <td className="border border-gray-300 p-2">{formatCurrency(params.baseFee)}</td>
+                              <td className="border border-gray-300 p-2 text-right">{formatCurrency(params.baseFee)}</td>
                             </tr>
                             {selectedCompany.totalKVA > 400 && selectedCompany.totalKVA <= 5000 && (
                               <tr>
                                 <td className="border border-gray-300 p-2">401 - {selectedCompany.totalKVA} kVA Arası (Artan)</td>
                                 <td className="border border-gray-300 p-2">{params.rate1} TL/kVA</td>
                                 <td className="border border-gray-300 p-2 text-right">
-                                  {formatCurrency((selectedCompany.totalKVA - 400) * params.rate1)} TL
+                                  {formatCurrency((selectedCompany.totalKVA - 400) * params.rate1)}
                                 </td>
                               </tr>
                             )}
@@ -2251,14 +2368,14 @@ const App = () => {
                                 <td className="border border-gray-300 p-2">401 - 5000 kVA Arası (Artan)</td>
                                 <td className="border border-gray-300 p-2">{params.rate1} TL/kVA</td>
                                 <td className="border border-gray-300 p-2 text-right">
-                                  {formatCurrency(4600 * params.rate1)} TL
+                                  {formatCurrency(4600 * params.rate1)}
                                 </td>
                               </tr>
                               <tr>
                                 <td className="border border-gray-300 p-2">5000 kVA Üzeri (Artan)</td>
                                 <td className="border border-gray-300 p-2">{params.rate2} TL/kVA</td>
                                 <td className="border border-gray-300 p-2 text-right">
-                                  {formatCurrency((selectedCompany.totalKVA - 5000) * params.rate2)} TL
+                                  {formatCurrency((selectedCompany.totalKVA - 5000) * params.rate2)}
                                 </td>
                               </tr>
                               </>
@@ -2275,7 +2392,7 @@ const App = () => {
                               </td>
                               <td className="border border-gray-300 p-2">Sabit</td>
                               <td className="border border-gray-300 p-2 text-right">
-                                  {formatCurrency(selectedCompany.nominalFee / (selectedCompany.regionCoeff || 1))} TL
+                                  {formatCurrency(selectedCompany.nominalFee / (selectedCompany.regionCoeff || 1))}
                               </td>
                           </tr>
                         )}
@@ -2284,14 +2401,14 @@ const App = () => {
                           <tr style={{backgroundColor: '#d4f5d4'}}>
                             <td className="border border-gray-300 p-2" colSpan="2">Bölgesel Azaltma Katsayısı (x {(selectedCompany.regionCoeff || params.regionCoeff)})</td>
                             <td className="border border-gray-300 p-2 text-right font-bold" style={{color: '#2e7d32'}}>
-                                {(selectedCompany.regionCoeff || params.regionCoeff) < 1 ? '-' : '+'}{formatCurrency(Math.abs(selectedCompany.nominalFee - (selectedCompany.nominalFee / (selectedCompany.regionCoeff || params.regionCoeff))))} TL
+                                {(selectedCompany.regionCoeff || params.regionCoeff) < 1 ? '-' : '+'}{formatCurrency(Math.abs(selectedCompany.nominalFee - (selectedCompany.nominalFee / (selectedCompany.regionCoeff || params.regionCoeff))))}
                             </td>
                           </tr>
                         )}
 
                         <tr className="font-bold" style={{backgroundColor: '#c8f0c8'}}>
                           <td className="border border-gray-300 p-2" colSpan="2">EMO {params.year} TOPLAM NOMİNAL TARİFE (KDV Hariç)</td>
-                          <td className="border border-gray-300 p-2 text-right">{formatCurrency(selectedCompany.nominalFee)} TL</td>
+                          <td className="border border-gray-300 p-2 text-right">{formatCurrency(selectedCompany.nominalFee)}</td>
                         </tr>
                       </tbody>
                     </table>
