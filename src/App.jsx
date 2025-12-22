@@ -1833,7 +1833,7 @@ const App = () => {
               >
                 
                 {/* SAYFA 1 */}
-                <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 periodic-pdf-page" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
+                <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 periodic-pdf-page" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
                   <div>
                 
                 {/* Header */}
@@ -1969,7 +1969,7 @@ const App = () => {
                 {/* SAYFA 1 SONU */}
 
                 {/* SAYFA 2 */}
-                <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 periodic-pdf-page" style={{pageBreakBefore: 'always', pageBreakInside: 'avoid', pageBreakAfter: 'auto'}}>
+                <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 periodic-pdf-page" style={{pageBreakBefore: 'always', pageBreakInside: 'avoid', pageBreakAfter: 'auto'}}>
                   <div>
 
                 {/* Header - Sayfa 2 */}
@@ -2296,7 +2296,7 @@ const App = () => {
               >
                   
                   {/* SAYFA 1 */}
-                  <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 pdf-page" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
+                  <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 pdf-page" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
                     <div>
                         {/* Header */}
                         <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
@@ -2463,7 +2463,7 @@ const App = () => {
                   </div>
                   
                   {/* SAYFA 2 - Ücretsiz Ek Hizmetler */}
-                  <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl relative text-[9.5pt] leading-tight text-gray-800 page-break pdf-page" style={{pageBreakBefore: 'always', pageBreakInside: 'avoid', pageBreakAfter: 'auto'}}>
+                  <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[9.5pt] leading-tight text-gray-800 page-break pdf-page" style={{pageBreakBefore: 'always', pageBreakInside: 'avoid', pageBreakAfter: 'auto'}}>
                     <div>
                       <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
                             {/* Page 2 Header - Logo */}
