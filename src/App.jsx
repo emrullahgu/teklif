@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet } from 'lucide-react';
+import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2 } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import jsPDF from 'jspdf';
@@ -10,6 +10,7 @@ import html2pdf from 'html2pdf.js';
 import html2canvas from 'html2canvas';
 import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableCell, TableRow, WidthType, BorderStyle, Packer } from 'docx';
 import { saveAs } from 'file-saver';
+import FaturaData from '../fatura/Fatura.json';
 
 // EMO 2026 Bölgesel Azaltma Katsayıları Listesi (Sabit Veri)
 const REGION_LIST = [
@@ -237,12 +238,114 @@ const App = () => {
   const [periodicEditorMode, setPeriodicEditorMode] = useState(false);
   const [periodicEditableContent, setPeriodicEditableContent] = useState('');
 
+  // Keşif Metraj States
+  const [kesifCustomer, setKesifCustomer] = useState({
+    name: '',
+    address: '',
+    contactName: '',
+    phone: '',
+    date: new Date().toLocaleDateString('tr-TR')
+  });
+
+  const [kesifProducts, setKesifProducts] = useState([]);
+  const [kesifSettings, setKesifSettings] = useState({
+    iskonto: 0,
+    kdvOrani: 20
+  });
+
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productQuantity, setProductQuantity] = useState(1);
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+
+  // Filter products based on search
+  const filteredProducts = useMemo(() => {
+    if (!productSearch) return [];
+    const searchLower = productSearch.toLowerCase();
+    return FaturaData.filter(p => 
+      p.ÜRÜN?.toLowerCase().includes(searchLower) || 
+      p.MARKA?.toLowerCase().includes(searchLower)
+    ).slice(0, 20);
+  }, [productSearch]);
+
+  // Keşif Metraj Editor Mode
+  const [kesifEditorMode, setKesifEditorMode] = useState(false);
+  const [kesifEditableContent, setKesifEditableContent] = useState('');
+
   // --- Helpers ---
 
   // Helper to parse power string "2000+2000+1600" -> 5600
   const parsePower = (str) => {
     if (!str) return 0;
     return str.toString().split('+').reduce((acc, curr) => acc + parseInt(curr.trim() || 0), 0);
+  };
+
+  // Keşif Metraj Fonksiyonları
+  const addProductToKesif = () => {
+    if (!selectedProduct || productQuantity <= 0) return;
+    
+    const newProduct = {
+      id: Date.now(),
+      sira: kesifProducts.length + 1,
+      urun: selectedProduct.ÜRÜN,
+      marka: selectedProduct.MARKA,
+      birimFiyat: selectedProduct["BİRİM FİYAT"],
+      miktar: productQuantity,
+      olcu: selectedProduct.ÖLÇÜ,
+      toplam: selectedProduct["BİRİM FİYAT"] * productQuantity
+    };
+
+    setKesifProducts([...kesifProducts, newProduct]);
+    setSelectedProduct(null);
+    setProductSearch('');
+    setProductQuantity(1);
+    setShowProductDropdown(false);
+  };
+
+  const removeProductFromKesif = (id) => {
+    const updated = kesifProducts.filter(p => p.id !== id);
+    // Re-number the rows
+    const reNumbered = updated.map((p, idx) => ({ ...p, sira: idx + 1 }));
+    setKesifProducts(reNumbered);
+  };
+
+  const updateProductQuantity = (id, newQuantity) => {
+    const updated = kesifProducts.map(p => 
+      p.id === id ? { ...p, miktar: newQuantity, toplam: p.birimFiyat * newQuantity } : p
+    );
+    setKesifProducts(updated);
+  };
+
+  const calculateKesifTotals = () => {
+    const subTotal = kesifProducts.reduce((sum, p) => sum + p.toplam, 0);
+    const iskontoAmount = subTotal * (kesifSettings.iskonto / 100);
+    const afterDiscount = subTotal - iskontoAmount;
+    const kdvAmount = afterDiscount * (kesifSettings.kdvOrani / 100);
+    const grandTotal = afterDiscount + kdvAmount;
+
+    return {
+      subTotal,
+      iskontoAmount,
+      afterDiscount,
+      kdvAmount,
+      grandTotal
+    };
+  };
+
+  const handleKesifSubmit = (e) => {
+    e.preventDefault();
+    if (kesifProducts.length === 0) {
+      alert('Lütfen en az bir ürün ekleyin!');
+      return;
+    }
+    setSelectedCompany({
+      ...kesifCustomer,
+      type: 'kesif',
+      products: kesifProducts,
+      settings: kesifSettings,
+      totals: calculateKesifTotals()
+    });
+    setActiveTab('proposal');
   };
 
   // Periyodik Kontrol Hesaplama Motoru
@@ -814,16 +917,16 @@ const App = () => {
               spacing: { before: 600, after: 100 }
             }),
             new Paragraph({
-              text: "KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.",
+              text: "Kobinerji Mühendislik",
               bold: true,
               spacing: { after: 100 }
             }),
             new Paragraph({
-              text: "Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa - İzmir",
+              text: "www.kobinerji.com.tr • info@kobinerji.com.tr",
               spacing: { after: 50 }
             }),
             new Paragraph({
-              text: "T: +90 535 714 52 88 | W: www.kobinerji.com"
+              text: "Tel: +90 535 714 52 88 | İzmir, Türkiye"
             })
           ]
         }]
@@ -975,9 +1078,9 @@ const App = () => {
       ['İskonto Tutarı:', formatCurrency(selectedCompany.discountAmount)],
       ['AYLIK TEKLİF FİYATI:', formatCurrency(selectedCompany.offerPrice) + ' + KDV'],
       [],
-      ['KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.'],
-      ['Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa - İzmir'],
-      ['T: +90 535 714 52 88 | W: www.kobinerji.com']
+      ['Kobinerji Mühendislik'],
+      ['www.kobinerji.com.tr • info@kobinerji.com.tr'],
+      ['Tel: +90 535 714 52 88 | İzmir, Türkiye']
     ];
     
     const worksheet = XLSX.utils.aoa_to_sheet(proposalData);
@@ -1239,8 +1342,8 @@ const App = () => {
     // Footer
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text('KOBİNERJİ Mühendislik ve Enerji Verimliliği Danışmanlık A.Ş.', pageWidth / 2, pageHeight - 15, { align: 'center' });
-    doc.text('T: +90 535 714 52 88 | W: www.kobinerji.com', pageWidth / 2, pageHeight - 10, { align: 'center' });
+    doc.text('Kobinerji Mühendislik', pageWidth / 2, pageHeight - 15, { align: 'center' });
+    doc.text('www.kobinerji.com.tr • info@kobinerji.com.tr | Tel: +90 535 714 52 88 | İzmir, Türkiye', pageWidth / 2, pageHeight - 10, { align: 'center' });
     
     // Kaydet
     const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
@@ -1506,6 +1609,13 @@ const App = () => {
           >
             <RefreshCw className="w-4 h-4 mr-2"/>
             Periyodik Kontrol
+          </button>
+          <button 
+            onClick={() => setActiveTab('kesif')}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'kesif' ? 'bg-white shadow text-orange-700' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            <Hammer className="w-4 h-4 mr-2"/>
+            Keşif Metraj Fiyat Teklifi
           </button>
           <button 
             onClick={() => setActiveTab('proposal')}
@@ -2021,9 +2131,9 @@ const App = () => {
 
                 {/* Footer - Sayfa 2 */}
                 <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] text-center text-[8pt] text-gray-500 border-t pt-2">
-                  <p className="font-bold text-gray-800">KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.</p>
-                  <p>Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
-                  <p>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                  <p className="font-bold text-gray-800">Kobinerji Mühendislik</p>
+                  <p>www.kobinerji.com.tr • info@kobinerji.com.tr</p>
+                  <p>Tel: +90 535 714 52 88 | İzmir, Türkiye</p>
                   <p className="mt-1 text-gray-400">Sayfa 2/2</p>
                 </div>
 
@@ -2034,6 +2144,289 @@ const App = () => {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* Keşif Metraj Fiyat Teklifi Tab */}
+        {activeTab === 'kesif' && (
+          <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-orange-600 to-orange-700 px-6 py-4 border-b border-orange-800">
+              <h2 className="text-lg font-bold text-white flex items-center">
+                <Hammer className="mr-2 h-5 w-5"/>
+                Keşif Metraj Fiyat Teklifi
+              </h2>
+              <p className="text-orange-100 text-xs mt-1">Elektrik malzemesi keşif metraj listesi oluşturun ve otomatik teklif hazırlayın.</p>
+            </div>
+
+            <form onSubmit={handleKesifSubmit} className="p-8 space-y-6">
+              
+              {/* Müşteri Bilgileri */}
+              <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <h3 className="text-md font-bold text-gray-800 mb-4 flex items-center">
+                  <Users className="w-5 h-5 mr-2 text-orange-600"/>
+                  Müşteri Bilgileri
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Firma/Kurum Adı *</label>
+                    <input 
+                      required
+                      type="text" 
+                      placeholder="Örn: XYZ İnşaat Ltd. Şti."
+                      value={kesifCustomer.name}
+                      onChange={(e) => setKesifCustomer({...kesifCustomer, name: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Yetkili Adı Soyadı</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: Ahmet Yılmaz"
+                      value={kesifCustomer.contactName}
+                      onChange={(e) => setKesifCustomer({...kesifCustomer, contactName: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Adres</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: Ankara, Çankaya"
+                      value={kesifCustomer.address}
+                      onChange={(e) => setKesifCustomer({...kesifCustomer, address: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Telefon</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: 0555 123 45 67"
+                      value={kesifCustomer.phone}
+                      onChange={(e) => setKesifCustomer({...kesifCustomer, phone: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Ürün Ekleme */}
+              <div className="bg-orange-50 p-6 rounded-lg border border-orange-200">
+                <h3 className="text-md font-bold text-gray-800 mb-4 flex items-center">
+                  <Plus className="w-5 h-5 mr-2 text-orange-600"/>
+                  Ürün Ekle
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div className="md:col-span-2 relative">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Ürün Ara</label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="Ürün adı veya marka ile arayın..."
+                        value={productSearch}
+                        onChange={(e) => {
+                          setProductSearch(e.target.value);
+                          setShowProductDropdown(true);
+                        }}
+                        onFocus={() => setShowProductDropdown(true)}
+                        className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                      />
+                      <Search className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"/>
+                    </div>
+                    
+                    {/* Dropdown */}
+                    {showProductDropdown && filteredProducts.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredProducts.map((product, idx) => (
+                          <div 
+                            key={idx}
+                            onClick={() => {
+                              setSelectedProduct(product);
+                              setProductSearch(product.ÜRÜN);
+                              setShowProductDropdown(false);
+                            }}
+                            className="px-4 py-3 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-0"
+                          >
+                            <div className="font-semibold text-sm text-gray-800">{product.ÜRÜN}</div>
+                            <div className="text-xs text-gray-600 mt-1">
+                              <span className="font-medium">{product.MARKA}</span> • {product["BİRİM FİYAT"]} TL/{product.ÖLÇÜ}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar</label>
+                    <input 
+                      type="number" 
+                      min="0.01"
+                      step="0.01"
+                      placeholder="Miktar"
+                      value={productQuantity}
+                      onChange={(e) => setProductQuantity(parseFloat(e.target.value) || 0)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-3">
+                    <button 
+                      type="button"
+                      onClick={addProductToKesif}
+                      disabled={!selectedProduct}
+                      className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                    >
+                      <Plus className="w-5 h-5 mr-2"/>
+                      Listeye Ekle
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ürün Listesi */}
+              {kesifProducts.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-800 px-4 py-3">
+                    <h3 className="text-md font-bold text-white flex items-center">
+                      <FileSpreadsheet className="w-5 h-5 mr-2"/>
+                      Ürün Listesi ({kesifProducts.length} ürün)
+                    </h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100 border-b border-gray-300">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">SIRA</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">ÜRÜN ADI</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">MARKA</th>
+                          <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">BİRİM FİYAT</th>
+                          <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">MİKTAR</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">ÖLÇÜ</th>
+                          <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">TOPLAM</th>
+                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-700">İŞLEM</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {kesifProducts.map((product) => (
+                          <tr key={product.id} className="border-b border-gray-200 hover:bg-gray-50">
+                            <td className="px-4 py-3 text-gray-700">{product.sira}</td>
+                            <td className="px-4 py-3 text-gray-700 font-medium">{product.urun}</td>
+                            <td className="px-4 py-3 text-gray-600">{product.marka}</td>
+                            <td className="px-4 py-3 text-right text-gray-700">{product.birimFiyat.toFixed(2)} TL</td>
+                            <td className="px-4 py-3 text-right">
+                              <input 
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={product.miktar}
+                                onChange={(e) => updateProductQuantity(product.id, parseFloat(e.target.value) || 0)}
+                                className="w-20 px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">{product.olcu}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-gray-800">{product.toplam.toFixed(2)} TL</td>
+                            <td className="px-4 py-3 text-center">
+                              <button 
+                                type="button"
+                                onClick={() => removeProductFromKesif(product.id)}
+                                className="text-red-600 hover:text-red-800 transition"
+                              >
+                                <Trash2 className="w-4 h-4"/>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* İskonto ve KDV Ayarları */}
+              {kesifProducts.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                      <Percent className="w-4 h-4 mr-2 text-blue-600"/>
+                      İskonto Oranı (%)
+                    </label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={kesifSettings.iskonto}
+                      onChange={(e) => setKesifSettings({...kesifSettings, iskonto: parseFloat(e.target.value) || 0})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-lg font-semibold"
+                    />
+                  </div>
+                  <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                      <Percent className="w-4 h-4 mr-2 text-green-600"/>
+                      KDV Oranı (%)
+                    </label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={kesifSettings.kdvOrani}
+                      onChange={(e) => setKesifSettings({...kesifSettings, kdvOrani: parseFloat(e.target.value) || 0})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition text-lg font-semibold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Özet ve Toplamlar */}
+              {kesifProducts.length > 0 && (
+                <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-lg border-2 border-gray-300">
+                  <h3 className="text-md font-bold text-gray-800 mb-4">Teklif Özeti</h3>
+                  {(() => {
+                    const totals = calculateKesifTotals();
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-gray-300">
+                          <span className="text-sm font-medium text-gray-700">Ara Toplam:</span>
+                          <span className="text-lg font-semibold text-gray-800">{totals.subTotal.toFixed(2)} TL</span>
+                        </div>
+                        {kesifSettings.iskonto > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b border-gray-300">
+                            <span className="text-sm font-medium text-blue-700">İskonto (% {kesifSettings.iskonto}):</span>
+                            <span className="text-lg font-semibold text-blue-700">- {totals.iskontoAmount.toFixed(2)} TL</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center py-2 border-b border-gray-300">
+                          <span className="text-sm font-medium text-gray-700">İskonto Sonrası:</span>
+                          <span className="text-lg font-semibold text-gray-800">{totals.afterDiscount.toFixed(2)} TL</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-gray-300">
+                          <span className="text-sm font-medium text-green-700">KDV (% {kesifSettings.kdvOrani}):</span>
+                          <span className="text-lg font-semibold text-green-700">+ {totals.kdvAmount.toFixed(2)} TL</span>
+                        </div>
+                        <div className="flex justify-between items-center py-3 bg-orange-600 text-white px-4 rounded-lg mt-4">
+                          <span className="text-base font-bold">GENEL TOPLAM:</span>
+                          <span className="text-2xl font-bold">{totals.grandTotal.toFixed(2)} TL</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button 
+                type="submit"
+                disabled={kesifProducts.length === 0}
+                className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white py-4 px-6 rounded-lg font-bold text-lg transition shadow-lg flex items-center justify-center"
+              >
+                <FileText className="w-6 h-6 mr-3"/>
+                Teklif Önizlemesine Git
+              </button>
+
+            </form>
           </div>
         )}
 
@@ -2287,7 +2680,161 @@ const App = () => {
                 style={editorMode ? { minHeight: '297mm' } : {}}
               >
                   
-                  {/* SAYFA 1 */}
+                  {/* KEŞİF METRAJ TEKLİF - Conditional Render */}
+                  {selectedCompany.type === 'kesif' ? (
+                    <>
+                      {(() => {
+                        const products = selectedCompany.products;
+                        const itemsPerPage = 8; // Her sayfada maksimum 15 ürün (sayfa taşmalarını önler)
+                        const totalPages = Math.ceil(products.length / itemsPerPage);
+                        
+                        return Array.from({ length: totalPages }, (_, pageIndex) => {
+                          const startIdx = pageIndex * itemsPerPage;
+                          const endIdx = Math.min(startIdx + itemsPerPage, products.length);
+                          const pageProducts = products.slice(startIdx, endIdx);
+                          const isLastPage = pageIndex === totalPages - 1;
+                          
+                          return (
+                            <div key={pageIndex} className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 pdf-page" style={{pageBreakAfter: isLastPage ? 'auto' : 'always', pageBreakInside: 'avoid'}}>
+                              <div>
+                                {/* Header */}
+                                <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
+                                  <div className="w-1/3 flex items-start">
+                                    <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
+                                  </div>
+                                  <div className="text-right">
+                                    <h1 className="text-xl font-bold text-orange-700 tracking-wide uppercase">KEŞİF METRAJ FİYAT TEKLİFİ</h1>
+                                    <p className="text-[9pt] text-gray-500 mt-2">Referans No: KM-{new Date().getTime().toString().slice(-6)}</p>
+                                    <p className="text-[9pt] text-gray-600 mt-0.5">{selectedCompany.date}</p>
+                                  </div>
+                                </div>
+
+                                {/* Müşteri Bilgileri - Sadece İlk Sayfa */}
+                                {pageIndex === 0 && (
+                                  <>
+                                    <div className="mb-6 bg-orange-50 p-4 rounded-lg border border-orange-200">
+                                      <h3 className="text-[10pt] font-bold text-orange-800 mb-3 uppercase tracking-wide">Müşteri Bilgileri</h3>
+                                      <div className="grid grid-cols-2 gap-3 text-[9pt]">
+                                        <div><strong>Firma/Kurum:</strong> {selectedCompany.name}</div>
+                                        {selectedCompany.contactName && <div><strong>Yetkili:</strong> {selectedCompany.contactName}</div>}
+                                        {selectedCompany.address && <div><strong>Adres:</strong> {selectedCompany.address}</div>}
+                                        {selectedCompany.phone && <div><strong>Telefon:</strong> {selectedCompany.phone}</div>}
+                                      </div>
+                                    </div>
+
+                                    <p className="mb-4 text-[9.5pt] leading-tight">
+                                      <strong>Sayın {selectedCompany.contactName ? `${selectedCompany.contactName} - ` : ''}{selectedCompany.name} Yetkilisi,</strong>
+                                    </p>
+                                    <p className="mb-6 text-justify text-[9.5pt] leading-tight">
+                                      Talep ettiğiniz elektrik malzemelerine ilişkin keşif metraj fiyat teklifimiz aşağıda detaylandırılmıştır. 
+                                      Tüm fiyatlar güncel piyasa koşulları göz önünde bulundurularak hazırlanmıştır.
+                                    </p>
+                                  </>
+                                )}
+
+                                {/* Ürün Tablosu */}
+                                <h3 className="text-[10pt] font-bold text-gray-800 mb-3 uppercase tracking-wide">
+                                  {pageIndex === 0 ? 'Malzeme Listesi ve Fiyatlandırma' : 'Malzeme Listesi (Devam)'}
+                                </h3>
+                                <div className="overflow-x-auto mb-6">
+                                  <table className="w-full text-[8pt] border-collapse border border-gray-300">
+                                    <thead style={{backgroundColor: '#fb8c00'}}>
+                                      <tr>
+                                        <th className="border border-gray-300 p-2 text-center text-white font-semibold">SIRA</th>
+                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">ÜRÜN ADI</th>
+                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">MARKA</th>
+                                        <th className="border border-gray-300 p-2 text-right text-white font-semibold">BİRİM FİYAT</th>
+                                        <th className="border border-gray-300 p-2 text-right text-white font-semibold">MİKTAR</th>
+                                        <th className="border border-gray-300 p-2 text-center text-white font-semibold">ÖLÇÜ</th>
+                                        <th className="border border-gray-300 p-2 text-right text-white font-semibold">TOPLAM (TL)</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {pageProducts.map((product, idx) => (
+                                        <tr key={product.id} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                          <td className="border border-gray-300 p-2 text-center">{product.sira}</td>
+                                          <td className="border border-gray-300 p-2">{product.urun}</td>
+                                          <td className="border border-gray-300 p-2 text-gray-600">{product.marka}</td>
+                                          <td className="border border-gray-300 p-2 text-right">{product.birimFiyat.toFixed(2)} TL</td>
+                                          <td className="border border-gray-300 p-2 text-right font-semibold">{product.miktar}</td>
+                                          <td className="border border-gray-300 p-2 text-center">{product.olcu}</td>
+                                          <td className="border border-gray-300 p-2 text-right font-semibold">{product.toplam.toFixed(2)} TL</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                {/* Özet Tablo ve Şartlar - Sadece Son Sayfa */}
+                                {isLastPage && (
+                                  <>
+                                    <div className="flex justify-end mb-6">
+                                      <div className="w-1/2 bg-gray-50 border border-gray-300 rounded-lg overflow-hidden">
+                                        <table className="w-full text-[9pt]">
+                                          <tbody>
+                                            <tr className="border-b border-gray-300">
+                                              <td className="p-3 font-semibold">Ara Toplam:</td>
+                                              <td className="p-3 text-right font-bold">{selectedCompany.totals.subTotal.toFixed(2)} TL</td>
+                                            </tr>
+                                            {selectedCompany.settings.iskonto > 0 && (
+                                              <tr className="border-b border-gray-300 bg-blue-50">
+                                                <td className="p-3 font-semibold text-blue-700">İskonto (% {selectedCompany.settings.iskonto}):</td>
+                                                <td className="p-3 text-right font-bold text-blue-700">- {selectedCompany.totals.iskontoAmount.toFixed(2)} TL</td>
+                                              </tr>
+                                            )}
+                                            <tr className="border-b border-gray-300">
+                                              <td className="p-3 font-semibold">İskonto Sonrası:</td>
+                                              <td className="p-3 text-right font-bold">{selectedCompany.totals.afterDiscount.toFixed(2)} TL</td>
+                                            </tr>
+                                            <tr className="border-b border-gray-300 bg-green-50">
+                                              <td className="p-3 font-semibold text-green-700">KDV (% {selectedCompany.settings.kdvOrani}):</td>
+                                              <td className="p-3 text-right font-bold text-green-700">+ {selectedCompany.totals.kdvAmount.toFixed(2)} TL</td>
+                                            </tr>
+                                            <tr className="bg-orange-600 text-white">
+                                              <td className="p-4 font-bold text-lg">GENEL TOPLAM:</td>
+                                              <td className="p-4 text-right font-bold text-xl">{selectedCompany.totals.grandTotal.toFixed(2)} TL</td>
+                                            </tr>
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+
+                                    <div className="mt-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                      <h3 className="text-[10pt] font-bold text-gray-800 mb-3">Genel Şartlar ve Notlar</h3>
+                                      <ul className="list-disc list-inside text-[9pt] leading-relaxed space-y-2">
+                                        <li>Teklif geçerlilik süresi: 15 gündür.</li>
+                                        <li>Fiyatlara KDV dahil edilmiştir.</li>
+                                        <li>Teslimat süresi: Sipariş onayından sonra 7-10 iş günüdür.</li>
+                                        <li>Ödeme şartları: Görüşülerek belirlenecektir.</li>
+                                        <li>Fiyatlar hammadde ve döviz kurundaki değişikliklere bağlı olarak revize edilebilir.</li>
+                                        <li>Malzemeler kaliteli ve orijinaldir, gerekli belge ve sertifikalarla birlikte teslim edilir.</li>
+                                      </ul>
+                                    </div>
+                                  </>
+                                )}
+
+                              </div>
+
+                              {/* Footer */}
+                              <div className="absolute bottom-[15mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-3 text-[8pt] text-gray-600 flex justify-between items-center">
+                                <div>
+                                  <p className="font-semibold">Kobinerji Mühendislik</p>
+                                  <p>www.kobinerji.com.tr • info@kobinerji.com.tr</p>
+                                </div>
+                                <div className="text-right">
+                                  <p>Tel: +90 535 714 52 88</p>
+                                  <p>İzmir, Türkiye</p>
+                                  <p className="text-gray-400 mt-1">Sayfa {pageIndex + 1}/{totalPages}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </>
+                  ) : (
+                    <>
+                  {/* SAYFA 1 - YG İŞLETME SORUMLULUĞU */}
                   <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 pdf-page" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
                     <div>
                         {/* Header */}
@@ -2522,6 +3069,8 @@ const App = () => {
                         </div>
                     </div>
                   </div>
+                  </>
+                  )}
               </div>
 
             </div>
