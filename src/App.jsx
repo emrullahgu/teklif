@@ -1956,14 +1956,6 @@ const App = () => {
                   </div>
                 </div>
 
-                {/* Footer - Sayfa 1 */}
-                <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] text-center text-[8pt] text-gray-500 border-t pt-2">
-                  <p className="font-bold text-gray-800">KOBİNERJİ MÜHENDİSLİK VE ENERJİ VERİMLİLİĞİ DANIŞMANLIK A.Ş.</p>
-                  <p>Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
-                  <p>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
-                  <p className="mt-1 text-gray-400">Sayfa 1/2</p>
-                </div>
-
                   </div>
                 </div>
                 {/* SAYFA 1 SONU */}
@@ -2440,24 +2432,6 @@ const App = () => {
                         <li>4. EMO tarafından hazırlanan Elektrik Yüksek Gerilim Tesisleri İşletme Sorumluluğu Yönetmeliği bu sözleşmenin ayrılmaz bir parçasıdır. YG İşletme Sorumluluğunu üstlenecek mühendisin EMO tarafından verilen YGTİS belgesine sahip olması gerekir.</li>
                         <li>5. İşveren olarak sizin yükümlülüğünüz, İşletme Sorumlusunun görevlerini yerine getirebilmesi için gerekli imalatları/hizmetleri sağlamak, talep edilen güvenlik malzemelerini almak ve uyarılarına riayet etmektir.</li>
                       </ul>
-                    </div>
-                    
-                    {/* Footer - Page 1 - Always at bottom */}
-                    <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-2" style={{pageBreakInside: 'avoid'}}>
-                        <div className="flex justify-between items-end">
-                            {/* Bottom Left Logo/Antet */}
-                            <div className="w-2/3">
-                                <div className="text-[9pt] text-gray-600">
-                                    <p className="font-bold text-gray-800 text-[9.5pt]">KOBİNERJİ MÜHENDİSLİK</p>
-                                    <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
-                                    <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
-                                </div>
-                            </div>
-                            {/* Bottom Right - Page Number */}
-                            <div className="text-right">
-                                <p className="text-[9pt] text-gray-500">Sayfa 1/2</p>
-                            </div>
-                        </div>
                     </div>
                     </div>
                   </div>
