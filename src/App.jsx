@@ -3407,7 +3407,7 @@ const App = () => {
                     <p className="mb-4 text-justify text-[9.5pt] leading-tight">
                       Tesisinize yönelik <strong>YG İşletme Sorumluluğu</strong> hizmeti fiyat teklifi, talep ettiğiniz trafo kurulu gücü ve 
                       TMMOB Elektrik Mühendisleri Odası'nın (EMO) {params.year} yılı Ücret Tanımları (KISIM III) esas alınarak, 
-                      rekabetçi piyasa koşulları doğrultusunda önceki tekliflerimizde uyguladığımız indirim oranıyla aşağıda sunulmuştur.
+                      rekabetçi piyasa koşulları doğrultusunda tekliflerimizde uyguladığımız indirim oranıyla aşağıda sunulmuştur.
                     </p>
 
                     <h3 className="text-[10pt] font-bold text-gray-800 mt-5 mb-2 uppercase tracking-wide">1. Tesis Bilgileri ve Toplam Kurulu Güç</h3>
