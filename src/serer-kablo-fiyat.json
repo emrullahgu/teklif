@@ -10,16 +10,16 @@
   "kategoriler": [
     {
       "id": "tek-damarli",
-      "ad": "Tek Damarlı Kablolar",
-      "aciklama": "NYA / NYAF / H05V-U / H05V-K - Bina içi tesisatlarda kullanılan tek telli veya çok telli kablolar",
+      "ad": "Tek Damarlı Bakır Kablolar",
+      "aciklama": "NYA / NVV / H05V-U - Bina içi tesisatlarda kullanılan tek damarlı bakır kablolar",
       "urunler": [
         { "kod": "NYA-0.5", "ad": "NYA 0,5 mm²", "kesit": "0,5", "fiyat1": 7.14, "fiyat2": null, "birim": "Metre" },
         { "kod": "NYA-0.75", "ad": "NYA 0,75 mm²", "kesit": "0,75", "fiyat1": 9.90, "fiyat2": 10.30, "birim": "Metre" },
-        { "kod": "NYA-1", "ad": "NYA 1 mm²", "kesit": "1", "fiyat1": 12.20, "fiyat2": 12.90, "birim": "Metre" },
-        { "kod": "NYA-1.5", "ad": "NYA 1,5 mm²", "kesit": "1,5", "fiyat1": 17.20, "fiyat2": 18.10, "birim": "Metre" },
-        { "kod": "NYA-2.5", "ad": "NYA 2,5 mm²", "kesit": "2,5", "fiyat1": 28.00, "fiyat2": 29.10, "birim": "Metre" },
-        { "kod": "NYA-4", "ad": "NYA 4 mm²", "kesit": "4", "fiyat1": 44.70, "fiyat2": 46.60, "birim": "Metre" },
-        { "kod": "NYA-6", "ad": "NYA 6 mm²", "kesit": "6", "fiyat1": 66.30, "fiyat2": 69.00, "birim": "Metre" },
+        { "kod": "NYA-1", "ad": "NYA 1 mm²", "kesit": "1", "fiyat1": 12.20, "fiyat2": 12.60, "birim": "Metre" },
+        { "kod": "NYA-1.5", "ad": "NYA 1,5 mm²", "kesit": "1,5", "fiyat1": 17.20, "fiyat2": 17.40, "birim": "Metre" },
+        { "kod": "NYA-2.5", "ad": "NYA 2,5 mm²", "kesit": "2,5", "fiyat1": 28.00, "fiyat2": 28.40, "birim": "Metre" },
+        { "kod": "NYA-4", "ad": "NYA 4 mm²", "kesit": "4", "fiyat1": 44.70, "fiyat2": 45.50, "birim": "Metre" },
+        { "kod": "NYA-6", "ad": "NYA 6 mm²", "kesit": "6", "fiyat1": 66.30, "fiyat2": 67.20, "birim": "Metre" },
         { "kod": "NYA-10", "ad": "NYA 10 mm²", "kesit": "10", "fiyat1": 118.60, "fiyat2": 121.90, "birim": "Metre" },
         { "kod": "NYA-16", "ad": "NYA 16 mm²", "kesit": "16", "fiyat1": 186.10, "fiyat2": 188.70, "birim": "Metre" },
         { "kod": "NYA-25", "ad": "NYA 25 mm²", "kesit": "25", "fiyat1": 292.00, "fiyat2": 298.80, "birim": "Metre" },
@@ -30,28 +30,97 @@
       ]
     },
     {
-      "id": "cok-damarli",
-      "ad": "Çok Damarlı Tesisat Kabloları",
-      "aciklama": "NYM / TTR / H05VV-F - Sıva altı/üstü kullanılan, birden fazla damar içeren kablolar",
+      "id": "cok-damarli-2x",
+      "ad": "İki Damarlı Bakır Kablolar (2x)",
+      "aciklama": "NYY / YVV / NYM - İki damarlı çok telli bakır kablolar",
       "urunler": [
         { "kod": "NYM-2x0.75", "ad": "NYM 2x0,75 mm²", "kesit": "2x0,75", "fiyat1": 25.90, "fiyat2": 30.30, "birim": "Metre" },
         { "kod": "NYM-2x1", "ad": "NYM 2x1 mm²", "kesit": "2x1", "fiyat1": 31.90, "fiyat2": 37.70, "birim": "Metre" },
         { "kod": "NYM-2x1.5", "ad": "NYM 2x1,5 mm²", "kesit": "2x1,5", "fiyat1": 44.50, "fiyat2": 51.40, "birim": "Metre" },
         { "kod": "NYM-2x2.5", "ad": "NYM 2x2,5 mm²", "kesit": "2x2,5", "fiyat1": 67.50, "fiyat2": 74.40, "birim": "Metre" },
-        { "kod": "NYM-2x4", "ad": "NYM 2x4 mm²", "kesit": "2x4", "fiyat1": 102.80, "fiyat2": 113.30, "birim": "Metre" },
-        { "kod": "NYM-2x6", "ad": "NYM 2x6 mm²", "kesit": "2x6", "fiyat1": 145.10, "fiyat2": 156.60, "birim": "Metre" },
-        { "kod": "NYM-3x1.5", "ad": "NYM 3x1,5 mm²", "kesit": "3x1,5", "fiyat1": 60.20, "fiyat2": 70.00, "birim": "Metre" },
-        { "kod": "NYM-3x2.5", "ad": "NYM 3x2,5 mm²", "kesit": "3x2,5", "fiyat1": 94.60, "fiyat2": 104.00, "birim": "Metre" },
-        { "kod": "NYM-3x4", "ad": "NYM 3x4 mm²", "kesit": "3x4", "fiyat1": 146.80, "fiyat2": 156.70, "birim": "Metre" },
-        { "kod": "NYM-3x6", "ad": "NYM 3x6 mm²", "kesit": "3x6", "fiyat1": 214.60, "fiyat2": 225.20, "birim": "Metre" },
-        { "kod": "NYM-4x1.5", "ad": "NYM 4x1,5 mm²", "kesit": "4x1,5", "fiyat1": 79.10, "fiyat2": 87.40, "birim": "Metre" },
-        { "kod": "NYM-4x2.5", "ad": "NYM 4x2,5 mm²", "kesit": "4x2,5", "fiyat1": 125.00, "fiyat2": 130.10, "birim": "Metre" },
-        { "kod": "NYM-4x4", "ad": "NYM 4x4 mm²", "kesit": "4x4", "fiyat1": 193.60, "fiyat2": 204.40, "birim": "Metre" }
+        { "kod": "NYM-2x4", "ad": "NYM 2x4 mm²", "kesit": "2x4", "fiyat1": 104.90, "fiyat2": 115.70, "birim": "Metre" },
+        { "kod": "NYM-2x6", "ad": "NYM 2x6 mm²", "kesit": "2x6", "fiyat1": 152.70, "fiyat2": 162.30, "birim": "Metre" },
+        { "kod": "NYM-2x10", "ad": "NYM 2x10 mm²", "kesit": "2x10", "fiyat1": 264.60, "fiyat2": 284.50, "birim": "Metre" },
+        { "kod": "NYM-2x16", "ad": "NYM 2x16 mm²", "kesit": "2x16", "fiyat1": 411.10, "fiyat2": 418.80, "birim": "Metre" }
+      ]
+    },
+    {
+      "id": "cok-damarli-3x",
+      "ad": "Üç Damarlı Bakır Kablolar (3x)",
+      "aciklama": "NYY / YVV / NYM - Üç damarlı çok telli bakır kablolar",
+      "urunler": [
+        { "kod": "NYM-3x0.75", "ad": "NYM 3x0,75 mm²", "kesit": "3x0,75", "fiyat1": 37.50, "fiyat2": 39.20, "birim": "Metre" },
+        { "kod": "NYM-3x1", "ad": "NYM 3x1 mm²", "kesit": "3x1", "fiyat1": 46.20, "fiyat2": 50.50, "birim": "Metre" },
+        { "kod": "NYM-3x1.5", "ad": "NYM 3x1,5 mm²", "kesit": "3x1,5", "fiyat1": 60.20, "fiyat2": 69.10, "birim": "Metre" },
+        { "kod": "NYM-3x2.5", "ad": "NYM 3x2,5 mm²", "kesit": "3x2,5", "fiyat1": 96.30, "fiyat2": 104.10, "birim": "Metre" },
+        { "kod": "NYM-3x4", "ad": "NYM 3x4 mm²", "kesit": "3x4", "fiyat1": 150.40, "fiyat2": 160.30, "birim": "Metre" },
+        { "kod": "NYM-3x6", "ad": "NYM 3x6 mm²", "kesit": "3x6", "fiyat1": 220.10, "fiyat2": 229.70, "birim": "Metre" },
+        { "kod": "NYM-3x10", "ad": "NYM 3x10 mm²", "kesit": "3x10", "fiyat1": 379.80, "fiyat2": 390.40, "birim": "Metre" },
+        { "kod": "NYM-3x16", "ad": "NYM 3x16 mm²", "kesit": "3x16", "fiyat1": 592.10, "fiyat2": 605.70, "birim": "Metre" },
+        { "kod": "NYM-3x25", "ad": "NYM 3x25 mm²", "kesit": "3x25", "fiyat1": 932.90, "fiyat2": 941.80, "birim": "Metre" },
+        { "kod": "NYM-3x35", "ad": "NYM 3x35 mm²", "kesit": "3x35", "fiyat1": 1240.00, "fiyat2": 1261.00, "birim": "Metre" }
+      ]
+    },
+    {
+      "id": "cok-damarli-4x",
+      "ad": "Dört Damarlı Bakır Kablolar (4x)",
+      "aciklama": "NYY / YVV / NYM - Dört damarlı çok telli bakır kablolar",
+      "urunler": [
+        { "kod": "NYM-4x0.75", "ad": "NYM 4x0,75 mm²", "kesit": "4x0,75", "fiyat1": 47.90, "fiyat2": 56.90, "birim": "Metre" },
+        { "kod": "NYM-4x1", "ad": "NYM 4x1 mm²", "kesit": "4x1", "fiyat1": 61.00, "fiyat2": 68.70, "birim": "Metre" },
+        { "kod": "NYM-4x1.5", "ad": "NYM 4x1,5 mm²", "kesit": "4x1,5", "fiyat1": 79.10, "fiyat2": 88.70, "birim": "Metre" },
+        { "kod": "NYM-4x2.5", "ad": "NYM 4x2,5 mm²", "kesit": "4x2,5", "fiyat1": 126.50, "fiyat2": 134.60, "birim": "Metre" },
+        { "kod": "NYM-4x4", "ad": "NYM 4x4 mm²", "kesit": "4x4", "fiyat1": 197.20, "fiyat2": 209.70, "birim": "Metre" }
+      ]
+    },
+    {
+      "id": "cok-damarli-5x",
+      "ad": "Beş Damarlı Bakır Kablolar (5x)",
+      "aciklama": "NYY / YVV / NYM - Beş damarlı çok telli bakır kablolar",
+      "urunler": [
+        { "kod": "NYM-5x0.75", "ad": "NYM 5x0,75 mm²", "kesit": "5x0,75", "fiyat1": 60.10, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYM-5x1", "ad": "NYM 5x1 mm²", "kesit": "5x1", "fiyat1": 76.90, "fiyat2": 84.70, "birim": "Metre" },
+        { "kod": "NYM-5x1.5", "ad": "NYM 5x1,5 mm²", "kesit": "5x1,5", "fiyat1": 100.10, "fiyat2": 107.80, "birim": "Metre" },
+        { "kod": "NYM-5x2.5", "ad": "NYM 5x2,5 mm²", "kesit": "5x2,5", "fiyat1": 160.50, "fiyat2": 166.20, "birim": "Metre" },
+        { "kod": "NYM-5x4", "ad": "NYM 5x4 mm²", "kesit": "5x4", "fiyat1": 248.30, "fiyat2": 256.50, "birim": "Metre" }
+      ]
+    },
+    {
+      "id": "toprakli-kablolar",
+      "ad": "Topraklı (Yeşil-Sarı Damar) Kablolar",
+      "aciklama": "Toprak hatlı alüminyum hava kabloları - ALPEK / AER",
+      "urunler": [
+        { "kod": "ALPEK-1x10+16", "ad": "ALPEK 1x10+16 mm²", "kesit": "1x10+16", "fiyat1": 38.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-1x16+25", "ad": "ALPEK 1x16+25 mm²", "kesit": "1x16+25", "fiyat1": 57.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-1x25+35", "ad": "ALPEK 1x25+35 mm²", "kesit": "1x25+35", "fiyat1": 79.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-1x35+50", "ad": "ALPEK 1x35+50 mm²", "kesit": "1x35+50", "fiyat1": 104.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-1x50+70", "ad": "ALPEK 1x50+70 mm²", "kesit": "1x50+70", "fiyat1": 142.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x10+16", "ad": "ALPEK 3x10+16 mm²", "kesit": "3x10+16", "fiyat1": 73.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x16+25", "ad": "ALPEK 3x16+25 mm²", "kesit": "3x16+25", "fiyat1": 104.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x25+35", "ad": "ALPEK 3x25+35 mm²", "kesit": "3x25+35", "fiyat1": 151.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x35+50", "ad": "ALPEK 3x35+50 mm²", "kesit": "3x35+50", "fiyat1": 201.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x50+70", "ad": "ALPEK 3x50+70 mm²", "kesit": "3x50+70", "fiyat1": 272.00, "fiyat2": null, "birim": "Metre" }
+      ]
+    },
+    {
+      "id": "esnek-kablolar",
+      "ad": "Esnek Kablolar",
+      "aciklama": "H07V-K / H05V-U / H05VV-F / YAVV - Esnek çok telli kablolar",
+      "urunler": [
+        { "kod": "H07V-K-1x16", "ad": "H07V-K 1x16 mm²", "kesit": "1x16", "fiyat1": 34.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "H07V-K-1x25", "ad": "H07V-K 1x25 mm²", "kesit": "1x25", "fiyat1": 47.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "H07V-K-1x35", "ad": "H07V-K 1x35 mm²", "kesit": "1x35", "fiyat1": 58.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "H05VV-F-2x10", "ad": "H05VV-F 2x10 mm²", "kesit": "2x10", "fiyat1": 61.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "H05VV-F-2x16", "ad": "H05VV-F 2x16 mm²", "kesit": "2x16", "fiyat1": 84.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "H05VV-F-4x10", "ad": "H05VV-F 4x10 mm²", "kesit": "4x10", "fiyat1": 94.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "H05VV-F-4x16", "ad": "H05VV-F 4x16 mm²", "kesit": "4x16", "fiyat1": 133.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "H05VV-F-5x10", "ad": "H05VV-F 5x10 mm²", "kesit": "5x10", "fiyat1": 119.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "H05VV-F-5x16", "ad": "H05VV-F 5x16 mm²", "kesit": "5x16", "fiyat1": 166.00, "fiyat2": null, "birim": "Metre" }
       ]
     },
     {
       "id": "alcak-gerilim",
-      "ad": "Alçak Gerilim Güç Kabloları",
+      "ad": "Alçak Gerilim Güç Kabloları (3x...+Toprak)",
       "aciklama": "NYY / YVV / N2XH - Yer altı, şebeke ve dış aydınlatmada kullanılan kablolar",
       "urunler": [
         { "kod": "NYY-3x16+10", "ad": "NYY 3x16+10 mm²", "kesit": "3x16+10", "fiyat1": 757.70, "fiyat2": null, "birim": "Metre" },
@@ -67,21 +136,22 @@
       ]
     },
     {
-      "id": "aluminyum-hava",
-      "ad": "Alüminyum Hava Hattı Kabloları",
-      "aciklama": "ALPEK / AER - Direkler arası askı telli alüminyum kablolar",
+      "id": "cok-damarli-esnek",
+      "ad": "Çok Damarlı Esnek Kablolar",
+      "aciklama": "H05VV-F / YAVV - 7 damarlı ve daha fazla esnek kablolar",
       "urunler": [
-        { "kod": "ALPEK-1x10+16", "ad": "ALPEK 1x10+16 mm²", "kesit": "1x10+16", "fiyat1": 38.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-1x16+25", "ad": "ALPEK 1x16+25 mm²", "kesit": "1x16+25", "fiyat1": 57.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-1x25+35", "ad": "ALPEK 1x25+35 mm²", "kesit": "1x25+35", "fiyat1": 79.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-1x35+50", "ad": "ALPEK 1x35+50 mm²", "kesit": "1x35+50", "fiyat1": 104.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-3x10+16", "ad": "ALPEK 3x10+16 mm²", "kesit": "3x10+16", "fiyat1": 73.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-3x16+25", "ad": "ALPEK 3x16+25 mm²", "kesit": "3x16+25", "fiyat1": 104.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-3x25+35", "ad": "ALPEK 3x25+35 mm²", "kesit": "3x25+35", "fiyat1": 151.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-3x35+50", "ad": "ALPEK 3x35+50 mm²", "kesit": "3x35+50", "fiyat1": 201.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-3x50+70", "ad": "ALPEK 3x50+70 mm²", "kesit": "3x50+70", "fiyat1": 272.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-3x70+95", "ad": "ALPEK 3x70+95 mm²", "kesit": "3x70+95", "fiyat1": 379.00, "fiyat2": null, "birim": "Metre" },
-        { "kod": "ALPEK-3x95+95", "ad": "ALPEK 3x95+95 mm²", "kesit": "3x95+95", "fiyat1": 475.00, "fiyat2": null, "birim": "Metre" }
+        { "kod": "H05VV-F-7x1.5", "ad": "H05VV-F 7x1,5 mm²", "kesit": "7x1,5", "fiyat1": 166.00, "fiyat2": 168.80, "birim": "Metre" },
+        { "kod": "H05VV-F-7x2.5", "ad": "H05VV-F 7x2,5 mm²", "kesit": "7x2,5", "fiyat1": 250.00, "fiyat2": 260.00, "birim": "Metre" }
+      ]
+    },
+    {
+      "id": "ozel-kablolar",
+      "ad": "Özel Güç Kabloları (4x)",
+      "aciklama": "NYY / YVV - Dört fazlı yüksek kesitli güç kabloları",
+      "urunler": [
+        { "kod": "NYY-4x35", "ad": "NYY 4x35 mm²", "kesit": "4x35", "fiyat1": 1638.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-4x50", "ad": "NYY 4x50 mm²", "kesit": "4x50", "fiyat1": 2245.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-4x70", "ad": "NYY 4x70 mm²", "kesit": "4x70", "fiyat1": 3089.00, "fiyat2": null, "birim": "Metre" }
       ]
     }
   ]

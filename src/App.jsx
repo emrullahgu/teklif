@@ -11,8 +11,35 @@ import html2canvas from 'html2canvas';
 import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableCell, TableRow, WidthType, BorderStyle, Packer } from 'docx';
 import { saveAs } from 'file-saver';
 import FaturaData from '../fatura/Fatura.json';
+import FaturaData2 from '../fatura/Fatura2.json';
 import KabloFiyatData from './serer-kablo-fiyat.json';
 import HazirPaketler from './hazir-paketler.json';
+
+// Fatura verilerini birleştir ve normalize et
+const normalizedFatura1 = FaturaData.map(item => ({
+  urun: item.ÜRÜN || '',
+  marka: item.MARKA || 'Genel',
+  birimFiyat: item["BİRİM FİYAT"] || 0,
+  miktar: item.MİKTAR || 0,
+  olcu: item.ÖLÇÜ || 'Adet',
+  aciklama: '',
+  tarih: item.TARİH || '',
+  kaynak: 'Fatura1'
+}));
+
+const normalizedFatura2 = FaturaData2.map(item => ({
+  urun: item["Ürün/hizmet"] || '',
+  marka: 'Genel',
+  birimFiyat: item["Birim fiyatı"] || 0,
+  miktar: item.Miktar || 0,
+  olcu: 'Adet',
+  aciklama: item["Ürün/hizmet açıklaması"] || '',
+  kdvOrani: item["KDV oranı"] || 20,
+  kaynak: 'Fatura2'
+}));
+
+// Tüm fatura verilerini birleştir
+const CombinedFaturaData = [...normalizedFatura1, ...normalizedFatura2];
 
 // EMO 2026 Bölgesel Azaltma Katsayıları Listesi (Sabit Veri)
 const REGION_LIST = [
@@ -278,15 +305,124 @@ const App = () => {
   const [selectedHazirPaket, setSelectedHazirPaket] = useState(null);
   const [paketKarMarji, setPaketKarMarji] = useState(30); // %30 varsayılan kar marjı
 
-  // Filter products based on search
+  // Gelişmiş Ürün Filtreleme States
+  const [markaFilter, setMarkaFilter] = useState('tumu');
+  const [kategoriFilter, setKategoriFilter] = useState('tumu');
+  const [fiyatAraligi, setFiyatAraligi] = useState({ min: 0, max: 100000 });
+  const [siralama, setSiralama] = useState('alfabetik'); // 'alfabetik', 'fiyat-artan', 'fiyat-azalan', 'populer'
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  // Ürün İstatistikleri ve Analizleri
+  const productStats = useMemo(() => {
+    // Marka sayıları
+    const markaCounts = {};
+    CombinedFaturaData.forEach(p => {
+      const marka = p.marka || 'Bilinmeyen';
+      markaCounts[marka] = (markaCounts[marka] || 0) + 1;
+    });
+
+    // En popüler ürünler (keşifte en çok kullanılanlar)
+    const urunKullanimSayilari = {};
+    kesifProducts.forEach(kp => {
+      urunKullanimSayilari[kp.urun] = (urunKullanimSayilari[kp.urun] || 0) + 1;
+    });
+
+    // Kategorilere göre sınıflandırma
+    const kategoriler = {
+      'Kablolar': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('kablo') || p.urun?.toLowerCase().includes('nvy') || p.urun?.toLowerCase().includes('nyy') || p.urun?.toLowerCase().includes('ttr') || p.urun?.toLowerCase().includes('kordon')),
+      'Otomatlar': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('otomat') || p.urun?.toLowerCase().includes('sigorta')),
+      'Prizler': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('priz')),
+      'Anahtarlar': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('anahtar') || p.urun?.toLowerCase().includes('komütatör')),
+      'Aydınlatma': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('armatür') || p.urun?.toLowerCase().includes('led') || p.urun?.toLowerCase().includes('ampul') || p.urun?.toLowerCase().includes('aplik') || p.urun?.toLowerCase().includes('projektör')),
+      'Pano Malzemeleri': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('pano') || p.urun?.toLowerCase().includes('kutu') || p.urun?.toLowerCase().includes('tava')),
+      'Kablo Kanalı': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('kanal') || p.urun?.toLowerCase().includes('oluk')),
+      'Tesisat Malzemeleri': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('buat') || p.urun?.toLowerCase().includes('boru') || p.urun?.toLowerCase().includes('klips')),
+      'Kompanzasyon': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('kompanzasyon') || p.urun?.toLowerCase().includes('kondansatör') || p.urun?.toLowerCase().includes('reaktif') || p.urun?.toLowerCase().includes('kontaktör')),
+      'Hizmetler': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('işçilik') || p.urun?.toLowerCase().includes('hizmet') || p.urun?.toLowerCase().includes('montaj'))
+    };
+
+    // Fiyat aralıkları
+    const fiyatAraliklari = {
+      '0-50': CombinedFaturaData.filter(p => p.birimFiyat <= 50),
+      '51-100': CombinedFaturaData.filter(p => p.birimFiyat > 50 && p.birimFiyat <= 100),
+      '101-500': CombinedFaturaData.filter(p => p.birimFiyat > 100 && p.birimFiyat <= 500),
+      '500-5000': CombinedFaturaData.filter(p => p.birimFiyat > 500 && p.birimFiyat <= 5000),
+      '5000+': CombinedFaturaData.filter(p => p.birimFiyat > 5000)
+    };
+
+    return {
+      toplamUrun: CombinedFaturaData.length,
+      markalar: Object.keys(markaCounts).sort(),
+      markaCounts,
+      enPopulerMarkalar: Object.entries(markaCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5),
+      kategoriler,
+      kategoriSayilari: Object.entries(kategoriler).map(([k, v]) => ({ ad: k, adet: v.length })),
+      fiyatAraliklari,
+      ortalamaFiyat: CombinedFaturaData.reduce((sum, p) => sum + (p.birimFiyat || 0), 0) / CombinedFaturaData.length,
+      enPahali: [...CombinedFaturaData].sort((a, b) => b.birimFiyat - a.birimFiyat).slice(0, 10),
+      enUcuz: [...CombinedFaturaData].filter(p => p.birimFiyat > 0).sort((a, b) => a.birimFiyat - b.birimFiyat).slice(0, 10),
+      enCokKullanilanlar: Object.entries(urunKullanimSayilari)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+    };
+  }, [kesifProducts]);
+
+  // Gelişmiş Ürün Filtreleme
   const filteredProducts = useMemo(() => {
-    if (!productSearch) return [];
-    const searchLower = productSearch.toLowerCase();
-    return FaturaData.filter(p => 
-      p.ÜRÜN?.toLowerCase().includes(searchLower) || 
-      p.MARKA?.toLowerCase().includes(searchLower)
-    ).slice(0, 20);
-  }, [productSearch]);
+    if (!productSearch && markaFilter === 'tumu' && kategoriFilter === 'tumu') return [];
+    
+    let filtered = CombinedFaturaData;
+
+    // Arama
+    if (productSearch) {
+      const searchLower = productSearch.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.urun?.toLowerCase().includes(searchLower) || 
+        p.marka?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Marka filtresi
+    if (markaFilter !== 'tumu') {
+      filtered = filtered.filter(p => p.marka === markaFilter);
+    }
+
+    // Kategori filtresi
+    if (kategoriFilter !== 'tumu') {
+      const kategoriUrunler = productStats.kategoriler[kategoriFilter] || [];
+      filtered = filtered.filter(p => kategoriUrunler.some(ku => ku.urun === p.urun));
+    }
+
+    // Fiyat aralığı filtresi
+    filtered = filtered.filter(p => {
+      const fiyat = p.birimFiyat || 0;
+      return fiyat >= fiyatAraligi.min && fiyat <= fiyatAraligi.max;
+    });
+
+    // Sıralama
+    switch(siralama) {
+      case 'fiyat-artan':
+        filtered.sort((a, b) => (a.birimFiyat || 0) - (b.birimFiyat || 0));
+        break;
+      case 'fiyat-azalan':
+        filtered.sort((a, b) => (b.birimFiyat || 0) - (a.birimFiyat || 0));
+        break;
+      case 'populer':
+        // En çok kullanılan ürünleri öne çıkar
+        const kullanimlar = {};
+        kesifProducts.forEach(kp => {
+          kullanimlar[kp.urun] = (kullanimlar[kp.urun] || 0) + 1;
+        });
+        filtered.sort((a, b) => (kullanimlar[b.urun] || 0) - (kullanimlar[a.urun] || 0));
+        break;
+      default: // alfabetik
+        filtered.sort((a, b) => (a.urun || '').localeCompare(b.urun || '', 'tr'));
+    }
+
+    return filtered.slice(0, 50); // İlk 50 sonuç
+  }, [productSearch, markaFilter, kategoriFilter, fiyatAraligi, siralama, productStats, kesifProducts]);
 
   // Keşif Metraj Editor Mode
   const [kesifEditorMode, setKesifEditorMode] = useState(false);
@@ -310,12 +446,12 @@ const App = () => {
         id: Date.now(),
         sira: kesifProducts.length + 1,
         type: 'normal',
-        urun: selectedProduct.ÜRÜN,
-        marka: selectedProduct.MARKA,
-        birimFiyat: selectedProduct["BİRİM FİYAT"],
+        urun: selectedProduct.urun,
+        marka: selectedProduct.marka,
+        birimFiyat: selectedProduct.birimFiyat,
         miktar: productQuantity,
-        olcu: selectedProduct.ÖLÇÜ,
-        toplam: selectedProduct["BİRİM FİYAT"] * productQuantity
+        olcu: selectedProduct.olcu,
+        toplam: selectedProduct.birimFiyat * productQuantity
       };
 
       setKesifProducts([...kesifProducts, newProduct]);
@@ -429,28 +565,28 @@ const App = () => {
     const newProducts = [];
 
     paket.urunler.forEach((paketUrun) => {
-      // Fatura.json'dan ürünü ara
-      const foundProduct = FaturaData.find(fp => 
-        fp.ÜRÜN?.toLowerCase().includes(paketUrun.urun.toLowerCase()) ||
-        paketUrun.urun.toLowerCase().includes(fp.ÜRÜN?.toLowerCase())
+      // CombinedFaturaData'dan ürünü ara
+      const foundProduct = CombinedFaturaData.find(fp => 
+        fp.urun?.toLowerCase().includes(paketUrun.urun.toLowerCase()) ||
+        paketUrun.urun.toLowerCase().includes(fp.urun?.toLowerCase())
       );
 
       if (foundProduct) {
         // Liste fiyatına (iskontosuz) kar marjı ekle
-        const listeFiyat = foundProduct['BİRİM FİYAT'] || 0;
+        const listeFiyat = foundProduct.birimFiyat || 0;
         const satisFiyat = listeFiyat * (1 + paketKarMarji / 100);
 
         const newProduct = {
           id: Date.now() + addedCount,
           sira: kesifProducts.length + addedCount + 1,
           type: 'normal',
-          urun: foundProduct.ÜRÜN,
-          birim: paketUrun.birim || foundProduct.ÖLÇÜ || 'Adet',
+          urun: foundProduct.urun,
+          birim: paketUrun.birim || foundProduct.olcu || 'Adet',
           miktar: paketUrun.miktar,
           birimFiyat: parseFloat(satisFiyat.toFixed(2)),
           toplam: parseFloat((satisFiyat * paketUrun.miktar).toFixed(2)),
           aciklama: paketUrun.aciklama || '',
-          marka: foundProduct.MARKA || '',
+          marka: foundProduct.marka || '',
           paketAdi: paket.ad
         };
         newProducts.push(newProduct);
@@ -1763,6 +1899,13 @@ const App = () => {
         {/* Tabs */}
         <div className="flex space-x-2 bg-gray-200 p-1 rounded-xl w-fit mb-6 no-print">
           <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'dashboard' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2"/>
+            Dashboard & İstatistikler
+          </button>
+          <button 
             onClick={() => setActiveTab('manual')}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'manual' ? 'bg-white shadow text-blue-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
@@ -1792,6 +1935,223 @@ const App = () => {
             {selectedCompany && <span className="ml-2 text-xs bg-blue-100 px-2 py-0.5 rounded-full text-blue-700">{selectedCompany.name.substring(0, 15)}...</span>}
           </button>
         </div>
+
+        {/* Dashboard Tab */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-lg p-8 text-white">
+              <h1 className="text-3xl font-bold mb-2">📊 Ürün ve Fiyat Veritabanı Dashboard</h1>
+              <p className="text-indigo-100">Tüm ürün, kablo ve fiyat verilerinizin detaylı analizi</p>
+            </div>
+
+            {/* Genel İstatistikler */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Toplam Ürün</p>
+                    <p className="text-3xl font-bold text-blue-600 mt-2">{productStats.toplamUrun}</p>
+                  </div>
+                  <FileSpreadsheet className="w-12 h-12 text-blue-500 opacity-20"/>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Farklı Marka</p>
+                    <p className="text-3xl font-bold text-green-600 mt-2">{productStats.markalar.length}</p>
+                  </div>
+                  <Users className="w-12 h-12 text-green-500 opacity-20"/>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-purple-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Kablo Kategorisi</p>
+                    <p className="text-3xl font-bold text-purple-600 mt-2">{KabloFiyatData.kategoriler.length}</p>
+                  </div>
+                  <Cable className="w-12 h-12 text-purple-500 opacity-20"/>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-orange-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Ort. Ürün Fiyatı</p>
+                    <p className="text-3xl font-bold text-orange-600 mt-2">{productStats.ortalamaFiyat.toFixed(2)} ₺</p>
+                  </div>
+                  <TrendingDown className="w-12 h-12 text-orange-500 opacity-20"/>
+                </div>
+              </div>
+            </div>
+
+            {/* Kategori Dağılımı */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <FileSpreadsheet className="w-6 h-6 mr-2 text-indigo-600"/>
+                  Kategori Dağılımı
+                </h3>
+                <div className="space-y-3">
+                  {productStats.kategoriSayilari.map(({ ad, adet }) => (
+                    <div key={ad} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700 font-medium">{ad}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-indigo-100 rounded-full h-2 w-32">
+                          <div
+                            className="bg-indigo-600 h-2 rounded-full"
+                            style={{ width: `${(adet / productStats.toplamUrun) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-bold text-indigo-600">{adet}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top 5 Markalar */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <Users className="w-6 h-6 mr-2 text-green-600"/>
+                  En Popüler Markalar
+                </h3>
+                <div className="space-y-3">
+                  {productStats.enPopulerMarkalar.map(([marka, adet], idx) => (
+                    <div key={marka} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-gray-400">#{idx + 1}</span>
+                        <span className="text-sm text-gray-700 font-medium">{marka}</span>
+                      </div>
+                      <span className="text-sm font-bold text-green-600 bg-green-100 px-3 py-1 rounded-full">{adet} ürün</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Fiyat Analizi */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* En Pahalı Ürünler */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <TrendingDown className="w-6 h-6 mr-2 text-red-600"/>
+                  En Pahalı 10 Ürün
+                </h3>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {productStats.enPahali.map((urun, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition">
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-gray-800">{urun.ÜRÜN}</p>
+                        <p className="text-xs text-gray-500">{urun.MARKA}</p>
+                      </div>
+                      <span className="text-sm font-bold text-red-600">{urun["BİRİM FİYAT"]} ₺</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* En Ucuz Ürünler */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <TrendingDown className="w-6 h-6 mr-2 text-green-600"/>
+                  En Ekonomik 10 Ürün
+                </h3>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {productStats.enUcuz.map((urun, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition">
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-gray-800">{urun.ÜRÜN}</p>
+                        <p className="text-xs text-gray-500">{urun.MARKA}</p>
+                      </div>
+                      <span className="text-sm font-bold text-green-600">{urun["BİRİM FİYAT"]} ₺</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Kablo Fiyat Bilgileri */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <Cable className="w-6 h-6 mr-2 text-purple-600"/>
+                Serer Kablo Fiyat Listesi Özeti
+              </h3>
+              <div className="bg-purple-50 p-4 rounded-lg mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-600">Firma</p>
+                    <p className="font-bold text-purple-800">{KabloFiyatData.firma}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Telefon</p>
+                    <p className="font-bold text-purple-800">{KabloFiyatData.telefon}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Web</p>
+                    <p className="font-bold text-purple-800">{KabloFiyatData.web}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">KDV</p>
+                    <p className="font-bold text-red-600">{KabloFiyatData.kdvDahil ? 'Dahil' : `Hariç (%${KabloFiyatData.kdvOrani})`}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {KabloFiyatData.kategoriler.map((kategori) => (
+                  <div key={kategori.id} className="border border-purple-200 rounded-lg p-4 hover:shadow-md transition">
+                    <h4 className="font-bold text-purple-800 mb-1">{kategori.ad}</h4>
+                    <p className="text-xs text-gray-600 mb-3">{kategori.aciklama}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">{kategori.urunler.length} çeşit kablo</span>
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">ID: {kategori.id}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Keşif Projelerinde Kullanım */}
+            {kesifProducts.length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <Hammer className="w-6 h-6 mr-2 text-orange-600"/>
+                  Mevcut Keşif Projesindeki Ürün Analizi
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div className="bg-orange-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">Toplam Kalem</p>
+                    <p className="text-2xl font-bold text-orange-600">{kesifProducts.length}</p>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">Malzeme</p>
+                    <p className="text-2xl font-bold text-blue-600">{kesifProducts.filter(p => p.type === 'normal').length}</p>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">Kablo</p>
+                    <p className="text-2xl font-bold text-purple-600">{kesifProducts.filter(p => p.type === 'kablo').length}</p>
+                  </div>
+                </div>
+                {productStats.enCokKullanilanlar.length > 0 && (
+                  <div>
+                    <h4 className="font-bold text-gray-700 mb-3">En Çok Kullanılan Ürünler:</h4>
+                    <div className="space-y-2">
+                      {productStats.enCokKullanilanlar.map(([urun, adet]) => (
+                        <div key={urun} className="flex items-center justify-between p-3 bg-gray-50 rounded hover:bg-gray-100 transition">
+                          <span className="text-sm font-medium text-gray-800">{urun}</span>
+                          <span className="text-sm font-bold text-orange-600 bg-orange-100 px-3 py-1 rounded-full">{adet}x kullanıldı</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tab Content: Manuel Giriş */}
         {activeTab === 'manual' && (
@@ -2416,7 +2776,7 @@ const App = () => {
                   Malzeme/Kablo Ekle
                 </h3>
                 
-                {/* Ürün Tipi Seçimi */}
+                {/* Ürün Tipi Seçim Butonları */}
                 <div className="mb-4 flex gap-4">
                   <button
                     type="button"
@@ -2472,70 +2832,239 @@ const App = () => {
 
                 {/* Normal Ürün Ekleme Formu */}
                 {productType === 'normal' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div className="md:col-span-2 relative">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Ürün Ara</label>
-                    <div className="relative">
-                      <input 
-                        type="text" 
-                        placeholder="Ürün adı veya marka ile arayın..."
-                        value={productSearch}
-                        onChange={(e) => {
-                          setProductSearch(e.target.value);
-                          setShowProductDropdown(true);
-                        }}
-                        onFocus={() => setShowProductDropdown(true)}
-                        className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
-                      />
-                      <Search className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"/>
+                <div className="space-y-4">
+                  {/* Ürün İstatistikleri Özeti */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-gray-800 text-sm flex items-center">
+                        <FileSpreadsheet className="w-4 h-4 mr-2 text-blue-600"/>
+                        Ürün Veritabanı İstatistikleri
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-full font-semibold transition"
+                      >
+                        {showAdvancedFilters ? '▼ Filtreleri Gizle' : '▶ Gelişmiş Filtreler'}
+                      </button>
                     </div>
-                    
-                    {/* Dropdown */}
-                    {showProductDropdown && filteredProducts.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        {filteredProducts.map((product, idx) => (
-                          <div 
-                            key={idx}
-                            onClick={() => {
-                              setSelectedProduct(product);
-                              setProductSearch(product.ÜRÜN);
-                              setShowProductDropdown(false);
-                            }}
-                            className="px-4 py-3 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-0"
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div className="bg-white p-2 rounded shadow-sm">
+                        <div className="text-gray-600">Toplam Ürün</div>
+                        <div className="text-lg font-bold text-blue-600">{productStats.toplamUrun}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded shadow-sm">
+                        <div className="text-gray-600">Marka Sayısı</div>
+                        <div className="text-lg font-bold text-green-600">{productStats.markalar.length}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded shadow-sm">
+                        <div className="text-gray-600">Kategori</div>
+                        <div className="text-lg font-bold text-purple-600">{productStats.kategoriSayilari.length}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded shadow-sm">
+                        <div className="text-gray-600">Ort. Fiyat</div>
+                        <div className="text-lg font-bold text-orange-600">{productStats.ortalamaFiyat.toFixed(2)} ₺</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gelişmiş Filtreler */}
+                  {showAdvancedFilters && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {/* Marka Filtresi */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Marka</label>
+                          <select
+                            value={markaFilter}
+                            onChange={(e) => setMarkaFilter(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                           >
-                            <div className="font-semibold text-sm text-gray-800">{product.ÜRÜN}</div>
-                            <div className="text-xs text-gray-600 mt-1">
-                              <span className="font-medium">{product.MARKA}</span> • {product["BİRİM FİYAT"]} TL/{product.ÖLÇÜ}
+                            <option value="tumu">Tüm Markalar</option>
+                            {productStats.enPopulerMarkalar.map(([marka, adet]) => (
+                              <option key={marka} value={marka}>{marka} ({adet})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Kategori Filtresi */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Kategori</label>
+                          <select
+                            value={kategoriFilter}
+                            onChange={(e) => setKategoriFilter(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                          >
+                            <option value="tumu">Tüm Kategoriler</option>
+                            {productStats.kategoriSayilari.map(({ ad, adet }) => (
+                              <option key={ad} value={ad}>{ad} ({adet})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Sıralama */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Sıralama</label>
+                          <select
+                            value={siralama}
+                            onChange={(e) => setSiralama(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                          >
+                            <option value="alfabetik">Alfabetik (A-Z)</option>
+                            <option value="fiyat-artan">Fiyat (Artan)</option>
+                            <option value="fiyat-azalan">Fiyat (Azalan)</option>
+                            <option value="populer">En Popüler</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Fiyat Aralığı */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Fiyat Aralığı: {fiyatAraligi.min} ₺ - {fiyatAraligi.max >= 100000 ? '∞' : fiyatAraligi.max + ' ₺'}
+                        </label>
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="number"
+                            placeholder="Min"
+                            value={fiyatAraligi.min}
+                            onChange={(e) => setFiyatAraligi({ ...fiyatAraligi, min: parseFloat(e.target.value) || 0 })}
+                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                          <span className="text-gray-500">-</span>
+                          <input
+                            type="number"
+                            placeholder="Max"
+                            value={fiyatAraligi.max >= 100000 ? '' : fiyatAraligi.max}
+                            onChange={(e) => setFiyatAraligi({ ...fiyatAraligi, max: parseFloat(e.target.value) || 100000 })}
+                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMarkaFilter('tumu');
+                              setKategoriFilter('tumu');
+                              setFiyatAraligi({ min: 0, max: 100000 });
+                              setSiralama('alfabetik');
+                            }}
+                            className="ml-auto text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                          >
+                            Filtreleri Temizle
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* En Çok Kullanılan Ürünler */}
+                      {productStats.enCokKullanilanlar.length > 0 && (
+                        <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+                          <h5 className="text-xs font-bold text-yellow-800 mb-2">⭐ Bu Projede En Çok Kullanılan Ürünler:</h5>
+                          <div className="flex flex-wrap gap-2">
+                            {productStats.enCokKullanilanlar.slice(0, 5).map(([urun, adet]) => (
+                              <button
+                                key={urun}
+                                type="button"
+                                onClick={() => {
+                                  setProductSearch(urun);
+                                  setShowProductDropdown(true);
+                                }}
+                                className="text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-900 px-2 py-1 rounded font-medium transition"
+                              >
+                                {urun} ({adet}x)
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Ürün Arama ve Ekleme */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="md:col-span-2 relative">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Ürün Ara ({filteredProducts.length > 0 ? `${filteredProducts.length} sonuç` : 'arama yapın'})
+                      </label>
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          placeholder="Ürün adı veya marka ile arayın..."
+                          value={productSearch}
+                          onChange={(e) => {
+                            setProductSearch(e.target.value);
+                            setShowProductDropdown(true);
+                          }}
+                          onFocus={() => setShowProductDropdown(true)}
+                          className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                        />
+                        <Search className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"/>
+                      </div>
+                      
+                      {/* Dropdown - Geliştirilmiş */}
+                      {showProductDropdown && filteredProducts.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl max-h-96 overflow-y-auto">
+                          <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 px-3 py-2 border-b border-blue-200">
+                            <div className="text-xs font-semibold text-gray-700">
+                              {filteredProducts.length} ürün bulundu
+                              {markaFilter !== 'tumu' && <span className="ml-2 text-blue-600">• Marka: {markaFilter}</span>}
+                              {kategoriFilter !== 'tumu' && <span className="ml-2 text-purple-600">• Kategori: {kategoriFilter}</span>}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar</label>
-                    <input 
-                      type="number" 
-                      min="0.01"
-                      step="0.01"
-                      placeholder="Miktar"
-                      value={productQuantity}
-                      onChange={(e) => setProductQuantity(parseFloat(e.target.value) || 0)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
-                    />
-                  </div>
-                  
-                  <div className="md:col-span-3">
-                    <button 
-                      type="button"
-                      onClick={addProductToKesif}
-                      disabled={!selectedProduct}
-                      className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
-                    >
-                      <Plus className="w-5 h-5 mr-2"/>
-                      Listeye Ekle
-                    </button>
+                          {filteredProducts.map((product, idx) => (
+                            <div 
+                              key={idx}
+                              onClick={() => {
+                                setSelectedProduct(product);
+                                setProductSearch(product.urun);
+                                setShowProductDropdown(false);
+                              }}
+                              className="px-4 py-3 hover:bg-gradient-to-r hover:from-orange-50 hover:to-yellow-50 cursor-pointer border-b border-gray-100 last:border-0 transition"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="font-semibold text-sm text-gray-800">{product.urun}</div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">{product.marka}</span>
+                                    <span className="text-xs text-gray-500">{product.olcu}</span>
+                                    {product.kaynak && (
+                                      <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded font-medium">{product.kaynak}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right ml-3">
+                                  <div className="text-sm font-bold text-orange-600">{product.birimFiyat} ₺</div>
+                                  <div className="text-xs text-gray-500">/{product.olcu}</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar</label>
+                      <input 
+                        type="number" 
+                        min="0.01"
+                        step="0.01"
+                        placeholder="Miktar"
+                        value={productQuantity}
+                        onChange={(e) => setProductQuantity(parseFloat(e.target.value) || 0)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                      />
+                    </div>
+                    
+                    <div className="md:col-span-3">
+                      <button 
+                        type="button"
+                        onClick={addProductToKesif}
+                        disabled={!selectedProduct}
+                        className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                      >
+                        <Plus className="w-5 h-5 mr-2"/>
+                        Listeye Ekle
+                      </button>
+                    </div>
                   </div>
                 </div>
                 )}
