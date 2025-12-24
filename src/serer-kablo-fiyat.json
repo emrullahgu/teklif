@@ -1,0 +1,88 @@
+{
+  "firma": "Serer Kablo",
+  "adres": "1203/4 Sok. No:11/E Yenişehir / İZMİR",
+  "telefon": "0.232 469 80 17",
+  "faks": "0.232 469 95 39",
+  "web": "www.serer.com.tr",
+  "email": "serer@serer.com.tr",
+  "kdvDahil": false,
+  "kdvOrani": 20,
+  "kategoriler": [
+    {
+      "id": "tek-damarli",
+      "ad": "Tek Damarlı Kablolar",
+      "aciklama": "NYA / NYAF / H05V-U / H05V-K - Bina içi tesisatlarda kullanılan tek telli veya çok telli kablolar",
+      "urunler": [
+        { "kod": "NYA-0.5", "ad": "NYA 0,5 mm²", "kesit": "0,5", "fiyat1": 7.14, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYA-0.75", "ad": "NYA 0,75 mm²", "kesit": "0,75", "fiyat1": 9.90, "fiyat2": 10.30, "birim": "Metre" },
+        { "kod": "NYA-1", "ad": "NYA 1 mm²", "kesit": "1", "fiyat1": 12.20, "fiyat2": 12.90, "birim": "Metre" },
+        { "kod": "NYA-1.5", "ad": "NYA 1,5 mm²", "kesit": "1,5", "fiyat1": 17.20, "fiyat2": 18.10, "birim": "Metre" },
+        { "kod": "NYA-2.5", "ad": "NYA 2,5 mm²", "kesit": "2,5", "fiyat1": 28.00, "fiyat2": 29.10, "birim": "Metre" },
+        { "kod": "NYA-4", "ad": "NYA 4 mm²", "kesit": "4", "fiyat1": 44.70, "fiyat2": 46.60, "birim": "Metre" },
+        { "kod": "NYA-6", "ad": "NYA 6 mm²", "kesit": "6", "fiyat1": 66.30, "fiyat2": 69.00, "birim": "Metre" },
+        { "kod": "NYA-10", "ad": "NYA 10 mm²", "kesit": "10", "fiyat1": 118.60, "fiyat2": 121.90, "birim": "Metre" },
+        { "kod": "NYA-16", "ad": "NYA 16 mm²", "kesit": "16", "fiyat1": 186.10, "fiyat2": 188.70, "birim": "Metre" },
+        { "kod": "NYA-25", "ad": "NYA 25 mm²", "kesit": "25", "fiyat1": 292.00, "fiyat2": 298.80, "birim": "Metre" },
+        { "kod": "NYA-35", "ad": "NYA 35 mm²", "kesit": "35", "fiyat1": 397.00, "fiyat2": 403.40, "birim": "Metre" },
+        { "kod": "NYA-50", "ad": "NYA 50 mm²", "kesit": "50", "fiyat1": 540.00, "fiyat2": 545.30, "birim": "Metre" },
+        { "kod": "NYA-70", "ad": "NYA 70 mm²", "kesit": "70", "fiyat1": 763.00, "fiyat2": 776.50, "birim": "Metre" },
+        { "kod": "NYA-95", "ad": "NYA 95 mm²", "kesit": "95", "fiyat1": 1056.00, "fiyat2": 1074.00, "birim": "Metre" }
+      ]
+    },
+    {
+      "id": "cok-damarli",
+      "ad": "Çok Damarlı Tesisat Kabloları",
+      "aciklama": "NYM / TTR / H05VV-F - Sıva altı/üstü kullanılan, birden fazla damar içeren kablolar",
+      "urunler": [
+        { "kod": "NYM-2x0.75", "ad": "NYM 2x0,75 mm²", "kesit": "2x0,75", "fiyat1": 25.90, "fiyat2": 30.30, "birim": "Metre" },
+        { "kod": "NYM-2x1", "ad": "NYM 2x1 mm²", "kesit": "2x1", "fiyat1": 31.90, "fiyat2": 37.70, "birim": "Metre" },
+        { "kod": "NYM-2x1.5", "ad": "NYM 2x1,5 mm²", "kesit": "2x1,5", "fiyat1": 44.50, "fiyat2": 51.40, "birim": "Metre" },
+        { "kod": "NYM-2x2.5", "ad": "NYM 2x2,5 mm²", "kesit": "2x2,5", "fiyat1": 67.50, "fiyat2": 74.40, "birim": "Metre" },
+        { "kod": "NYM-2x4", "ad": "NYM 2x4 mm²", "kesit": "2x4", "fiyat1": 102.80, "fiyat2": 113.30, "birim": "Metre" },
+        { "kod": "NYM-2x6", "ad": "NYM 2x6 mm²", "kesit": "2x6", "fiyat1": 145.10, "fiyat2": 156.60, "birim": "Metre" },
+        { "kod": "NYM-3x1.5", "ad": "NYM 3x1,5 mm²", "kesit": "3x1,5", "fiyat1": 60.20, "fiyat2": 70.00, "birim": "Metre" },
+        { "kod": "NYM-3x2.5", "ad": "NYM 3x2,5 mm²", "kesit": "3x2,5", "fiyat1": 94.60, "fiyat2": 104.00, "birim": "Metre" },
+        { "kod": "NYM-3x4", "ad": "NYM 3x4 mm²", "kesit": "3x4", "fiyat1": 146.80, "fiyat2": 156.70, "birim": "Metre" },
+        { "kod": "NYM-3x6", "ad": "NYM 3x6 mm²", "kesit": "3x6", "fiyat1": 214.60, "fiyat2": 225.20, "birim": "Metre" },
+        { "kod": "NYM-4x1.5", "ad": "NYM 4x1,5 mm²", "kesit": "4x1,5", "fiyat1": 79.10, "fiyat2": 87.40, "birim": "Metre" },
+        { "kod": "NYM-4x2.5", "ad": "NYM 4x2,5 mm²", "kesit": "4x2,5", "fiyat1": 125.00, "fiyat2": 130.10, "birim": "Metre" },
+        { "kod": "NYM-4x4", "ad": "NYM 4x4 mm²", "kesit": "4x4", "fiyat1": 193.60, "fiyat2": 204.40, "birim": "Metre" }
+      ]
+    },
+    {
+      "id": "alcak-gerilim",
+      "ad": "Alçak Gerilim Güç Kabloları",
+      "aciklama": "NYY / YVV / N2XH - Yer altı, şebeke ve dış aydınlatmada kullanılan kablolar",
+      "urunler": [
+        { "kod": "NYY-3x16+10", "ad": "NYY 3x16+10 mm²", "kesit": "3x16+10", "fiyat1": 757.70, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-3x25+16", "ad": "NYY 3x25+16 mm²", "kesit": "3x25+16", "fiyat1": 1130.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-3x35+16", "ad": "NYY 3x35+16 mm²", "kesit": "3x35+16", "fiyat1": 1494.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-3x50+25", "ad": "NYY 3x50+25 mm²", "kesit": "3x50+25", "fiyat1": 2115.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-3x70+35", "ad": "NYY 3x70+35 mm²", "kesit": "3x70+35", "fiyat1": 2938.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-3x95+50", "ad": "NYY 3x95+50 mm²", "kesit": "3x95+50", "fiyat1": 4017.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-3x120+70", "ad": "NYY 3x120+70 mm²", "kesit": "3x120+70", "fiyat1": 5178.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-3x150+70", "ad": "NYY 3x150+70 mm²", "kesit": "3x150+70", "fiyat1": 6197.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-3x185+95", "ad": "NYY 3x185+95 mm²", "kesit": "3x185+95", "fiyat1": 7464.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "NYY-3x240+120", "ad": "NYY 3x240+120 mm²", "kesit": "3x240+120", "fiyat1": 9681.00, "fiyat2": null, "birim": "Metre" }
+      ]
+    },
+    {
+      "id": "aluminyum-hava",
+      "ad": "Alüminyum Hava Hattı Kabloları",
+      "aciklama": "ALPEK / AER - Direkler arası askı telli alüminyum kablolar",
+      "urunler": [
+        { "kod": "ALPEK-1x10+16", "ad": "ALPEK 1x10+16 mm²", "kesit": "1x10+16", "fiyat1": 38.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-1x16+25", "ad": "ALPEK 1x16+25 mm²", "kesit": "1x16+25", "fiyat1": 57.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-1x25+35", "ad": "ALPEK 1x25+35 mm²", "kesit": "1x25+35", "fiyat1": 79.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-1x35+50", "ad": "ALPEK 1x35+50 mm²", "kesit": "1x35+50", "fiyat1": 104.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x10+16", "ad": "ALPEK 3x10+16 mm²", "kesit": "3x10+16", "fiyat1": 73.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x16+25", "ad": "ALPEK 3x16+25 mm²", "kesit": "3x16+25", "fiyat1": 104.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x25+35", "ad": "ALPEK 3x25+35 mm²", "kesit": "3x25+35", "fiyat1": 151.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x35+50", "ad": "ALPEK 3x35+50 mm²", "kesit": "3x35+50", "fiyat1": 201.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x50+70", "ad": "ALPEK 3x50+70 mm²", "kesit": "3x50+70", "fiyat1": 272.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x70+95", "ad": "ALPEK 3x70+95 mm²", "kesit": "3x70+95", "fiyat1": 379.00, "fiyat2": null, "birim": "Metre" },
+        { "kod": "ALPEK-3x95+95", "ad": "ALPEK 3x95+95 mm²", "kesit": "3x95+95", "fiyat1": 475.00, "fiyat2": null, "birim": "Metre" }
+      ]
+    }
+  ]
+}

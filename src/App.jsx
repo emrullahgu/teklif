@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2 } from 'lucide-react';
+import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import jsPDF from 'jspdf';
@@ -11,6 +11,8 @@ import html2canvas from 'html2canvas';
 import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableCell, TableRow, WidthType, BorderStyle, Packer } from 'docx';
 import { saveAs } from 'file-saver';
 import FaturaData from '../fatura/Fatura.json';
+import KabloFiyatData from './serer-kablo-fiyat.json';
+import HazirPaketler from './hazir-paketler.json';
 
 // EMO 2026 Bölgesel Azaltma Katsayıları Listesi (Sabit Veri)
 const REGION_LIST = [
@@ -257,6 +259,24 @@ const App = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productQuantity, setProductQuantity] = useState(1);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
+  
+  // Ürün Tipi: 'normal', 'kablo' veya 'hizmet'
+  const [productType, setProductType] = useState('normal');
+  const [selectedCategoryForKesif, setSelectedCategoryForKesif] = useState('');
+  const [selectedCableForKesif, setSelectedCableForKesif] = useState(null);
+  const [kesifFiyatSecimi, setKesifFiyatSecimi] = useState('fiyat1');
+  
+  // Hizmet/İşçilik için state'ler
+  const [hizmetAdi, setHizmetAdi] = useState('');
+  const [hizmetFiyat, setHizmetFiyat] = useState(0);
+  const [hizmetMiktar, setHizmetMiktar] = useState(1);
+  const [hizmetBirim, setHizmetBirim] = useState('Gün');
+  const [hizmetAciklama, setHizmetAciklama] = useState('');
+
+  // Hazır Paket States
+  const [showHazirPaketModal, setShowHazirPaketModal] = useState(false);
+  const [selectedHazirPaket, setSelectedHazirPaket] = useState(null);
+  const [paketKarMarji, setPaketKarMarji] = useState(30); // %30 varsayılan kar marjı
 
   // Filter products based on search
   const filteredProducts = useMemo(() => {
@@ -282,24 +302,76 @@ const App = () => {
 
   // Keşif Metraj Fonksiyonları
   const addProductToKesif = () => {
-    if (!selectedProduct || productQuantity <= 0) return;
-    
-    const newProduct = {
-      id: Date.now(),
-      sira: kesifProducts.length + 1,
-      urun: selectedProduct.ÜRÜN,
-      marka: selectedProduct.MARKA,
-      birimFiyat: selectedProduct["BİRİM FİYAT"],
-      miktar: productQuantity,
-      olcu: selectedProduct.ÖLÇÜ,
-      toplam: selectedProduct["BİRİM FİYAT"] * productQuantity
-    };
+    if (productType === 'normal') {
+      // Normal ürün ekleme
+      if (!selectedProduct || productQuantity <= 0) return;
+      
+      const newProduct = {
+        id: Date.now(),
+        sira: kesifProducts.length + 1,
+        type: 'normal',
+        urun: selectedProduct.ÜRÜN,
+        marka: selectedProduct.MARKA,
+        birimFiyat: selectedProduct["BİRİM FİYAT"],
+        miktar: productQuantity,
+        olcu: selectedProduct.ÖLÇÜ,
+        toplam: selectedProduct["BİRİM FİYAT"] * productQuantity
+      };
 
-    setKesifProducts([...kesifProducts, newProduct]);
-    setSelectedProduct(null);
-    setProductSearch('');
-    setProductQuantity(1);
-    setShowProductDropdown(false);
+      setKesifProducts([...kesifProducts, newProduct]);
+      setSelectedProduct(null);
+      setProductSearch('');
+      setProductQuantity(1);
+      setShowProductDropdown(false);
+    } else if (productType === 'kablo') {
+      // Kablo ekleme
+      if (!selectedCableForKesif || productQuantity <= 0) return;
+      
+      const fiyat = kesifFiyatSecimi === 'fiyat1' ? selectedCableForKesif.fiyat1 : (selectedCableForKesif.fiyat2 || selectedCableForKesif.fiyat1);
+      const kategori = KabloFiyatData.kategoriler.find(k => k.urunler.some(u => u.kod === selectedCableForKesif.kod));
+      
+      const newProduct = {
+        id: Date.now(),
+        sira: kesifProducts.length + 1,
+        type: 'kablo',
+        urun: selectedCableForKesif.ad,
+        marka: `${kategori?.ad || 'Kablo'} - ${selectedCableForKesif.kesit} mm²`,
+        birimFiyat: fiyat,
+        miktar: productQuantity,
+        olcu: selectedCableForKesif.birim,
+        toplam: fiyat * productQuantity,
+        kategori: kategori?.ad || '',
+        kesit: selectedCableForKesif.kesit
+      };
+
+      setKesifProducts([...kesifProducts, newProduct]);
+      setSelectedCableForKesif(null);
+      setSelectedCategoryForKesif('');
+      setProductQuantity(1);
+    } else if (productType === 'hizmet') {
+      // Hizmet/İşçilik ekleme
+      if (!hizmetAdi || hizmetFiyat <= 0 || hizmetMiktar <= 0) return;
+      
+      const newProduct = {
+        id: Date.now(),
+        sira: kesifProducts.length + 1,
+        type: 'hizmet',
+        urun: hizmetAdi,
+        marka: 'Hizmet/İşçilik',
+        birimFiyat: hizmetFiyat,
+        miktar: hizmetMiktar,
+        olcu: hizmetBirim,
+        toplam: hizmetFiyat * hizmetMiktar,
+        aciklama: hizmetAciklama
+      };
+
+      setKesifProducts([...kesifProducts, newProduct]);
+      setHizmetAdi('');
+      setHizmetFiyat(0);
+      setHizmetMiktar(1);
+      setHizmetBirim('Gün');
+      setHizmetAciklama('');
+    }
   };
 
   const removeProductFromKesif = (id) => {
@@ -314,6 +386,86 @@ const App = () => {
       p.id === id ? { ...p, miktar: newQuantity, toplam: p.birimFiyat * newQuantity } : p
     );
     setKesifProducts(updated);
+  };
+
+  const updateProductPrice = (id, newPrice) => {
+    const updated = kesifProducts.map(p => 
+      p.id === id ? { ...p, birimFiyat: newPrice, toplam: newPrice * p.miktar } : p
+    );
+    setKesifProducts(updated);
+  };
+
+  const applyBulkPriceAdjustment = (percentage) => {
+    if (percentage === 0) return;
+    const updated = kesifProducts.map(p => {
+      const newPrice = p.birimFiyat * (1 + percentage / 100);
+      return { ...p, birimFiyat: newPrice, toplam: newPrice * p.miktar };
+    });
+    setKesifProducts(updated);
+  };
+
+  // Hazır Paket Ekleme Fonksiyonu
+  const addHazirPaketToKesif = () => {
+    if (!selectedHazirPaket) return;
+
+    const paket = HazirPaketler.paketler.find(p => p.id === selectedHazirPaket);
+    if (!paket) return;
+
+    let addedCount = 0;
+    const newProducts = [];
+
+    paket.urunler.forEach((paketUrun) => {
+      // Fatura.json'dan ürünü ara
+      const foundProduct = FaturaData.find(fp => 
+        fp.ÜRÜN?.toLowerCase().includes(paketUrun.urun.toLowerCase()) ||
+        paketUrun.urun.toLowerCase().includes(fp.ÜRÜN?.toLowerCase())
+      );
+
+      if (foundProduct) {
+        // Liste fiyatına (iskontosuz) kar marjı ekle
+        const listeFiyat = foundProduct['BİRİM FİYAT'] || 0;
+        const satisFiyat = listeFiyat * (1 + paketKarMarji / 100);
+
+        const newProduct = {
+          id: Date.now() + addedCount,
+          sira: kesifProducts.length + addedCount + 1,
+          type: 'normal',
+          urun: foundProduct.ÜRÜN,
+          birim: paketUrun.birim || foundProduct.ÖLÇÜ || 'Adet',
+          miktar: paketUrun.miktar,
+          birimFiyat: parseFloat(satisFiyat.toFixed(2)),
+          toplam: parseFloat((satisFiyat * paketUrun.miktar).toFixed(2)),
+          aciklama: paketUrun.aciklama || '',
+          marka: foundProduct.MARKA || '',
+          paketAdi: paket.ad
+        };
+        newProducts.push(newProduct);
+        addedCount++;
+      } else {
+        // Ürün bulunamadıysa, varsayılan fiyat ile ekle
+        const defaultPrice = 100 * (1 + paketKarMarji / 100);
+        const newProduct = {
+          id: Date.now() + addedCount,
+          sira: kesifProducts.length + addedCount + 1,
+          type: 'normal',
+          urun: paketUrun.urun,
+          birim: paketUrun.birim || 'Adet',
+          miktar: paketUrun.miktar,
+          birimFiyat: parseFloat(defaultPrice.toFixed(2)),
+          toplam: parseFloat((defaultPrice * paketUrun.miktar).toFixed(2)),
+          aciklama: paketUrun.aciklama || '',
+          marka: '---',
+          paketAdi: paket.ad
+        };
+        newProducts.push(newProduct);
+        addedCount++;
+      }
+    });
+
+    setKesifProducts([...kesifProducts, ...newProducts]);
+    setShowHazirPaketModal(false);
+    setSelectedHazirPaket(null);
+    alert(`${paket.ad} paketi eklendi! ${addedCount} ürün listeye eklendi.`);
   };
 
   const calculateKesifTotals = () => {
@@ -1615,7 +1767,7 @@ const App = () => {
             className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'kesif' ? 'bg-white shadow text-orange-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
             <Hammer className="w-4 h-4 mr-2"/>
-            Keşif Metraj Fiyat Teklifi
+            Keşif Metraj (Malzeme + Kablo)
           </button>
           <button 
             onClick={() => setActiveTab('proposal')}
@@ -2155,11 +2307,28 @@ const App = () => {
                 <Hammer className="mr-2 h-5 w-5"/>
                 Keşif Metraj Fiyat Teklifi
               </h2>
-              <p className="text-orange-100 text-xs mt-1">Elektrik malzemesi keşif metraj listesi oluşturun ve otomatik teklif hazırlayın.</p>
+              <p className="text-orange-100 text-xs mt-1">Elektrik malzemesi ve kablo için keşif metraj listesi oluşturun. Kablo fiyatları: Serer Kablo (İzmir)</p>
             </div>
 
             <form onSubmit={handleKesifSubmit} className="p-8 space-y-6">
               
+              {/* Serer Kablo Bilgi Kutusu */}
+              {productType === 'kablo' && (
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-purple-200">
+                  <div className="flex items-start">
+                    <Cable className="w-5 h-5 mr-2 text-purple-600 mt-0.5"/>
+                    <div>
+                      <h3 className="text-sm font-bold text-purple-800 mb-1">Kablo Fiyatları: Serer Kablo (İzmir)</h3>
+                      <div className="grid grid-cols-3 gap-2 text-xs text-gray-700">
+                        <div><span className="font-semibold">Tel:</span> {KabloFiyatData.telefon}</div>
+                        <div><span className="font-semibold">Web:</span> {KabloFiyatData.web}</div>
+                        <div><span className="font-semibold text-red-600">⚠️ KDV Hariç</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Müşteri Bilgileri */}
               <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
                 <h3 className="text-md font-bold text-gray-800 mb-4 flex items-center">
@@ -2211,12 +2380,84 @@ const App = () => {
                 </div>
               </div>
 
-              {/* Ürün Ekleme */}
-              <div className="bg-orange-50 p-6 rounded-lg border border-orange-200">
+              {/* Hazır Paket Ekle Butonu */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg border-2 border-blue-200 mb-6">
+                <button
+                  type="button"
+                  onClick={() => setShowHazirPaketModal(true)}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-4 px-6 rounded-lg font-bold transition shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-6 h-6"/>
+                  ⚡ Hazır Paket Ekle (Hızlı Teklif)
+                </button>
+                <p className="text-xs text-center text-gray-600 mt-2">
+                  Kompanzasyon, ADP, Aydınlatma gibi hazır paketlerle hızlı teklif oluşturun
+                </p>
+              </div>
+
+              {/* Ürün Tipi Seçimi */}
+              <div className="bg-gradient-to-r from-orange-50 to-purple-50 p-6 rounded-lg border border-orange-200">
                 <h3 className="text-md font-bold text-gray-800 mb-4 flex items-center">
                   <Plus className="w-5 h-5 mr-2 text-orange-600"/>
-                  Ürün Ekle
+                  Malzeme/Kablo Ekle
                 </h3>
+                
+                {/* Ürün Tipi Seçimi */}
+                <div className="mb-4 flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductType('normal');
+                      setSelectedCableForKesif(null);
+                      setSelectedCategoryForKesif('');
+                    }}
+                    className={`px-6 py-3 rounded-lg font-semibold transition flex-1 ${
+                      productType === 'normal'
+                        ? 'bg-orange-600 text-white shadow-lg'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:border-orange-400'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-4 h-4 inline mr-2"/>
+                    Normal Ürün/Malzeme
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductType('kablo');
+                      setSelectedProduct(null);
+                      setProductSearch('');
+                    }}
+                    className={`px-6 py-3 rounded-lg font-semibold transition flex-1 ${
+                      productType === 'kablo'
+                        ? 'bg-purple-600 text-white shadow-lg'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:border-purple-400'
+                    }`}
+                  >
+                    <Cable className="w-4 h-4 inline mr-2"/>
+                    Kablo (Serer Kablo)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductType('hizmet');
+                      setSelectedProduct(null);
+                      setProductSearch('');
+                      setSelectedCableForKesif(null);
+                      setSelectedCategoryForKesif('');
+                    }}
+                    className={`px-6 py-3 rounded-lg font-semibold transition flex-1 ${
+                      productType === 'hizmet'
+                        ? 'bg-green-600 text-white shadow-lg'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:border-green-400'
+                    }`}
+                  >
+                    <Wrench className="w-4 h-4 inline mr-2"/>
+                    Hizmet/İşçilik
+                  </button>
+                </div>
+
+                {/* Normal Ürün Ekleme Formu */}
+                {productType === 'normal' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                   <div className="md:col-span-2 relative">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Ürün Ara</label>
@@ -2283,24 +2524,261 @@ const App = () => {
                     </button>
                   </div>
                 </div>
+                )}
+
+                {/* Kablo Ekleme Formu */}
+                {productType === 'kablo' && (
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Kategori Seçimi */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Kablo Kategorisi *</label>
+                    <select 
+                      value={selectedCategoryForKesif}
+                      onChange={(e) => {
+                        setSelectedCategoryForKesif(e.target.value);
+                        setSelectedCableForKesif(null);
+                      }}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                    >
+                      <option value="">-- Kategori Seçiniz --</option>
+                      {KabloFiyatData.kategoriler.map((kategori) => (
+                        <option key={kategori.id} value={kategori.id}>
+                          {kategori.ad}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedCategoryForKesif && (
+                      <p className="text-xs text-gray-600 mt-1">
+                        {KabloFiyatData.kategoriler.find(k => k.id === selectedCategoryForKesif)?.aciklama}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Kablo Seçimi */}
+                  {selectedCategoryForKesif && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Kablo Tipi ve Kesit *</label>
+                      <select 
+                        value={selectedCableForKesif ? selectedCableForKesif.kod : ''}
+                        onChange={(e) => {
+                          const kategori = KabloFiyatData.kategoriler.find(k => k.id === selectedCategoryForKesif);
+                          const cable = kategori?.urunler.find(u => u.kod === e.target.value);
+                          setSelectedCableForKesif(cable || null);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                      >
+                        <option value="">-- Kablo Seçiniz --</option>
+                        {KabloFiyatData.kategoriler
+                          .find(k => k.id === selectedCategoryForKesif)
+                          ?.urunler.map((urun) => (
+                            <option key={urun.kod} value={urun.kod}>
+                              {urun.ad} - {kesifFiyatSecimi === 'fiyat1' ? urun.fiyat1 : (urun.fiyat2 || urun.fiyat1)} TL/{urun.birim}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Fiyat Seçimi */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Fiyat Seçimi</label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center">
+                        <input 
+                          type="radio" 
+                          name="kesifFiyatSecimi" 
+                          value="fiyat1"
+                          checked={kesifFiyatSecimi === 'fiyat1'}
+                          onChange={(e) => setKesifFiyatSecimi(e.target.value)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm text-gray-700">Fiyat 1</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input 
+                          type="radio" 
+                          name="kesifFiyatSecimi" 
+                          value="fiyat2"
+                          checked={kesifFiyatSecimi === 'fiyat2'}
+                          onChange={(e) => setKesifFiyatSecimi(e.target.value)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm text-gray-700">Fiyat 2 (varsa)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Miktar ve Özet */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar (Metre) *</label>
+                      <input 
+                        type="number" 
+                        min="0.01"
+                        step="0.01"
+                        placeholder="Örn: 100"
+                        value={productQuantity}
+                        onChange={(e) => setProductQuantity(parseFloat(e.target.value) || 0)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                      />
+                    </div>
+                    
+                    {selectedCableForKesif && (
+                      <div className="bg-purple-100 p-4 rounded-lg flex flex-col justify-center">
+                        <div className="text-xs text-gray-600">Birim Fiyat</div>
+                        <div className="text-xl font-bold text-purple-700">
+                          {(kesifFiyatSecimi === 'fiyat1' ? selectedCableForKesif.fiyat1 : (selectedCableForKesif.fiyat2 || selectedCableForKesif.fiyat1)).toFixed(2)} TL
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">Toplam: {((kesifFiyatSecimi === 'fiyat1' ? selectedCableForKesif.fiyat1 : (selectedCableForKesif.fiyat2 || selectedCableForKesif.fiyat1)) * productQuantity).toFixed(2)} TL</div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <button 
+                    type="button"
+                    onClick={addProductToKesif}
+                    disabled={!selectedCableForKesif || productQuantity <= 0}
+                    className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <Plus className="w-5 h-5 mr-2"/>
+                    Listeye Ekle
+                  </button>
+                </div>
+                )}
+
+                {/* Hizmet/İşçilik Ekleme Formu */}
+                {productType === 'hizmet' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Hizmet/İşçilik Adı *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: İşçilik, Devreye Alma, Mühendislik Hizmeti"
+                      value={hizmetAdi}
+                      onChange={(e) => setHizmetAdi(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Birim Fiyat (TL) *</label>
+                      <input 
+                        type="number" 
+                        min="0"
+                        step="0.01"
+                        placeholder="Örn: 5000"
+                        value={hizmetFiyat || ''}
+                        onChange={(e) => setHizmetFiyat(parseFloat(e.target.value) || 0)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Birim</label>
+                      <select
+                        value={hizmetBirim}
+                        onChange={(e) => setHizmetBirim(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition"
+                      >
+                        <option value="Gün">Gün</option>
+                        <option value="Saat">Saat</option>
+                        <option value="Adet">Adet</option>
+                        <option value="Takım">Takım</option>
+                        <option value="Proje">Proje</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar *</label>
+                    <input 
+                      type="number" 
+                      min="0.01"
+                      step="0.01"
+                      placeholder="Örn: 1"
+                      value={hizmetMiktar}
+                      onChange={(e) => setHizmetMiktar(parseFloat(e.target.value) || 1)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Açıklama (Opsiyonel)</label>
+                    <textarea 
+                      rows="2"
+                      placeholder="Örn: Panel devreye alma ve test"
+                      value={hizmetAciklama}
+                      onChange={(e) => setHizmetAciklama(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition resize-none"
+                    />
+                  </div>
+
+                  {hizmetAdi && hizmetFiyat > 0 && hizmetMiktar > 0 && (
+                    <div className="bg-green-100 p-4 rounded-lg">
+                      <div className="text-xs text-gray-600">Toplam Tutar</div>
+                      <div className="text-xl font-bold text-green-700">
+                        {(hizmetFiyat * hizmetMiktar).toFixed(2)} TL
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        {hizmetFiyat.toFixed(2)} TL × {hizmetMiktar} {hizmetBirim}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <button 
+                    type="button"
+                    onClick={addProductToKesif}
+                    disabled={!hizmetAdi || hizmetFiyat <= 0 || hizmetMiktar <= 0}
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <Plus className="w-5 h-5 mr-2"/>
+                    Listeye Ekle
+                  </button>
+                </div>
+                )}
               </div>
 
               {/* Ürün Listesi */}
               {kesifProducts.length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-800 px-4 py-3">
+                  <div className="bg-gray-800 px-4 py-3 flex justify-between items-center">
                     <h3 className="text-md font-bold text-white flex items-center">
                       <FileSpreadsheet className="w-5 h-5 mr-2"/>
-                      Ürün Listesi ({kesifProducts.length} ürün)
+                      Malzeme/Kablo/Hizmet Listesi ({kesifProducts.length} kalem)
                     </h3>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => applyBulkPriceAdjustment(10)}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                      >
+                        +10% Toplu Artış
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => applyBulkPriceAdjustment(20)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                      >
+                        +20% Toplu Artış
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => applyBulkPriceAdjustment(-10)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                      >
+                        -10% Toplu İndirim
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-100 border-b border-gray-300">
                         <tr>
                           <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">SIRA</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">TİP</th>
                           <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">ÜRÜN ADI</th>
-                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">MARKA</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">DETAY</th>
                           <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">BİRİM FİYAT</th>
                           <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">MİKTAR</th>
                           <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">ÖLÇÜ</th>
@@ -2310,11 +2788,41 @@ const App = () => {
                       </thead>
                       <tbody>
                         {kesifProducts.map((product) => (
-                          <tr key={product.id} className="border-b border-gray-200 hover:bg-gray-50">
+                          <tr key={product.id} className={`border-b border-gray-200 hover:bg-gray-50 ${
+                            product.type === 'kablo' ? 'bg-purple-50' : ''
+                          }`}>
                             <td className="px-4 py-3 text-gray-700">{product.sira}</td>
+                            <td className="px-4 py-3">
+                              {product.type === 'kablo' ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                                  <Cable className="w-3 h-3 mr-1"/>
+                                  Kablo
+                                </span>
+                              ) : product.type === 'hizmet' ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                  <Wrench className="w-3 h-3 mr-1"/>
+                                  Hizmet
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                                  <FileSpreadsheet className="w-3 h-3 mr-1"/>
+                                  Malzeme
+                                </span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-gray-700 font-medium">{product.urun}</td>
-                            <td className="px-4 py-3 text-gray-600">{product.marka}</td>
-                            <td className="px-4 py-3 text-right text-gray-700">{product.birimFiyat.toFixed(2)} TL</td>
+                            <td className="px-4 py-3 text-gray-600 text-xs">{product.marka}</td>
+                            <td className="px-4 py-3 text-right">
+                              <input 
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={product.birimFiyat}
+                                onChange={(e) => updateProductPrice(product.id, parseFloat(e.target.value) || 0)}
+                                className="w-24 px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              />
+                              <span className="text-xs text-gray-500 ml-1">TL</span>
+                            </td>
                             <td className="px-4 py-3 text-right">
                               <input 
                                 type="number"
@@ -2398,10 +2906,12 @@ const App = () => {
                             <span className="text-lg font-semibold text-blue-700">- {totals.iskontoAmount.toFixed(2)} TL</span>
                           </div>
                         )}
-                        <div className="flex justify-between items-center py-2 border-b border-gray-300">
-                          <span className="text-sm font-medium text-gray-700">İskonto Sonrası:</span>
-                          <span className="text-lg font-semibold text-gray-800">{totals.afterDiscount.toFixed(2)} TL</span>
-                        </div>
+                        {kesifSettings.iskonto > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b border-gray-300">
+                            <span className="text-sm font-medium text-gray-700">İskonto Sonrası:</span>
+                            <span className="text-lg font-semibold text-gray-800">{totals.afterDiscount.toFixed(2)} TL</span>
+                          </div>
+                        )}
                         <div className="flex justify-between items-center py-2 border-b border-gray-300">
                           <span className="text-sm font-medium text-green-700">KDV (% {kesifSettings.kdvOrani}):</span>
                           <span className="text-lg font-semibold text-green-700">+ {totals.kdvAmount.toFixed(2)} TL</span>
@@ -2430,6 +2940,7 @@ const App = () => {
           </div>
         )}
 
+        {/* Kablo Keşif Metraj Tab */}
         {/* Proposal View */}
         {activeTab === 'proposal' && selectedCompany && (
           <div className="flex gap-6 flex-col lg:flex-row">
@@ -2685,7 +3196,7 @@ const App = () => {
                     <>
                       {(() => {
                         const products = selectedCompany.products;
-                        const itemsPerPage = 8; // Her sayfada maksimum 15 ürün (sayfa taşmalarını önler)
+                        const itemsPerPage = 8;
                         const totalPages = Math.ceil(products.length / itemsPerPage);
                         
                         return Array.from({ length: totalPages }, (_, pageIndex) => {
@@ -2703,7 +3214,9 @@ const App = () => {
                                     <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
                                   </div>
                                   <div className="text-right">
-                                    <h1 className="text-xl font-bold text-orange-700 tracking-wide uppercase">KEŞİF METRAJ FİYAT TEKLİFİ</h1>
+                                    <h1 className="text-xl font-bold text-orange-700 tracking-wide uppercase">
+                                      KEŞİF METRAJ FİYAT TEKLİFİ
+                                    </h1>
                                     <p className="text-[9pt] text-gray-500 mt-2">Referans No: KM-{new Date().getTime().toString().slice(-6)}</p>
                                     <p className="text-[9pt] text-gray-600 mt-0.5">{selectedCompany.date}</p>
                                   </div>
@@ -2726,7 +3239,7 @@ const App = () => {
                                       <strong>Sayın {selectedCompany.contactName ? `${selectedCompany.contactName} - ` : ''}{selectedCompany.name} Yetkilisi,</strong>
                                     </p>
                                     <p className="mb-6 text-justify text-[9.5pt] leading-tight">
-                                      Talep ettiğiniz elektrik malzemelerine ilişkin keşif metraj fiyat teklifimiz aşağıda detaylandırılmıştır. 
+                                      Talep ettiğiniz elektrik malzemeleri ve kablolarına ilişkin keşif metraj fiyat teklifimiz aşağıda detaylandırılmıştır. 
                                       Tüm fiyatlar güncel piyasa koşulları göz önünde bulundurularak hazırlanmıştır.
                                     </p>
                                   </>
@@ -2741,8 +3254,9 @@ const App = () => {
                                     <thead style={{backgroundColor: '#fb8c00'}}>
                                       <tr>
                                         <th className="border border-gray-300 p-2 text-center text-white font-semibold">SIRA</th>
-                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">ÜRÜN ADI</th>
-                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">MARKA</th>
+                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">TİP</th>
+                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">ÜRÜN/KABLO ADI</th>
+                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">DETAY/KESİT</th>
                                         <th className="border border-gray-300 p-2 text-right text-white font-semibold">BİRİM FİYAT</th>
                                         <th className="border border-gray-300 p-2 text-right text-white font-semibold">MİKTAR</th>
                                         <th className="border border-gray-300 p-2 text-center text-white font-semibold">ÖLÇÜ</th>
@@ -2753,6 +3267,13 @@ const App = () => {
                                       {pageProducts.map((product, idx) => (
                                         <tr key={product.id} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                           <td className="border border-gray-300 p-2 text-center">{product.sira}</td>
+                                          <td className="border border-gray-300 p-2 text-center">
+                                            {product.type === 'kablo' ? (
+                                              <span className="text-[7pt] font-semibold text-purple-700">KABLO</span>
+                                            ) : (
+                                              <span className="text-[7pt] font-semibold text-orange-700">MALZEME</span>
+                                            )}
+                                          </td>
                                           <td className="border border-gray-300 p-2">{product.urun}</td>
                                           <td className="border border-gray-300 p-2 text-gray-600">{product.marka}</td>
                                           <td className="border border-gray-300 p-2 text-right">{product.birimFiyat.toFixed(2)} TL</td>
@@ -2782,15 +3303,17 @@ const App = () => {
                                                 <td className="p-3 text-right font-bold text-blue-700">- {selectedCompany.totals.iskontoAmount.toFixed(2)} TL</td>
                                               </tr>
                                             )}
-                                            <tr className="border-b border-gray-300">
-                                              <td className="p-3 font-semibold">İskonto Sonrası:</td>
-                                              <td className="p-3 text-right font-bold">{selectedCompany.totals.afterDiscount.toFixed(2)} TL</td>
-                                            </tr>
+                                            {selectedCompany.settings.iskonto > 0 && (
+                                              <tr className="border-b border-gray-300">
+                                                <td className="p-3 font-semibold">İskonto Sonrası:</td>
+                                                <td className="p-3 text-right font-bold">{selectedCompany.totals.afterDiscount.toFixed(2)} TL</td>
+                                              </tr>
+                                            )}
                                             <tr className="border-b border-gray-300 bg-green-50">
                                               <td className="p-3 font-semibold text-green-700">KDV (% {selectedCompany.settings.kdvOrani}):</td>
                                               <td className="p-3 text-right font-bold text-green-700">+ {selectedCompany.totals.kdvAmount.toFixed(2)} TL</td>
                                             </tr>
-                                            <tr className="bg-orange-600 text-white">
+                                            <tr className={isKabloKesif ? "bg-purple-600 text-white" : "bg-orange-600 text-white"}>
                                               <td className="p-4 font-bold text-lg">GENEL TOPLAM:</td>
                                               <td className="p-4 text-right font-bold text-xl">{selectedCompany.totals.grandTotal.toFixed(2)} TL</td>
                                             </tr>
@@ -3079,6 +3602,148 @@ const App = () => {
         )}
 
       </div>
+
+      {/* Hazır Paket Modal */}
+      {showHazirPaketModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-6 h-6 text-yellow-300"/>
+                <h2 className="text-xl font-bold text-white">Hazır Paket Seçimi - Hızlı Teklif</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowHazirPaketModal(false);
+                  setSelectedHazirPaket(null);
+                }}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition"
+              >
+                <X className="w-6 h-6"/>
+              </button>
+            </div>
+
+            {/* Kar Marjı Ayarı */}
+            <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingDown className="w-5 h-5 text-green-600"/>
+                  <label className="text-sm font-semibold text-gray-700">Kar Marjı (%)</label>
+                </div>
+                <div className="flex items-center gap-4">
+                  <input 
+                    type="range"
+                    min="10"
+                    max="80"
+                    step="5"
+                    value={paketKarMarji}
+                    onChange={(e) => setPaketKarMarji(parseInt(e.target.value))}
+                    className="w-48"
+                  />
+                  <input 
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={paketKarMarji}
+                    onChange={(e) => setPaketKarMarji(parseInt(e.target.value) || 30)}
+                    className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold text-green-700"
+                  />
+                  <span className="text-sm text-gray-600">Alış fiyatlarına %{paketKarMarji} kar eklenir</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Paket Listesi */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {HazirPaketler.paketler.map((paket) => (
+                  <div
+                    key={paket.id}
+                    onClick={() => setSelectedHazirPaket(paket.id)}
+                    className={`cursor-pointer rounded-lg border-2 p-4 transition transform hover:scale-105 ${
+                      selectedHazirPaket === paket.id
+                        ? 'border-blue-500 bg-blue-50 shadow-lg'
+                        : 'border-gray-200 bg-white hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-bold text-gray-800 text-sm">{paket.ad}</h3>
+                      {selectedHazirPaket === paket.id && (
+                        <CheckCircle className="w-5 h-5 text-blue-600"/>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mb-2">{paket.kategori}</p>
+                    <p className="text-xs text-gray-600 mb-3 line-clamp-2">{paket.aciklama}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <FileSpreadsheet className="w-4 h-4"/>
+                      <span className="font-semibold">{paket.urunler.length} kalem ürün</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Seçili Paket Detayları */}
+            {selectedHazirPaket && (
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <h3 className="text-sm font-bold text-gray-800 mb-3">
+                  📋 {HazirPaketler.paketler.find(p => p.id === selectedHazirPaket)?.ad} - Ürün Listesi
+                </h3>
+                <div className="max-h-48 overflow-y-auto bg-white rounded-lg border border-gray-200 p-3">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-100 sticky top-0">
+                      <tr>
+                        <th className="px-2 py-1 text-left">Ürün</th>
+                        <th className="px-2 py-1 text-center">Miktar</th>
+                        <th className="px-2 py-1 text-left">Açıklama</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HazirPaketler.paketler
+                        .find(p => p.id === selectedHazirPaket)
+                        ?.urunler.map((urun, idx) => (
+                          <tr key={idx} className="border-b border-gray-100">
+                            <td className="px-2 py-2 font-medium">{urun.urun}</td>
+                            <td className="px-2 py-2 text-center">{urun.miktar} {urun.birim}</td>
+                            <td className="px-2 py-2 text-gray-600">{urun.aciklama}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-100 border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-800">{HazirPaketler.paketler.length}</span> farklı hazır paket mevcut
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowHazirPaketModal(false);
+                    setSelectedHazirPaket(null);
+                  }}
+                  className="px-6 py-2 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-200 transition"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={addHazirPaketToKesif}
+                  disabled={!selectedHazirPaket}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5"/>
+                  Paketi Listeye Ekle
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
