@@ -395,6 +395,20 @@ const App = () => {
     setKesifProducts(updated);
   };
 
+  const updateProductName = (id, newName) => {
+    const updated = kesifProducts.map(p => 
+      p.id === id ? { ...p, urun: newName } : p
+    );
+    setKesifProducts(updated);
+  };
+
+  const updateProductDetail = (id, newDetail) => {
+    const updated = kesifProducts.map(p => 
+      p.id === id ? { ...p, marka: newDetail } : p
+    );
+    setKesifProducts(updated);
+  };
+
   const applyBulkPriceAdjustment = (percentage) => {
     if (percentage === 0) return;
     const updated = kesifProducts.map(p => {
@@ -2781,7 +2795,6 @@ const App = () => {
                           <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">DETAY</th>
                           <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">BİRİM FİYAT</th>
                           <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">MİKTAR</th>
-                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">ÖLÇÜ</th>
                           <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">TOPLAM</th>
                           <th className="px-4 py-3 text-center text-xs font-bold text-gray-700">İŞLEM</th>
                         </tr>
@@ -2810,8 +2823,22 @@ const App = () => {
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-gray-700 font-medium">{product.urun}</td>
-                            <td className="px-4 py-3 text-gray-600 text-xs">{product.marka}</td>
+                            <td className="px-4 py-3">
+                              <input 
+                                type="text"
+                                value={product.urun}
+                                onChange={(e) => updateProductName(product.id, e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <input 
+                                type="text"
+                                value={product.marka}
+                                onChange={(e) => updateProductDetail(product.id, e.target.value)}
+                                className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              />
+                            </td>
                             <td className="px-4 py-3 text-right">
                               <input 
                                 type="number"
@@ -2832,8 +2859,8 @@ const App = () => {
                                 onChange={(e) => updateProductQuantity(product.id, parseFloat(e.target.value) || 0)}
                                 className="w-20 px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
                               />
+                              <span className="text-xs text-gray-500 ml-1">{product.olcu}</span>
                             </td>
-                            <td className="px-4 py-3 text-gray-600">{product.olcu}</td>
                             <td className="px-4 py-3 text-right font-semibold text-gray-800">{product.toplam.toFixed(2)} TL</td>
                             <td className="px-4 py-3 text-center">
                               <button 
