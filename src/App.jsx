@@ -3313,7 +3313,7 @@ const App = () => {
                                               <td className="p-3 font-semibold text-green-700">KDV (% {selectedCompany.settings.kdvOrani}):</td>
                                               <td className="p-3 text-right font-bold text-green-700">+ {selectedCompany.totals.kdvAmount.toFixed(2)} TL</td>
                                             </tr>
-                                            <tr className={isKabloKesif ? "bg-purple-600 text-white" : "bg-orange-600 text-white"}>
+                                            <tr className="bg-orange-600 text-white">
                                               <td className="p-4 font-bold text-lg">GENEL TOPLAM:</td>
                                               <td className="p-4 text-right font-bold text-xl">{selectedCompany.totals.grandTotal.toFixed(2)} TL</td>
                                             </tr>
