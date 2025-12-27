@@ -654,8 +654,8 @@ const App = () => {
   // AI Gemini API Fonksiyonları
   const callGeminiAPI = async (prompt, systemInstruction, useJson = true) => {
     try {
-      // Model: gemini-1.5-flash veya gemini-2.0-flash-exp
-      const model = "gemini-1.5-flash"; // Daha stabil versiyon
+      // Model: gemini-pro (en stabil versiyon)
+      const model = "gemini-pro";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       
       const requestBody = {
