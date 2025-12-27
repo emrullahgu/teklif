@@ -312,6 +312,7 @@ const App = () => {
   // Gelişmiş Ürün Filtreleme States
   const [markaFilter, setMarkaFilter] = useState('tumu');
   const [kategoriFilter, setKategoriFilter] = useState('tumu');
+  const [kaynakFilter, setKaynakFilter] = useState('tumu'); // Yeni: Veri kaynağı filtresi
   const [fiyatAraligi, setFiyatAraligi] = useState({ min: 0, max: 100000 });
   const [siralama, setSiralama] = useState('alfabetik'); // 'alfabetik', 'fiyat-artan', 'fiyat-azalan', 'populer'
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -375,7 +376,7 @@ const App = () => {
 
   // Gelişmiş Ürün Filtreleme
   const filteredProducts = useMemo(() => {
-    if (!productSearch && markaFilter === 'tumu' && kategoriFilter === 'tumu') return [];
+    if (!productSearch && markaFilter === 'tumu' && kategoriFilter === 'tumu' && kaynakFilter === 'tumu') return [];
     
     let filtered = CombinedFaturaData;
 
@@ -391,6 +392,11 @@ const App = () => {
     // Marka filtresi
     if (markaFilter !== 'tumu') {
       filtered = filtered.filter(p => p.marka === markaFilter);
+    }
+
+    // Kaynak filtresi (Fatura1 veya Fatura2)
+    if (kaynakFilter !== 'tumu') {
+      filtered = filtered.filter(p => p.kaynak === kaynakFilter);
     }
 
     // Kategori filtresi
@@ -426,7 +432,7 @@ const App = () => {
     }
 
     return filtered.slice(0, 50); // İlk 50 sonuç
-  }, [productSearch, markaFilter, kategoriFilter, fiyatAraligi, siralama, productStats, kesifProducts]);
+  }, [productSearch, markaFilter, kategoriFilter, kaynakFilter, fiyatAraligi, siralama, productStats, kesifProducts]);
 
   // Keşif Metraj Editor Mode
   const [kesifEditorMode, setKesifEditorMode] = useState(false);
@@ -665,72 +671,97 @@ const App = () => {
 
   // AI Keşif Sihirbazı - Proje tanımından otomatik ürün listesi oluşturma
   const handleAiWizard = async () => {
-    if (!aiWizardPrompt.trim()) return;
+    if (!aiWizardPrompt.trim()) {
+      setAiError("Lütfen proje tanımı girin!");
+      return;
+    }
     
     setAiLoading(true);
     setAiError(null);
     
     try {
-      // Katalog verilerini hazırla
-      const catalogSummary = JSON.stringify(
-        CombinedFaturaData.slice(0, 500).map(d => ({
-          urun: d.urun,
-          marka: d.marka,
-          birimFiyat: d.birimFiyat,
-          olcu: d.olcu
-        }))
-      );
+      // Katalog verilerini hazırla - daha küçük örnek
+      const catalogSample = CombinedFaturaData.slice(0, 200).map(d => ({
+        urun: d.urun,
+        marka: d.marka,
+        olcu: d.olcu
+      }));
       
-      const systemPrompt = `
-        Sen uzman bir elektrik mühendisisin. Kullanıcının tarif ettiği proje için gerekli malzeme listesini oluşturacaksın.
-        
-        Elindeki Ürün Kataloğu (örnek 500 ürün): ${catalogSummary}
-        
-        KURALLAR:
-        1. Sadece katalogdaki ürünleri kullan (urun, marka, olcu alanlarını eşleştir)
-        2. Miktarları gerçekçi tahmin et (metre, adet, paket vb.)
-        3. Çıktı SADECE JSON array formatında olmalı: [{"urun": "...", "miktar": 100, "birim": "metre", "aciklama": "..."}, ...]
-        4. En az 5, en fazla 20 ürün öner
-        5. Kablo, sigorta, priz, anahtar gibi temel malzemeleri dahil et
-      `;
+      const systemPrompt = `Sen uzman bir elektrik mühendisisin. Kullanıcının proje tanımına göre gerekli malzeme listesi oluştur.
 
+Katalog örnekleri: ${JSON.stringify(catalogSample.slice(0, 50))}
+
+KURALLAR:
+1. Katalogdaki ürün isimlerine benzer ürünler öner (NYY, NYM, NVV, kablo, sigorta, priz, anahtar vb.)
+2. Gerçekçi miktarlar tahmin et
+3. SADECE bu JSON formatında yanıt ver: [{"urun": "3x2.5 NYY", "miktar": 50, "birim": "metre", "aciklama": "Ana hat"}]
+4. 5-15 ürün öner
+5. Yanıt başka bir şey içermemeli, sadece JSON array`;
+
+      console.log("AI Wizard - Prompt gönderiliyor...");
       const responseText = await callGeminiAPI(aiWizardPrompt, systemPrompt, true);
-      const suggestedItems = JSON.parse(responseText);
+      console.log("AI Wizard - Yanıt alındı:", responseText);
+      
+      if (!responseText) {
+        throw new Error("API'den yanıt alınamadı");
+      }
+
+      let suggestedItems;
+      try {
+        suggestedItems = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("JSON parse hatası:", parseError, "Yanıt:", responseText);
+        throw new Error("AI yanıtı işlenemedi. Format hatası.");
+      }
+
+      if (!Array.isArray(suggestedItems)) {
+        throw new Error("AI geçersiz format döndürdü");
+      }
       
       let addedCount = 0;
+      const newProducts = [];
+      
       suggestedItems.forEach(suggested => {
-        // Ürünü katalogda bul
-        const matched = CombinedFaturaData.find(d => 
-          d.urun?.toLowerCase().includes(suggested.urun?.toLowerCase()) ||
-          suggested.urun?.toLowerCase().includes(d.urun?.toLowerCase())
-        );
+        if (!suggested.urun) return;
+        
+        // Fuzzy match - daha esnek eşleştirme
+        const searchTerms = suggested.urun.toLowerCase().split(' ');
+        const matched = CombinedFaturaData.find(d => {
+          const urunLower = d.urun?.toLowerCase() || '';
+          return searchTerms.some(term => urunLower.includes(term) && term.length > 2);
+        });
         
         if (matched) {
           const newProduct = {
             id: Date.now() + addedCount,
-            sira: kesifProducts.length + addedCount + 1,
+            sira: kesifProducts.length + newProducts.length + 1,
             type: 'normal',
             urun: matched.urun,
             birim: suggested.birim || matched.olcu || 'Adet',
             miktar: suggested.miktar || 1,
             birimFiyat: matched.birimFiyat,
             toplam: matched.birimFiyat * (suggested.miktar || 1),
-            aciklama: suggested.aciklama || 'AI Sihirbazı tarafından eklendi',
+            aciklama: suggested.aciklama || 'AI Sihirbazı önerisi',
             marka: matched.marka || ''
           };
           
-          setKesifProducts(prev => [...prev, newProduct]);
+          newProducts.push(newProduct);
           addedCount++;
         }
       });
       
-      setAiWizardPrompt("");
-      setIsAiWizardOpen(false);
-      alert(`✨ ${addedCount} ürün AI Sihirbazı tarafından eklendi!`);
+      if (newProducts.length > 0) {
+        setKesifProducts(prev => [...prev, ...newProducts]);
+        setAiWizardPrompt("");
+        setIsAiWizardOpen(false);
+        alert(`✨ ${addedCount} ürün AI Sihirbazı tarafından eklendi!`);
+      } else {
+        setAiError("Katalogda eşleşen ürün bulunamadı. Daha genel terimler kullanın.");
+      }
       
     } catch (error) {
-      console.error(error);
-      setAiError("Bir hata oluştu. Lütfen tekrar deneyin.");
+      console.error("AI Wizard hatası:", error);
+      setAiError(error.message || "Bir hata oluştu. Lütfen tekrar deneyin.");
     } finally {
       setAiLoading(false);
     }
@@ -2109,12 +2140,15 @@ const App = () => {
             </div>
 
             {/* Genel İstatistikler */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-600 text-sm font-semibold">Toplam Ürün</p>
                     <p className="text-3xl font-bold text-blue-600 mt-2">{productStats.toplamUrun}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      F1: {normalizedFatura1.length} • F2: {normalizedFatura2.length}
+                    </p>
                   </div>
                   <FileSpreadsheet className="w-12 h-12 text-blue-500 opacity-20"/>
                 </div>
@@ -2147,6 +2181,27 @@ const App = () => {
                     <p className="text-3xl font-bold text-orange-600 mt-2">{productStats.ortalamaFiyat.toFixed(2)} ₺</p>
                   </div>
                   <TrendingDown className="w-12 h-12 text-orange-500 opacity-20"/>
+                </div>
+              </div>
+
+              {/* Veri Kaynakları */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg shadow-lg p-6 border-l-4 border-indigo-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Veri Kaynağı</p>
+                    <p className="text-lg font-bold text-indigo-600 mt-2">2 Fatura</p>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-xs text-gray-600">Fatura1: {normalizedFatura1.length}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        <span className="text-xs text-gray-600">Fatura2: {normalizedFatura2.length}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <FileText className="w-12 h-12 text-indigo-500 opacity-20"/>
                 </div>
               </div>
             </div>
@@ -3070,7 +3125,7 @@ const App = () => {
                   {/* Gelişmiş Filtreler */}
                   {showAdvancedFilters && (
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                         {/* Marka Filtresi */}
                         <div>
                           <label className="block text-xs font-semibold text-gray-700 mb-1">Marka</label>
@@ -3098,6 +3153,20 @@ const App = () => {
                             {productStats.kategoriSayilari.map(({ ad, adet }) => (
                               <option key={ad} value={ad}>{ad} ({adet})</option>
                             ))}
+                          </select>
+                        </div>
+
+                        {/* Veri Kaynağı Filtresi */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Veri Kaynağı</label>
+                          <select
+                            value={kaynakFilter}
+                            onChange={(e) => setKaynakFilter(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                          >
+                            <option value="tumu">Tüm Kaynaklar</option>
+                            <option value="Fatura1">📄 Fatura1 ({normalizedFatura1.length})</option>
+                            <option value="Fatura2">📄 Fatura2 ({normalizedFatura2.length})</option>
                           </select>
                         </div>
 
@@ -3143,12 +3212,13 @@ const App = () => {
                             onClick={() => {
                               setMarkaFilter('tumu');
                               setKategoriFilter('tumu');
+                              setKaynakFilter('tumu');
                               setFiyatAraligi({ min: 0, max: 100000 });
                               setSiralama('alfabetik');
                             }}
                             className="ml-auto text-xs text-blue-600 hover:text-blue-800 font-semibold"
                           >
-                            Filtreleri Temizle
+                            🔄 Filtreleri Temizle
                           </button>
                         </div>
                       </div>
@@ -3206,6 +3276,7 @@ const App = () => {
                               {filteredProducts.length} ürün bulundu
                               {markaFilter !== 'tumu' && <span className="ml-2 text-blue-600">• Marka: {markaFilter}</span>}
                               {kategoriFilter !== 'tumu' && <span className="ml-2 text-purple-600">• Kategori: {kategoriFilter}</span>}
+                              {kaynakFilter !== 'tumu' && <span className="ml-2 text-green-600">• Kaynak: {kaynakFilter}</span>}
                             </div>
                           </div>
                           {filteredProducts.map((product, idx) => (
