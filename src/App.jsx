@@ -195,7 +195,8 @@ const App = () => {
     EUR: 49.00  // TL/EUR
   });
 
-  const apiKey = "AIzaSyBV6xkzwqdbKkiMirAJArlTO9ctHsQZrS4"; // Gemini API key
+  // Gemini API key - Environment variable'dan al (Production için Netlify'da ayarlanmalı)
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBV6xkzwqdbKkiMirAJArlTO9ctHsQZrS4";
   
   // Editor Mode States
   const [editorMode, setEditorMode] = useState(false);
