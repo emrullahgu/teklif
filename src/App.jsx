@@ -195,7 +195,7 @@ const App = () => {
     EUR: 49.00  // TL/EUR
   });
 
-  const apiKey = "AIzaSyBMTNck0O4t_zFGoojvqseM1KX3OSxCy2s"; // Gemini API key
+  const apiKey = "AIzaSyBV6xkzwqdbKkiMirAJArlTO9ctHsQZrS4"; // Gemini API key
   
   // Editor Mode States
   const [editorMode, setEditorMode] = useState(false);
@@ -355,6 +355,12 @@ const App = () => {
       '5000+': CombinedFaturaData.filter(p => p.birimFiyat > 5000)
     };
 
+    // Ortalama fiyat hesaplama - sadece geçerli fiyatları kullan
+    const validPrices = CombinedFaturaData.filter(p => p.birimFiyat && p.birimFiyat > 0);
+    const avgPrice = validPrices.length > 0 
+      ? validPrices.reduce((sum, p) => sum + p.birimFiyat, 0) / validPrices.length 
+      : 0;
+
     return {
       toplamUrun: CombinedFaturaData.length,
       markalar: Object.keys(markaCounts).sort(),
@@ -365,8 +371,8 @@ const App = () => {
       kategoriler,
       kategoriSayilari: Object.entries(kategoriler).map(([k, v]) => ({ ad: k, adet: v.length })),
       fiyatAraliklari,
-      ortalamaFiyat: CombinedFaturaData.reduce((sum, p) => sum + (p.birimFiyat || 0), 0) / CombinedFaturaData.length,
-      enPahali: [...CombinedFaturaData].sort((a, b) => b.birimFiyat - a.birimFiyat).slice(0, 10),
+      ortalamaFiyat: avgPrice,
+      enPahali: [...CombinedFaturaData].sort((a, b) => (b.birimFiyat || 0) - (a.birimFiyat || 0)).slice(0, 10),
       enUcuz: [...CombinedFaturaData].filter(p => p.birimFiyat > 0).sort((a, b) => a.birimFiyat - b.birimFiyat).slice(0, 10),
       enCokKullanilanlar: Object.entries(urunKullanimSayilari)
         .sort((a, b) => b[1] - a[1])
@@ -647,25 +653,62 @@ const App = () => {
   // AI Gemini API Fonksiyonları
   const callGeminiAPI = async (prompt, systemInstruction, useJson = true) => {
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            ...(useJson && { generationConfig: { responseMimeType: "application/json" } })
-          }),
-        }
-      );
+      // Model: gemini-1.5-flash veya gemini-2.0-flash-exp
+      const model = "gemini-1.5-flash"; // Daha stabil versiyon
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      
+      const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        ...(useJson && { 
+          generationConfig: { 
+            responseMimeType: "application/json",
+            temperature: 0.7
+          } 
+        })
+      };
 
-      if (!response.ok) throw new Error("API çağrısı başarısız");
+      console.log("API Request:", { model, promptLength: prompt.length });
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log("API Response Status:", response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("API Error Details:", errorData);
+        
+        if (response.status === 429) {
+          throw new Error("API rate limit aşıldı. Lütfen birkaç dakika bekleyin.");
+        } else if (response.status === 401) {
+          throw new Error("API key geçersiz. Lütfen ayarları kontrol edin.");
+        } else if (response.status === 404) {
+          throw new Error("API endpoint bulunamadı. Model adı güncel olmayabilir.");
+        } else {
+          throw new Error(`API hatası: ${response.status} - ${errorData?.error?.message || response.statusText}`);
+        }
+      }
+      
       const result = await response.json();
+      console.log("API Response Data:", result);
+      
+      if (!result.candidates || result.candidates.length === 0) {
+        throw new Error("API'den yanıt alınamadı. Model yanıt üretemedi.");
+      }
+      
       return result.candidates?.[0]?.content?.parts?.[0]?.text;
     } catch (error) {
       console.error("Gemini API Error:", error);
-      throw error;
+      if (error.message) {
+        throw error; // Özel hata mesajını koru
+      }
+      throw new Error("API bağlantısı kurulamadı. İnternet bağlantınızı kontrol edin.");
     }
   };
 
