@@ -176,6 +176,10 @@ const App = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
   const [aiActiveFeature, setAiActiveFeature] = useState(null); // 'email' or 'tips'
+  const [isAiWizardOpen, setIsAiWizardOpen] = useState(false);
+  const [aiWizardPrompt, setAiWizardPrompt] = useState("");
+  const [isEmailGeneratorOpen, setIsEmailGeneratorOpen] = useState(false);
+  const [generatedEmail, setGeneratedEmail] = useState("");
 
   const [logo, setLogo] = useState(null); // Logo state
   
@@ -632,6 +636,165 @@ const App = () => {
       kdvAmount,
       grandTotal
     };
+  };
+
+  // AI Gemini API Fonksiyonları
+  const callGeminiAPI = async (prompt, systemInstruction, useJson = true) => {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            ...(useJson && { generationConfig: { responseMimeType: "application/json" } })
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error("API çağrısı başarısız");
+      const result = await response.json();
+      return result.candidates?.[0]?.content?.parts?.[0]?.text;
+    } catch (error) {
+      console.error("Gemini API Error:", error);
+      throw error;
+    }
+  };
+
+  // AI Keşif Sihirbazı - Proje tanımından otomatik ürün listesi oluşturma
+  const handleAiWizard = async () => {
+    if (!aiWizardPrompt.trim()) return;
+    
+    setAiLoading(true);
+    setAiError(null);
+    
+    try {
+      // Katalog verilerini hazırla
+      const catalogSummary = JSON.stringify(
+        CombinedFaturaData.slice(0, 500).map(d => ({
+          urun: d.urun,
+          marka: d.marka,
+          birimFiyat: d.birimFiyat,
+          olcu: d.olcu
+        }))
+      );
+      
+      const systemPrompt = `
+        Sen uzman bir elektrik mühendisisin. Kullanıcının tarif ettiği proje için gerekli malzeme listesini oluşturacaksın.
+        
+        Elindeki Ürün Kataloğu (örnek 500 ürün): ${catalogSummary}
+        
+        KURALLAR:
+        1. Sadece katalogdaki ürünleri kullan (urun, marka, olcu alanlarını eşleştir)
+        2. Miktarları gerçekçi tahmin et (metre, adet, paket vb.)
+        3. Çıktı SADECE JSON array formatında olmalı: [{"urun": "...", "miktar": 100, "birim": "metre", "aciklama": "..."}, ...]
+        4. En az 5, en fazla 20 ürün öner
+        5. Kablo, sigorta, priz, anahtar gibi temel malzemeleri dahil et
+      `;
+
+      const responseText = await callGeminiAPI(aiWizardPrompt, systemPrompt, true);
+      const suggestedItems = JSON.parse(responseText);
+      
+      let addedCount = 0;
+      suggestedItems.forEach(suggested => {
+        // Ürünü katalogda bul
+        const matched = CombinedFaturaData.find(d => 
+          d.urun?.toLowerCase().includes(suggested.urun?.toLowerCase()) ||
+          suggested.urun?.toLowerCase().includes(d.urun?.toLowerCase())
+        );
+        
+        if (matched) {
+          const newProduct = {
+            id: Date.now() + addedCount,
+            sira: kesifProducts.length + addedCount + 1,
+            type: 'normal',
+            urun: matched.urun,
+            birim: suggested.birim || matched.olcu || 'Adet',
+            miktar: suggested.miktar || 1,
+            birimFiyat: matched.birimFiyat,
+            toplam: matched.birimFiyat * (suggested.miktar || 1),
+            aciklama: suggested.aciklama || 'AI Sihirbazı tarafından eklendi',
+            marka: matched.marka || ''
+          };
+          
+          setKesifProducts(prev => [...prev, newProduct]);
+          addedCount++;
+        }
+      });
+      
+      setAiWizardPrompt("");
+      setIsAiWizardOpen(false);
+      alert(`✨ ${addedCount} ürün AI Sihirbazı tarafından eklendi!`);
+      
+    } catch (error) {
+      console.error(error);
+      setAiError("Bir hata oluştu. Lütfen tekrar deneyin.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // AI Teklif Mektubu Oluşturucu
+  const handleGenerateProposalEmail = async () => {
+    if (kesifProducts.length === 0) {
+      alert("Lütfen önce keşif listesine ürün ekleyin!");
+      return;
+    }
+    
+    setAiLoading(true);
+    setIsEmailGeneratorOpen(true);
+    setGeneratedEmail("");
+    
+    try {
+      const totals = calculateKesifTotals();
+      const productList = kesifProducts.map(p => 
+        `${p.urun} (${p.marka}) - ${p.miktar} ${p.birim} x ${p.birimFiyat.toFixed(2)} TL = ${p.toplam.toFixed(2)} TL`
+      ).join("\n");
+      
+      const systemPrompt = `
+        Sen profesyonel bir elektrik mühendisisin ve müşterilere teklif sunuyorsun.
+        Aşağıdaki bilgilere göre profesyonel, ikna edici ve detaylı bir teklif mektubu oluştur.
+        
+        KURALLLAR:
+        1. Resmi ve profesyonel bir dil kullan
+        2. Firma adı: ${kesifCustomer.name || 'Değerli Müşterimiz'}
+        3. Mail konusu ile başla
+        4. Malzeme listesini tablo formatında göster
+        5. Fiyat detaylarını açıkla (ara toplam, iskonto, KDV, genel toplam)
+        6. Geçerlilik süresi, ödeme koşulları ve garanti bilgilerini ekle
+        7. Türkçe yaz
+      `;
+      
+      const userPrompt = `
+        FİRMA BİLGİLERİ:
+        - Firma Adı: ${kesifCustomer.name || 'Belirtilmemiş'}
+        - Adres: ${kesifCustomer.address || 'Belirtilmemiş'}
+        - İletişim: ${kesifCustomer.contactPerson || 'Belirtilmemiş'}
+        
+        MALZEME LİSTESİ:
+        ${productList}
+        
+        FİYAT DETAYLARI:
+        - Ara Toplam: ${totals.subTotal.toFixed(2)} TL
+        - İskonto (%${kesifSettings.iskonto}): -${totals.iskontoAmount.toFixed(2)} TL
+        - İskonto Sonrası: ${totals.afterDiscount.toFixed(2)} TL
+        - KDV (%${kesifSettings.kdvOrani}): +${totals.kdvAmount.toFixed(2)} TL
+        - GENEL TOPLAM: ${totals.grandTotal.toFixed(2)} TL
+        
+        Profesyonel bir teklif mektubu oluştur.
+      `;
+      
+      const emailText = await callGeminiAPI(userPrompt, systemPrompt, false);
+      setGeneratedEmail(emailText);
+      
+    } catch (error) {
+      console.error(error);
+      setGeneratedEmail("❌ E-posta oluşturulamadı. Lütfen tekrar deneyin.");
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleKesifSubmit = (e) => {
@@ -2769,6 +2932,42 @@ const App = () => {
                 </p>
               </div>
 
+              {/* AI Akıllı Özellikler */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-lg border-2 border-purple-200">
+                  <button
+                    type="button"
+                    onClick={() => setIsAiWizardOpen(true)}
+                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-4 px-6 rounded-lg font-bold transition shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-6 h-6 animate-pulse"/>
+                    🪄 AI Keşif Sihirbazı
+                  </button>
+                  <p className="text-xs text-center text-gray-600 mt-2">
+                    Projenizi anlatın, AI otomatik malzeme listesi oluştursun
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-lg border-2 border-indigo-200">
+                  <button
+                    type="button"
+                    onClick={handleGenerateProposalEmail}
+                    disabled={kesifProducts.length === 0}
+                    className={`w-full py-4 px-6 rounded-lg font-bold transition shadow-lg flex items-center justify-center gap-2 ${
+                      kesifProducts.length === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white'
+                    }`}
+                  >
+                    <Mail className="w-6 h-6"/>
+                    ✉️ AI Teklif Mektubu Oluştur
+                  </button>
+                  <p className="text-xs text-center text-gray-600 mt-2">
+                    Listedeki ürünlerden profesyonel teklif mektubu oluştur
+                  </p>
+                </div>
+              </div>
+
               {/* Ürün Tipi Seçimi */}
               <div className="bg-gradient-to-r from-orange-50 to-purple-50 p-6 rounded-lg border border-orange-200">
                 <h3 className="text-md font-bold text-gray-800 mb-4 flex items-center">
@@ -3291,6 +3490,38 @@ const App = () => {
                       Malzeme/Kablo/Hizmet Listesi ({kesifProducts.length} kalem)
                     </h3>
                     <div className="flex gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const totals = calculateKesifTotals();
+                          let text = `📋 KEŞİF METRAJ LİSTESİ\n`;
+                          text += `================================\n\n`;
+                          text += `Firma: ${kesifCustomer.name || 'Belirtilmemiş'}\n`;
+                          text += `Tarih: ${new Date().toLocaleDateString('tr-TR')}\n\n`;
+                          text += `MALZEME LİSTESİ:\n`;
+                          text += `--------------------------------\n`;
+                          kesifProducts.forEach((p, idx) => {
+                            text += `${idx + 1}. ${p.urun}\n`;
+                            text += `   Marka: ${p.marka || '-'} | ${p.miktar} ${p.birim}\n`;
+                            text += `   Birim Fiyat: ${p.birimFiyat.toFixed(2)} TL\n`;
+                            text += `   Toplam: ${p.toplam.toFixed(2)} TL\n\n`;
+                          });
+                          text += `================================\n`;
+                          text += `Ara Toplam: ${totals.subTotal.toFixed(2)} TL\n`;
+                          text += `İskonto (%${kesifSettings.iskonto}): -${totals.iskontoAmount.toFixed(2)} TL\n`;
+                          text += `İskonto Sonrası: ${totals.afterDiscount.toFixed(2)} TL\n`;
+                          text += `KDV (%${kesifSettings.kdvOrani}): +${totals.kdvAmount.toFixed(2)} TL\n`;
+                          text += `--------------------------------\n`;
+                          text += `GENEL TOPLAM: ${totals.grandTotal.toFixed(2)} TL\n`;
+                          
+                          navigator.clipboard.writeText(text);
+                          alert('✅ Liste panoya kopyalandı!');
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1"
+                      >
+                        <Copy className="w-3 h-3"/>
+                        Panoya Kopyala
+                      </button>
                       <button 
                         type="button"
                         onClick={() => applyBulkPriceAdjustment(10)}
@@ -4293,6 +4524,149 @@ const App = () => {
                 >
                   <Plus className="w-5 h-5"/>
                   Paketi Listeye Ekle
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Keşif Sihirbazı Modal */}
+      {isAiWizardOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden animate-fadeIn">
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 flex justify-between items-center text-white">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-8 h-8 animate-pulse text-yellow-300"/>
+                <div>
+                  <h3 className="font-bold text-xl">🪄 AI Keşif Sihirbazı</h3>
+                  <p className="text-sm text-purple-100">Yapay zeka ile otomatik malzeme listesi oluştur</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsAiWizardOpen(false)}
+                className="hover:bg-white/20 p-2 rounded-lg transition"
+              >
+                <X className="w-6 h-6"/>
+              </button>
+            </div>
+            
+            <div className="p-8">
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg mb-6 border border-purple-200">
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  <span className="font-bold text-purple-700">💡 Nasıl kullanılır:</span><br/>
+                  Projenizi detaylı bir şekilde anlatın. Örneğin: "150m² 3+1 daire için komple elektrik tesisatı", 
+                  "Ofis binası 5 kat için aydınlatma ve priz hattı", "Villa için dış cephe ve bahçe aydınlatması" vb.
+                </p>
+              </div>
+              
+              <textarea 
+                className="w-full h-40 p-4 border-2 border-gray-300 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 outline-none resize-none mb-6 text-gray-800 placeholder-gray-400"
+                placeholder="Projenizi buraya yazın... Örneğin: &#10;&#10;'200 metrekare, 4+1 villa için komple elektrik tesisatı. Salonda spot aydınlatma, her odada priz ve anahtar, mutfakta bol priz, dış cephede bahçe aydınlatması gerekiyor.'"
+                value={aiWizardPrompt}
+                onChange={(e) => setAiWizardPrompt(e.target.value)}
+              />
+
+              {aiError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex items-center gap-2">
+                  <X className="w-5 h-5"/>
+                  <span className="text-sm">{aiError}</span>
+                </div>
+              )}
+              
+              <button 
+                onClick={handleAiWizard}
+                disabled={aiLoading || !aiWizardPrompt.trim()}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95"
+              >
+                {aiLoading ? (
+                  <>
+                    <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"/>
+                    AI Analiz Ediyor...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-6 h-6"/>
+                    Sihirli Listeyi Oluştur
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Teklif Mektubu Modal */}
+      {isEmailGeneratorOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-fadeIn">
+            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 p-6 flex justify-between items-center text-white shrink-0">
+              <div className="flex items-center gap-3">
+                <Mail className="w-8 h-8"/>
+                <div>
+                  <h3 className="font-bold text-xl">✉️ Profesyonel Teklif Mektubu</h3>
+                  <p className="text-sm text-indigo-100">AI tarafından oluşturuldu</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsEmailGeneratorOpen(false)}
+                className="hover:bg-white/20 p-2 rounded-lg transition"
+              >
+                <X className="w-6 h-6"/>
+              </button>
+            </div>
+            
+            <div className="p-8 flex-1 overflow-y-auto">
+              {aiLoading ? (
+                <div className="h-96 flex flex-col items-center justify-center text-indigo-600">
+                  <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"/>
+                  <p className="font-bold text-lg">Profesyonel teklifiniz hazırlanıyor...</p>
+                  <p className="text-sm text-gray-500 mt-2">Bu birkaç saniye sürebilir</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-indigo-200">
+                    <p className="text-sm text-gray-700 flex items-start gap-2">
+                      <Lightbulb className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5"/>
+                      <span>
+                        <span className="font-bold text-indigo-700">Düzenleme İpucu:</span> Metni istediğiniz gibi düzenleyebilir, 
+                        ardından kopyalayıp e-posta programınıza yapıştırabilirsiniz.
+                      </span>
+                    </p>
+                  </div>
+                  
+                  <textarea 
+                    className="w-full h-[500px] p-6 border-2 border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500 outline-none font-mono text-sm leading-relaxed text-gray-800 resize-none"
+                    value={generatedEmail}
+                    onChange={(e) => setGeneratedEmail(e.target.value)}
+                    placeholder="Teklif mektubu burada görünecek..."
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-between items-center gap-4 shrink-0">
+              <div className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-800">{kesifProducts.length}</span> ürün • 
+                <span className="font-semibold text-indigo-600 ml-1">{calculateKesifTotals().grandTotal.toFixed(2)} TL</span>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsEmailGeneratorOpen(false)}
+                  className="px-6 py-2 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-100 transition"
+                >
+                  Kapat
+                </button>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedEmail);
+                    alert("✅ Teklif mektubu panoya kopyalandı!");
+                  }}
+                  disabled={!generatedEmail || aiLoading}
+                  className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold flex items-center gap-2 transition shadow-lg"
+                >
+                  <Copy className="w-5 h-5"/>
+                  Metni Kopyala
                 </button>
               </div>
             </div>
