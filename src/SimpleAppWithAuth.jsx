@@ -12,7 +12,7 @@ const AuthWrapper = () => {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   // Admin kontrolü
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.email === 'emrullah.gunay@koobinerji.com';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.email === 'emrullah.gunay@kobinerji.com';
 
   if (loading) {
     return (

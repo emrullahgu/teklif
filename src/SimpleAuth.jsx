@@ -15,7 +15,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   // Admin bilgileri
-  const ADMIN_EMAIL = 'emrullah.gunay@koobinerji.com';
+  const ADMIN_EMAIL = 'emrullah.gunay@kobinerji.com';
   const ADMIN_PASSWORD = 'Eg8502Eg.';
 
   useEffect(() => {
