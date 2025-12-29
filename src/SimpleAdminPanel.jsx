@@ -115,7 +115,7 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
 
       await emailjs.send(
         'service_5l9ghli',
-        'template_g8ee2jz',
+        'template_5xj0s46',
         {
           to_email: user.email,
           to_name: user.name,
@@ -179,7 +179,7 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
         
         const emailResult = await emailjs.send(
           'service_5l9ghli',
-          'template_g8ee2jz',
+          'template_5xj0s46',
           {
             to_email: newUser.email,
             to_name: newUser.name,

@@ -40,7 +40,7 @@ const ForgotPassword = ({ onBackToLogin }) => {
       // E-posta gönder
       await emailjs.send(
         'service_5l9ghli',
-        'template_g8ee2jz',
+        'template_5xj0s46',
         {
           to_email: email,
           to_name: user.name,
