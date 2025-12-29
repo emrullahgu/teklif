@@ -4846,9 +4846,6 @@ KURALLAR:
                   </div>
                 </div>
 
-                  </div>
-                </div>
-
                 {/* Footer - Sayfa 1 */}
                 <div className="absolute bottom-[10mm] left-0 right-0 border-t border-gray-300 pt-2">
                   <div className="text-center text-[8pt] text-gray-500">
@@ -4859,6 +4856,7 @@ KURALLAR:
                   </div>
                 </div>
 
+                  </div>
                 </div>
                 {/* SAYFA 1 SONU */}
 
