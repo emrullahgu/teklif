@@ -293,8 +293,7 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
           company: newUserForm.company,
           password: password,
           role: newUserForm.role,
-          approved: true, // Admin oluşturduğu için otomatik onaylı
-          created_by: 'admin'
+          approved: true // Admin oluşturduğu için otomatik onaylı
         }])
         .select()
         .single();
