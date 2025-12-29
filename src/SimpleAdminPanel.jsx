@@ -227,12 +227,6 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
                     </th>
                   </tr>
                 </thead>
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      İşlemler
-                    </th>
-                  </tr>
-                </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {users.map((user) => (
                     <tr key={user.id} className="hover:bg-gray-50">
