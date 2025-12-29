@@ -335,10 +335,37 @@ const App = () => {
   const [allSavedProposals, setAllSavedProposals] = useState({
     yg: [],
     periodic: [],
-    kesif: []
+    kesif: [],
+    ges: []
   });
   const [showAllProposals, setShowAllProposals] = useState(false);
-  const [proposalFilterType, setProposalFilterType] = useState('all'); // 'all', 'yg', 'periodic', 'kesif'
+  const [proposalFilterType, setProposalFilterType] = useState('all'); // 'all', 'yg', 'periodic', 'kesif', 'ges'
+
+  // GES Teklifi States
+  const [gesForm, setGesForm] = useState({
+    customerName: 'Mehmet Bey',
+    location: 'Yakaköy / İzmir',
+    usdRate: 34.50,
+    offerDate: new Date().toISOString().split('T')[0],
+    autoPower: 12, // kW
+    laborRate: 10,
+    transportRate: 1,
+    overheadRate: 1,
+    marginRate: 20,
+    vatRate: 20
+  });
+
+  const [gesItems, setGesItems] = useState([]);
+
+  const [gesDB] = useState({
+    panelPrice: 127.44,
+    inverter: 2997,
+    battery: 952.19,
+    cable: 1.0,
+    connector: 0.5,
+    panelMount: 25,
+    transport: 250
+  });
 
   // Teklifleri Supabase'den yükle
   React.useEffect(() => {
@@ -358,7 +385,8 @@ const App = () => {
       const grouped = {
         yg: data?.filter(p => p.type === 'yg') || [],
         periodic: data?.filter(p => p.type === 'periodic') || [],
-        kesif: data?.filter(p => p.type === 'kesif') || []
+        kesif: data?.filter(p => p.type === 'kesif') || [],
+        ges: data?.filter(p => p.type === 'ges') || []
       };
       
       setAllSavedProposals(grouped);
@@ -559,6 +587,11 @@ const App = () => {
         setKesifProducts(proposal.data.products);
         setKesifSettings(proposal.data.settings);
         break;
+      case 'ges':
+        setGesForm(proposal.data.form);
+        setGesItems(proposal.data.items);
+        setActiveTab('ges');
+        break;
     }
     setShowAllProposals(false);
     alert(`✅ "${proposal.name}" teklifi yüklendi!`);
@@ -630,6 +663,101 @@ const App = () => {
 
     saveProposal('kesif', data, name);
     alert('✅ Keşif Metraj Teklifi kaydedildi!');
+  };
+
+  // GES Teklifi Kaydetme
+  const saveGESProposal = () => {
+    if (gesItems.length === 0) {
+      alert('Kaydedilecek malzeme yok!');
+      return;
+    }
+
+    const name = prompt('Teklif adı girin:', `${gesForm.customerName || 'GES'} - Güneş Enerjisi Teklifi`);
+    if (!name) return;
+
+    const totals = calculateGESTotals();
+    const data = {
+      form: gesForm,
+      items: gesItems,
+      totals: totals
+    };
+
+    saveProposal('ges', data, name);
+    alert('✅ GES Teklifi kaydedildi!');
+  };
+
+  // GES Fonksiyonları
+  const loadDefaultGESPackage = () => {
+    const kw = parseFloat(gesForm.autoPower) || 12;
+    const panelCount = Math.ceil((kw * 1000) / 590);
+    
+    const items = [
+      { brand: 'Jinko', desc: 'Güneş Paneli JKM590N-72HL4-BDV (590 Wp)', qty: panelCount, price: gesDB.panelPrice },
+      { brand: 'DEYE', desc: `DEYE ${kw} KW TRİFAZE HİBRİT İNVERTER`, qty: 1, price: gesDB.inverter },
+      { brand: 'ORBİT', desc: '51.2 V 100 Ah LiFePO4 Akü-High Voltage', qty: 2, price: gesDB.battery },
+      { brand: 'HAS ÇELİK', desc: 'Solar Kablo (Kırmızı) - 6mm', qty: 50, price: gesDB.cable },
+      { brand: 'HAS ÇELİK', desc: 'Solar Kablo (Siyah) - 6mm', qty: 50, price: gesDB.cable },
+      { brand: 'ISO/TSE', desc: 'DC Konnektör Setleri - MC4 Uyumlu', qty: 10, price: gesDB.connector },
+      { brand: 'ABB', desc: 'Pano & Sigorta Takımı - DC/AC koruma', qty: 1, price: 1250 },
+      { brand: 'DEYE', desc: 'Deye Smart Meter + Wi-Fi', qty: 1, price: 103 },
+      { brand: 'Konstrüksiyon', desc: 'Alüminyum Alt Yapı Seti', qty: panelCount, price: gesDB.panelMount },
+      { brand: 'Lojistik', desc: 'Nakliye Hizmeti', qty: 1, price: gesDB.transport }
+    ];
+    
+    setGesItems(items);
+  };
+
+  const addNewGESRow = () => {
+    setGesItems([...gesItems, { brand: '', desc: '', qty: 1, price: 0 }]);
+  };
+
+  const removeGESRow = (index) => {
+    const updated = gesItems.filter((_, i) => i !== index);
+    setGesItems(updated);
+  };
+
+  const updateGESItem = (index, field, value) => {
+    const updated = [...gesItems];
+    updated[index][field] = value;
+    setGesItems(updated);
+  };
+
+  const calculateGESTotals = () => {
+    const materialTotal = gesItems.reduce((sum, item) => sum + ((item.qty || 0) * (item.price || 0)), 0);
+    
+    const laborRate = parseFloat(gesForm.laborRate) / 100;
+    const transportRate = parseFloat(gesForm.transportRate) / 100;
+    const overheadRate = parseFloat(gesForm.overheadRate) / 100;
+    const marginRate = parseFloat(gesForm.marginRate) / 100;
+    const vatRate = parseFloat(gesForm.vatRate) / 100;
+    const usdToTl = parseFloat(gesForm.usdRate) || 1;
+
+    const laborCost = materialTotal * laborRate;
+    const transportCost = materialTotal * transportRate;
+    const overheadCost = materialTotal * overheadRate;
+    
+    const directCost = materialTotal + laborCost + transportCost + overheadCost;
+    const marginAmount = directCost * marginRate;
+    const grandTotalExVat = directCost + marginAmount;
+    const vatAmount = grandTotalExVat * vatRate;
+    const finalTotal = grandTotalExVat + vatAmount;
+
+    return {
+      materialTotal,
+      laborCost,
+      transportCost,
+      overheadCost,
+      directCost,
+      marginAmount,
+      grandTotalExVat,
+      vatAmount,
+      finalTotal,
+      tlTotal: finalTotal * usdToTl
+    };
+  };
+
+  const formatMoney = (amount, currency = '$') => {
+    return currency + amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   // Hızlı Teklif Yardımcı Fonksiyonları
@@ -2561,14 +2689,21 @@ KURALLAR:
             Keşif Metraj (Malzeme + Kablo)
           </button>
           <button 
+            onClick={() => setActiveTab('ges')}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'ges' ? 'bg-white shadow text-yellow-700' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            <Zap className="w-4 h-4 mr-2"/>
+            GES Teklifi
+          </button>
+          <button 
             onClick={() => setActiveTab('saved')}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'saved' ? 'bg-white shadow text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
             <Save className="w-4 h-4 mr-2"/>
             Kaydedilen Teklifler
-            {(allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length) > 0 && (
+            {(allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length) > 0 && (
               <span className="ml-2 text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">
-                {allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length}
+                {allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length}
               </span>
             )}
           </button>
@@ -2581,6 +2716,341 @@ KURALLAR:
             {selectedCompany && <span className="ml-2 text-xs bg-blue-100 px-2 py-0.5 rounded-full text-blue-700">{selectedCompany.name.substring(0, 15)}...</span>}
           </button>
         </div>
+
+        {/* GES Teklifi Tab */}
+        {activeTab === 'ges' && (
+          <div className="max-w-7xl mx-auto flex gap-6 h-[calc(100vh-200px)]">
+            {/* Sol Panel - Editör */}
+            <div className="w-5/12 bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden">
+              <div className="bg-gradient-to-r from-yellow-600 to-orange-600 px-6 py-4 border-b border-yellow-800 shrink-0">
+                <h2 className="text-lg font-bold text-white flex items-center">
+                  <Zap className="mr-2 h-5 w-5"/>
+                  GES Teklifi Editörü
+                </h2>
+                <p className="text-yellow-100 text-xs mt-1">Güneş Enerjisi Sistemi Fiyat Teklifi</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Genel Ayarlar */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h3 className="text-sm font-bold text-blue-800 uppercase mb-3">Genel Ayarlar</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input 
+                      type="text" 
+                      placeholder="Müşteri Adı"
+                      value={gesForm.customerName}
+                      onChange={(e) => setGesForm({...gesForm, customerName: e.target.value})}
+                      className="px-3 py-2 text-sm border rounded w-full"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Lokasyon"
+                      value={gesForm.location}
+                      onChange={(e) => setGesForm({...gesForm, location: e.target.value})}
+                      className="px-3 py-2 text-sm border rounded w-full"
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="Dolar Kuru"
+                      value={gesForm.usdRate}
+                      onChange={(e) => setGesForm({...gesForm, usdRate: parseFloat(e.target.value)})}
+                      step="0.01"
+                      className="px-3 py-2 text-sm border rounded w-full"
+                    />
+                    <input 
+                      type="date"
+                      value={gesForm.offerDate}
+                      onChange={(e) => setGesForm({...gesForm, offerDate: e.target.value})}
+                      className="px-3 py-2 text-sm border rounded w-full"
+                    />
+                  </div>
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Logo Yükle</label>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (e) => setLogo(e.target.result);
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-100 file:text-blue-700"
+                    />
+                  </div>
+                </div>
+
+                {/* Hızlı Paket Yükleyici */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Kurulu Güç (kW)</label>
+                      <input 
+                        type="number"
+                        value={gesForm.autoPower}
+                        onChange={(e) => setGesForm({...gesForm, autoPower: parseFloat(e.target.value)})}
+                        className="px-3 py-2 text-sm border rounded w-full"
+                      />
+                    </div>
+                    <button 
+                      onClick={loadDefaultGESPackage}
+                      className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded text-sm font-semibold transition"
+                    >
+                      <Sparkles className="w-4 h-4 inline mr-1"/>
+                      Otomatik Doldur
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">* Mevcut listeyi silip standart Jinko/Deye paketi yükler</p>
+                </div>
+
+                {/* Malzeme Listesi */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-sm font-bold text-gray-800 uppercase">Malzeme Listesi</h3>
+                    <button 
+                      onClick={addNewGESRow}
+                      className="text-green-600 text-xs font-bold hover:underline flex items-center"
+                    >
+                      <Plus className="w-3 h-3 mr-1"/>
+                      Satır Ekle
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {gesItems.map((item, idx) => (
+                      <div key={idx} className="bg-white p-3 rounded border border-gray-200 shadow-sm">
+                        <div className="flex gap-2 mb-2">
+                          <input 
+                            type="text" 
+                            placeholder="Marka"
+                            value={item.brand}
+                            onChange={(e) => updateGESItem(idx, 'brand', e.target.value)}
+                            className="w-1/4 border px-2 py-1 rounded text-xs"
+                          />
+                          <input 
+                            type="text" 
+                            placeholder="Ürün Açıklaması"
+                            value={item.desc}
+                            onChange={(e) => updateGESItem(idx, 'desc', e.target.value)}
+                            className="w-3/4 border px-2 py-1 rounded text-xs"
+                          />
+                          <button 
+                            onClick={() => removeGESRow(idx)}
+                            className="text-red-500 px-2 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-4 h-4"/>
+                          </button>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1 flex items-center border rounded px-2 bg-gray-50">
+                            <span className="text-xs text-gray-500 mr-1">Adet:</span>
+                            <input 
+                              type="number"
+                              value={item.qty}
+                              onChange={(e) => updateGESItem(idx, 'qty', parseFloat(e.target.value))}
+                              className="w-full bg-transparent py-1 outline-none text-right text-sm"
+                            />
+                          </div>
+                          <div className="flex-1 flex items-center border rounded px-2 bg-gray-50">
+                            <span className="text-xs text-gray-500 mr-1">Birim($):</span>
+                            <input 
+                              type="number"
+                              value={item.price}
+                              onChange={(e) => updateGESItem(idx, 'price', parseFloat(e.target.value))}
+                              className="w-full bg-transparent py-1 outline-none text-right text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Maliyet & Kar Ayarları */}
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <h3 className="text-sm font-bold text-yellow-800 uppercase mb-3">Maliyet & Kar Ayarları</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span>İşçilik Oranı (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.laborRate}
+                        onChange={(e) => setGesForm({...gesForm, laborRate: parseFloat(e.target.value)})}
+                        className="w-20 text-right border rounded px-2 py-1"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Nakliye/Operasyon (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.transportRate}
+                        onChange={(e) => setGesForm({...gesForm, transportRate: parseFloat(e.target.value)})}
+                        className="w-20 text-right border rounded px-2 py-1"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Genel Gider (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.overheadRate}
+                        onChange={(e) => setGesForm({...gesForm, overheadRate: parseFloat(e.target.value)})}
+                        className="w-20 text-right border rounded px-2 py-1"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center font-bold">
+                      <span>KAR ORANI (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.marginRate}
+                        onChange={(e) => setGesForm({...gesForm, marginRate: parseFloat(e.target.value)})}
+                        className="w-20 text-right border border-yellow-400 bg-white rounded px-2 py-1"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center border-t border-yellow-200 pt-2">
+                      <span>KDV (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.vatRate}
+                        onChange={(e) => setGesForm({...gesForm, vatRate: parseFloat(e.target.value)})}
+                        className="w-20 text-right border rounded px-2 py-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Kaydet Butonu */}
+                <button 
+                  onClick={saveGESProposal}
+                  disabled={gesItems.length === 0}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                >
+                  <Save className="w-5 h-5 mr-2"/>
+                  Teklifi Kaydet
+                </button>
+              </div>
+            </div>
+
+            {/* Sağ Panel - Önizleme */}
+            <div className="w-7/12 bg-gray-200 rounded-xl overflow-auto p-8 flex justify-center">
+              {(() => {
+                const totals = calculateGESTotals();
+                const dateObj = new Date(gesForm.offerDate);
+                return (
+                  <div className="bg-white w-[210mm] min-h-[297mm] shadow-2xl p-[10mm] flex flex-col text-[10pt]">
+                    {/* Header */}
+                    <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-6">
+                      <img 
+                        src={logo || "https://via.placeholder.com/180x60?text=LOGO"} 
+                        className="h-12 object-contain"
+                        alt="Logo"
+                      />
+                      <div className="text-right">
+                        <h2 className="text-2xl font-bold text-gray-800">FİYAT TEKLİFİ</h2>
+                        <p className="text-gray-500 text-xs mt-1">Tarih: {dateObj.toLocaleDateString('tr-TR')}</p>
+                      </div>
+                    </div>
+
+                    {/* Müşteri Bilgisi */}
+                    <div className="mb-6">
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <span className="text-xs text-gray-500 uppercase font-semibold">Sayın Yetkili / Müşteri</span>
+                          <h3 className="text-lg font-bold text-gray-800">{gesForm.customerName}</h3>
+                          <p className="text-gray-600 text-sm">{gesForm.location}</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-500">Para Birimi</div>
+                          <div className="font-bold text-gray-800">USD ($)</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tablo */}
+                    <table className="w-full mb-4 border-collapse">
+                      <thead>
+                        <tr className="bg-gray-800 text-white text-xs uppercase">
+                          <th className="py-2 px-2 text-left w-10">No</th>
+                          <th className="py-2 px-2 text-left">Marka</th>
+                          <th className="py-2 px-2 text-left w-1/2">Açıklama</th>
+                          <th className="py-2 px-2 text-center">Miktar</th>
+                          <th className="py-2 px-2 text-right">Birim Fiyat</th>
+                          <th className="py-2 px-2 text-right">Toplam</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-gray-700 text-sm divide-y divide-gray-200 border-b border-gray-200">
+                        {gesItems.map((item, idx) => {
+                          const total = (item.qty || 0) * (item.price || 0);
+                          return (
+                            <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                              <td className="py-1 px-2 border-b text-gray-500">{idx + 1}</td>
+                              <td className="py-1 px-2 border-b font-semibold text-xs">{item.brand}</td>
+                              <td className="py-1 px-2 border-b">{item.desc}</td>
+                              <td className="py-1 px-2 border-b text-center">{item.qty}</td>
+                              <td className="py-1 px-2 border-b text-right text-gray-500">{formatMoney(item.price)}</td>
+                              <td className="py-1 px-2 border-b text-right font-bold text-gray-800">{formatMoney(total)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+
+                    {/* Özet Hesaplar */}
+                    <div className="flex justify-end mt-auto mb-8">
+                      <div className="w-1/2 space-y-1 text-sm">
+                        <div className="flex justify-between text-gray-600">
+                          <span>Malzeme Toplamı:</span>
+                          <span className="font-medium">{formatMoney(totals.materialTotal)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-500 text-xs">
+                          <span>+ İşçilik ({gesForm.laborRate}%):</span>
+                          <span>{formatMoney(totals.laborCost)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-500 text-xs">
+                          <span>+ Nakliye & Op. ({gesForm.transportRate}%):</span>
+                          <span>{formatMoney(totals.transportCost)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-500 text-xs pb-2 border-b border-gray-100">
+                          <span>+ Genel Gider ({gesForm.overheadRate}%):</span>
+                          <span>{formatMoney(totals.overheadCost)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-700 font-semibold pt-1">
+                          <span>Direkt Maliyet:</span>
+                          <span>{formatMoney(totals.directCost)}</span>
+                        </div>
+                        <div className="flex justify-between text-green-700 pt-1">
+                          <span>+ Kar ({gesForm.marginRate}%):</span>
+                          <span>{formatMoney(totals.marginAmount)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-900 font-bold text-lg pt-2 border-t border-gray-300 mt-2">
+                          <span>GENEL TOPLAM (KDV Hariç):</span>
+                          <span>{formatMoney(totals.grandTotalExVat)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-500 text-xs mt-1">
+                          <span>KDV (%{gesForm.vatRate}):</span>
+                          <span>{formatMoney(totals.vatAmount)}</span>
+                        </div>
+                        <div className="bg-gray-800 text-white p-2 rounded mt-2 flex justify-between items-center">
+                          <span className="text-xs">ÖDENECEK TUTAR (KDV Dahil)</span>
+                          <span className="font-bold text-lg">{formatMoney(totals.finalTotal)}</span>
+                        </div>
+                        <div className="text-right mt-2 pt-2 border-t border-gray-200">
+                          <p className="text-xs text-gray-500">Yaklaşık TL Karşılığı (Kur: {gesForm.usdRate})</p>
+                          <p className="text-xl font-black text-gray-800">{formatMoney(totals.tlTotal, '₺')}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="text-xs text-gray-400 text-center border-t pt-4">
+                      Bu teklif Kobinerji Otomasyon Sistemi ile oluşturulmuştur. Geçerlilik süresi 3 gündür.
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
 
         {/* Tab Content: Kaydedilen Teklifler */}
         {activeTab === 'saved' && (
@@ -2603,7 +3073,7 @@ KURALLAR:
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                Tümü ({allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length})
+                Tümü ({allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length})
               </button>
               <button
                 onClick={() => setProposalFilterType('yg')}
@@ -2634,6 +3104,16 @@ KURALLAR:
                 }`}
               >
                 Keşif Metraj ({allSavedProposals.kesif.length})
+              </button>
+              <button
+                onClick={() => setProposalFilterType('ges')}
+                className={`px-6 py-3 rounded-lg font-semibold transition shadow ${
+                  proposalFilterType === 'ges'
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                GES Teklifleri ({allSavedProposals.ges.length})
               </button>
             </div>
 
@@ -2786,12 +3266,65 @@ KURALLAR:
                     </div>
                   </div>
                 ))}
+
+              {/* GES Teklifleri */}
+              {(proposalFilterType === 'all' || proposalFilterType === 'ges') &&
+                allSavedProposals.ges.map((proposal) => (
+                  <div key={proposal.id} className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-yellow-500 hover:shadow-xl transition">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-yellow-100 p-2 rounded-lg">
+                        <Zap className="w-6 h-6 text-yellow-600"/>
+                      </div>
+                      <span className="text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full font-semibold">GES</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">{proposal.name}</h3>
+                    <div className="space-y-2 mb-4 text-sm text-gray-600">
+                      <div className="flex items-center justify-between">
+                        <span>Tarih:</span>
+                        <span className="font-semibold">{proposal.date}</span>
+                      </div>
+                      {proposal.data.form && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span>Müşteri:</span>
+                            <span className="font-semibold truncate max-w-[150px]">{proposal.data.form.customerName}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Güç:</span>
+                            <span className="font-semibold">{proposal.data.form.autoPower} kW</span>
+                          </div>
+                        </>
+                      )}
+                      {proposal.data.totals && (
+                        <div className="flex items-center justify-between">
+                          <span>Toplam:</span>
+                          <span className="font-semibold text-yellow-600">${proposal.data.totals.finalTotal.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadProposal(proposal)}
+                        className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        Yükle
+                      </button>
+                      <button
+                        onClick={() => deleteProposal('ges', proposal.id)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        <Trash2 className="w-4 h-4"/>
+                      </button>
+                    </div>
+                  </div>
+                ))}
             </div>
 
             {/* Boş Durum */}
             {allSavedProposals.yg.length === 0 && 
              allSavedProposals.periodic.length === 0 && 
-             allSavedProposals.kesif.length === 0 && (
+             allSavedProposals.kesif.length === 0 && 
+             allSavedProposals.ges.length === 0 && (
               <div className="bg-white rounded-xl shadow-lg p-12 text-center">
                 <Save className="w-16 h-16 text-gray-300 mx-auto mb-4"/>
                 <h3 className="text-xl font-bold text-gray-800 mb-2">Henüz Kaydedilmiş Teklif Yok</h3>
