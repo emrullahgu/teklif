@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
 
 const AuthContext = createContext();
 
@@ -20,77 +21,88 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Admin kullanıcısını otomatik oluştur (yoksa)
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const adminExists = users.find(u => u.email === ADMIN_EMAIL);
-    
-    if (!adminExists) {
-      const adminUser = {
-        id: 'admin-' + Date.now(),
-        email: ADMIN_EMAIL,
-        password: ADMIN_PASSWORD,
-        name: 'Admin',
-        company: 'Kob Enerji',
-        approved: true,
-        role: 'admin',
-        createdAt: new Date().toISOString()
-      };
-      users.push(adminUser);
-      localStorage.setItem('users', JSON.stringify(users));
-    }
-
-    // LocalStorage'dan kullanıcıyı yükle
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      // Kullanıcı onaylı mı kontrol et
-      const userInDB = users.find(u => u.email === user.email);
-      
-      if (userInDB && userInDB.approved) {
-        setCurrentUser(userInDB);
-      } else {
-        localStorage.removeItem('currentUser');
-      }
-    }
+    initializeAdmin();
     setLoading(false);
   }, []);
 
-  const signIn = (email, password) => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    
-    console.log('🔐 Login denemesi:', { email, password });
-    console.log('👥 Tüm kullanıcılar:', users.map(u => ({ email: u.email, password: u.password, approved: u.approved })));
-    
-    const user = users.find(u => u.email === email && u.password === password);
-    
-    if (!user) {
-      // Ayrıntılı hata ayıklama
-      const userByEmail = users.find(u => u.email === email);
-      if (userByEmail) {
-        console.log('❌ E-posta bulundu ama şifre yanlış!');
-        console.log('Girilen şifre:', password);
-        console.log('Kayıtlı şifre:', userByEmail.password);
-        console.log('Şifreler eşit mi?', userByEmail.password === password);
-        console.log('Girilen şifre tipi:', typeof password, 'Uzunluk:', password.length);
-        console.log('Kayıtlı şifre tipi:', typeof userByEmail.password, 'Uzunluk:', userByEmail.password ? userByEmail.password.length : 0);
-      } else {
-        console.log('❌ E-posta bulunamadı!');
+  const initializeAdmin = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', ADMIN_EMAIL)
+        .single();
+
+      if (error && error.code === 'PGRST116') {
+        // Admin yok, oluştur
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert([{
+            email: ADMIN_EMAIL,
+            password: ADMIN_PASSWORD,
+            name: 'Admin',
+            company: 'Kob Enerji',
+            approved: true,
+            role: 'admin'
+          }]);
+
+        if (insertError) {
+          console.error('Admin oluşturma hatası:', insertError);
+        } else {
+          console.log('✅ Admin kullanıcısı oluşturuldu');
+        }
       }
-      throw new Error('E-posta veya şifre hatalı!');
+    } catch (error) {
+      console.error('Admin kontrolü hatası:', error);
     }
-    
-    if (!user.approved) {
-      throw new Error('Hesabınız henüz onaylanmamış. Lütfen admin onayını bekleyin.');
+  };
+
+  const signIn = async (email, password) => {
+    try {
+      console.log('🔐 Login denemesi:', { email, password });
+
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password)
+        .single();
+
+      if (error || !user) {
+        // Ayrıntılı hata ayıklama
+        const { data: userByEmail } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', email)
+          .single();
+
+        if (userByEmail) {
+          console.log('❌ E-posta bulundu ama şifre yanlış!');
+          console.log('Girilen şifre:', password);
+          console.log('Kayıtlı şifre:', userByEmail.password);
+        } else {
+          console.log('❌ E-posta bulunamadı!');
+        }
+        throw new Error('E-posta veya şifre hatalı!');
+      }
+
+      if (!user.approved) {
+        throw new Error('Hesabınız henüz onaylanmamış. Lütfen admin onayını bekleyin.');
+      }
+
+      console.log('✅ Giriş başarılı!', user);
+
+      // Şifreyi saklama (güvenlik için)
+      const userToStore = { ...user };
+      delete userToStore.password;
+
+      localStorage.setItem('currentUser', JSON.stringify(userToStore));
+      setCurrentUser(userToStore);
+      return userToStore;
+    } catch (error) {
+      console.error('❌ Login hatası:', error);
+      throw error;
     }
-    
-    console.log('✅ Giriş başarılı!');
-    
-    // Şifreyi saklama (güvenlik için)
-    const userToStore = { ...user };
-    delete userToStore.password;
-    
-    localStorage.setItem('currentUser', JSON.stringify(userToStore));
-    setCurrentUser(userToStore);
-    return userToStore;
   };
 
   const signOut = () => {
@@ -98,37 +110,87 @@ export const AuthProvider = ({ children }) => {
     setCurrentUser(null);
   };
 
-  const register = (userData) => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    
-    // E-posta kontrolü
-    if (users.find(u => u.email === userData.email)) {
-      throw new Error('Bu e-posta adresi zaten kullanılıyor!');
+  const register = async (userData) => {
+    try {
+      console.log('📝 Kayıt işlemi başlatılıyor:', userData);
+
+      // E-posta kontrolü
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('email')
+        .eq('email', userData.email)
+        .single();
+
+      if (existingUser) {
+        throw new Error('Bu e-posta adresi zaten kullanılıyor!');
+      }
+
+      // Yeni kullanıcı oluştur
+      const { data, error } = await supabase
+        .from('users')
+        .insert([{
+          ...userData,
+          approved: false,
+          role: 'user'
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log('✅ Kayıt başarılı:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Kayıt hatası:', error);
+      throw error;
     }
-    
-    const newUser = {
-      ...userData,
-      id: Date.now().toString(),
-      approved: false,
-      createdAt: new Date().toISOString()
-    };
-    
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
-    
-    console.log('✅ Kullanıcı kaydedildi:', newUser.email);
-    console.log('📊 Toplam kullanıcı sayısı:', users.length);
-    
-    return newUser;
   };
 
-  const updateUser = (updatedUserData) => {
-    // LocalStorage'daki mevcut kullanıcıyı güncelle
-    const userToStore = { ...updatedUserData };
-    delete userToStore.password; // Şifreyi saklama
-    
-    localStorage.setItem('currentUser', JSON.stringify(userToStore));
-    setCurrentUser(userToStore);
+  const updateUser = async (userId, updates) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // currentUser güncelle
+      if (currentUser && currentUser.id === userId) {
+        const updatedUser = { ...currentUser, ...updates };
+        delete updatedUser.password;
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        setCurrentUser(updatedUser);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Kullanıcı güncelleme hatası:', error);
+      throw error;
+    }
+  };
+
+  const deleteAccount = async (userId) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      // Eğer kendi hesabını siliyorsa logout yap
+      if (currentUser && currentUser.id === userId) {
+        signOut();
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Hesap silme hatası:', error);
+      throw error;
+    }
   };
 
   const value = {
@@ -138,6 +200,7 @@ export const AuthProvider = ({ children }) => {
     signOut,
     register,
     updateUser,
+    deleteAccount,
     isAuthenticated: currentUser !== null
   };
 
