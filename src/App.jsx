@@ -4918,9 +4918,10 @@ KURALLAR:
                 {/* Footer - Sayfa 2 */}
                 <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] text-center text-[8pt] text-gray-500 border-t pt-2">
                   <p className="font-bold text-gray-800">Kobinerji Mühendislik</p>
-                  <p className="text-[7pt] text-gray-600 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız  Tel: +90 535 714 52 88</p>
-                  <p>İzmir, Türkiye</p>
-                  <p className="mt-1 text-gray-400">Sayfa 1/2</p>
+                  <p className="text-[7pt] text-gray-600 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
+                  <p>www.kobinerji.com.tr • info@kobinerji.com.tr</p>
+                  <p>Tel: +90 535 714 52 88 | İzmir, Türkiye</p>
+                  <p className="mt-1 text-gray-400">Sayfa 2/2</p>
                 </div>
 
                   </div>
