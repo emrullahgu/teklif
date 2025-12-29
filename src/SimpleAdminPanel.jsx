@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Trash2, Mail, User, Building, RefreshCw } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Trash2, Mail, User, Building, RefreshCw, UserPlus, Lock, AlertCircle } from 'lucide-react';
+import emailjs from 'emailjs-com';
 
 const SimpleAdminPanel = ({ isEmbedded = false }) => {
   const [users, setUsers] = useState([]);
@@ -7,6 +8,18 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(isEmbedded); // Embedded ise otomatik authenticated
+  
+  // Yeni kullanıcı oluşturma state'leri
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({
+    name: '',
+    email: '',
+    company: '',
+    password: '',
+    role: 'user'
+  });
+  const [createUserLoading, setCreateUserLoading] = useState(false);
+  const [createUserError, setCreateUserError] = useState('');
 
   // Admin bilgileri
   const ADMIN_EMAIL = 'emrullah.gunay@kobinerji.com';
@@ -84,6 +97,83 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
     loadUsers();
   };
 
+  const generateRandomPassword = () => {
+    return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
+  };
+
+  const createNewUser = async (e) => {
+    e.preventDefault();
+    setCreateUserError('');
+    setCreateUserLoading(true);
+
+    try {
+      const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+      
+      // E-posta kontrolü
+      if (allUsers.find(u => u.email === newUserForm.email)) {
+        throw new Error('Bu e-posta adresi zaten kullanılıyor!');
+      }
+
+      // Şifre yoksa otomatik oluştur
+      const password = newUserForm.password || generateRandomPassword();
+
+      const newUser = {
+        id: Date.now().toString(),
+        name: newUserForm.name,
+        email: newUserForm.email,
+        company: newUserForm.company,
+        password: password,
+        role: newUserForm.role,
+        approved: true, // Admin oluşturduğu için otomatik onaylı
+        createdAt: new Date().toISOString(),
+        createdBy: 'admin'
+      };
+
+      // Kullanıcıyı kaydet
+      allUsers.push(newUser);
+      localStorage.setItem('users', JSON.stringify(allUsers));
+
+      // EmailJS ile login bilgilerini gönder
+      await emailjs.send(
+        'service_5l9ghli',
+        'template_g8ee2jz',
+        {
+          to_email: newUser.email,
+          to_name: newUser.name,
+          from_name: 'Teklif Sistemi - Admin',
+          subject: 'Hesabınız Oluşturuldu',
+          message: `Merhaba ${newUser.name},\n\nSistem yöneticisi tarafından hesabınız oluşturuldu.\n\n` +
+                   `🔑 GİRİŞ BİLGİLERİNİZ:\n` +
+                   `E-posta: ${newUser.email}\n` +
+                   `Şifre: ${password}\n\n` +
+                   `Giriş için: ${window.location.origin}\n\n` +
+                   `Güvenlik için lütfen giriş yaptıktan sonra şifrenizi değiştirin.\n\n` +
+                   `İyi günler dileriz.`
+        },
+        '-rEVDm1IKnRaw6jCm'
+      );
+
+      alert(`Kullanıcı başarıyla oluşturuldu ve login bilgileri ${newUser.email} adresine gönderildi!`);
+      
+      // Formu temizle
+      setNewUserForm({
+        name: '',
+        email: '',
+        company: '',
+        password: '',
+        role: 'user'
+      });
+      setShowCreateUser(false);
+      loadUsers();
+
+    } catch (error) {
+      console.error('Kullanıcı oluşturma hatası:', error);
+      setCreateUserError(error.message || 'Kullanıcı oluşturulurken bir hata oluştu!');
+    } finally {
+      setCreateUserLoading(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Bilinmiyor';
     const date = new Date(dateString);
@@ -152,15 +242,170 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
               <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Paneli</h1>
               <p className="text-gray-600">Kullanıcı onay ve yönetim sistemi</p>
             </div>
-            <button
-              onClick={loadUsers}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Yenile
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCreateUser(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition"
+              >
+                <UserPlus className="w-4 h-4" />
+                Yeni Kullanıcı
+              </button>
+              <button
+                onClick={loadUsers}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Yenile
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Yeni Kullanıcı Oluşturma Modalı */}
+        {showCreateUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+              <div className="p-6 border-b">
+                <h2 className="text-2xl font-bold text-gray-800">Yeni Kullanıcı Oluştur</h2>
+                <p className="text-gray-600 text-sm mt-1">Login bilgileri otomatik e-posta ile gönderilecek</p>
+              </div>
+
+              <form onSubmit={createNewUser} className="p-6 space-y-4">
+                {createUserError && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-red-700 text-sm">{createUserError}</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ad Soyad *
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={newUserForm.name}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, name: e.target.value })}
+                      required
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Kullanıcı adı"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    E-posta *
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="email"
+                      value={newUserForm.email}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                      required
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="ornek@email.com"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Firma
+                  </label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={newUserForm.company}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, company: e.target.value })}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Firma adı"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Şifre (Opsiyonel)
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={newUserForm.password}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Boş bırakılırsa otomatik oluşturulur"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Boş bırakılırsa güvenli rastgele şifre oluşturulur</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Rol
+                  </label>
+                  <select
+                    value={newUserForm.role}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="user">Kullanıcı</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-gray-600">
+                    <strong className="text-blue-700">Not:</strong> Login bilgileri (e-posta ve şifre) kullanıcıya otomatik olarak e-posta ile gönderilecektir.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={createUserLoading}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {createUserLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        <span>Oluşturuluyor...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-5 h-5" />
+                        <span>Kullanıcı Oluştur</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateUser(false);
+                      setCreateUserError('');
+                      setNewUserForm({
+                        name: '',
+                        email: '',
+                        company: '',
+                        password: '',
+                        role: 'user'
+                      });
+                    }}
+                    disabled={createUserLoading}
+                    className="px-6 py-3 border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-lg transition disabled:opacity-50"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Filtreler */}
         <div className="bg-white rounded-lg shadow-md p-4 mb-6">
