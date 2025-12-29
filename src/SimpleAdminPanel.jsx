@@ -117,6 +117,7 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
         'service_5l9ghli',
         'template_5xj0s46',
         {
+          to_email: user.email,
           to_name: user.name,
           from_name: 'Teklif Sistemi',
           from_email: 'emrullah.gunay@kobinerji.com',
