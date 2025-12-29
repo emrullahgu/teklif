@@ -62,11 +62,17 @@ const SimpleRegister = ({ onSwitchToLogin }) => {
     setLoading(true);
 
     try {
+      console.log('🔵 Kayıt işlemi başlıyor...', formData.email);
+      
       // Kullanıcı kaydet
       const newUser = register(formData);
       
+      console.log('🟢 Kullanıcı başarıyla kaydedildi:', newUser);
+      
       // Admin'e e-posta gönder
       await sendApprovalEmail(formData);
+      
+      console.log('📧 E-posta gönderildi');
       
       setSuccess(true);
       setError('');
@@ -77,6 +83,7 @@ const SimpleRegister = ({ onSwitchToLogin }) => {
       }, 3000);
 
     } catch (error) {
+      console.error('❌ Kayıt hatası:', error);
       setError(error.message || 'Kayıt sırasında bir hata oluştu');
     } finally {
       setLoading(false);

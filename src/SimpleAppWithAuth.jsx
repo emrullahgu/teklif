@@ -2,14 +2,18 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './SimpleAuth';
 import SimpleLogin from './SimpleLogin';
 import SimpleRegister from './SimpleRegister';
+import ForgotPassword from './ForgotPassword';
+import UserProfile from './UserProfile';
 import App from './App';
 import SimpleAdminPanel from './SimpleAdminPanel';
-import { LogOut, User, Shield } from 'lucide-react';
+import { LogOut, User, Shield, Settings } from 'lucide-react';
 
 const AuthWrapper = () => {
   const { isAuthenticated, loading, currentUser, signOut } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   // Admin kontrolü
   const isAdmin = currentUser?.role === 'admin' || currentUser?.email === 'emrullah.gunay@kobinerji.com';
@@ -26,11 +30,17 @@ const AuthWrapper = () => {
   }
 
   if (!isAuthenticated) {
+    if (showForgotPassword) {
+      return <ForgotPassword onBackToLogin={() => setShowForgotPassword(false)} />;
+    }
     if (showRegister) {
       return <SimpleRegister onSwitchToLogin={() => setShowRegister(false)} />;
     }
     return (
-      <SimpleLogin onSwitchToRegister={() => setShowRegister(true)} />
+      <SimpleLogin 
+        onSwitchToRegister={() => setShowRegister(true)}
+        onSwitchToForgotPassword={() => setShowForgotPassword(true)}
+      />
     );
   }
 
@@ -62,6 +72,9 @@ const AuthWrapper = () => {
 
   return (
     <div>
+      {/* Profil modal */}
+      {showProfile && <UserProfile onClose={() => setShowProfile(false)} />}
+      
       {/* Kullanıcı bilgisi ve çıkış butonu */}
       <div className="bg-white border-b shadow-sm">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
@@ -73,6 +86,13 @@ const AuthWrapper = () => {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowProfile(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition duration-200"
+            >
+              <Settings className="w-4 h-4" />
+              <span>Profil</span>
+            </button>
             {isAdmin && (
               <button
                 onClick={() => setShowAdminPanel(true)}

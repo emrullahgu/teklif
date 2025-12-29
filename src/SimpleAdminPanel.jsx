@@ -20,14 +20,21 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
 
   const loadUsers = () => {
     const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+    console.log('📋 Tüm kullanıcılar:', allUsers.length);
+    console.log('🔍 Seçili filtre:', filter);
     
     let filteredUsers = allUsers;
     if (filter === 'pending') {
       filteredUsers = allUsers.filter(u => !u.approved);
+      console.log('⏳ Bekleyen kullanıcılar:', filteredUsers.length);
     } else if (filter === 'approved') {
       filteredUsers = allUsers.filter(u => u.approved);
+      console.log('✅ Onaylı kullanıcılar:', filteredUsers.length);
+    } else {
+      console.log('📊 Tüm kullanıcılar gösteriliyor:', filteredUsers.length);
     }
     
+    console.log('👥 Gösterilecek kullanıcılar:', filteredUsers);
     setUsers(filteredUsers);
   };
 

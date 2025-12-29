@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from './SimpleAuth';
 import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
 
-const SimpleLogin = ({ onSwitchToRegister }) => {
+const SimpleLogin = ({ onSwitchToRegister, onSwitchToForgotPassword }) => {
   const { signIn } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
@@ -84,6 +84,15 @@ const SimpleLogin = ({ onSwitchToRegister }) => {
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Şifrenizi girin"
               />
+            </div>
+            <div className="text-right mt-2">
+              <button
+                type="button"
+                onClick={onSwitchToForgotPassword}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Şifremi Unuttum
+              </button>
             </div>
           </div>
 

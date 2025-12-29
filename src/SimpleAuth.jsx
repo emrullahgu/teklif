@@ -98,7 +98,19 @@ export const AuthProvider = ({ children }) => {
     users.push(newUser);
     localStorage.setItem('users', JSON.stringify(users));
     
+    console.log('✅ Kullanıcı kaydedildi:', newUser.email);
+    console.log('📊 Toplam kullanıcı sayısı:', users.length);
+    
     return newUser;
+  };
+
+  const updateUser = (updatedUserData) => {
+    // LocalStorage'daki mevcut kullanıcıyı güncelle
+    const userToStore = { ...updatedUserData };
+    delete userToStore.password; // Şifreyi saklama
+    
+    localStorage.setItem('currentUser', JSON.stringify(userToStore));
+    setCurrentUser(userToStore);
   };
 
   const value = {
@@ -107,6 +119,7 @@ export const AuthProvider = ({ children }) => {
     signIn,
     signOut,
     register,
+    updateUser,
     isAuthenticated: currentUser !== null
   };
 
