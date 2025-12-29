@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Trash2, Mail, User, Building, RefreshCw, UserPlus, Lock, AlertCircle, Edit } from 'lucide-react';
 import emailjs from 'emailjs-com';
+import { supabase } from './supabaseClient';
 
 const SimpleAdminPanel = ({ isEmbedded = false }) => {
   const [users, setUsers] = useState([]);
@@ -44,70 +45,102 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
     }
   }, [filter, isAuthenticated]);
 
-  const loadUsers = () => {
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    console.log('📋 Tüm kullanıcılar:', allUsers.length);
-    console.log('🔍 Seçili filtre:', filter);
-    
-    let filteredUsers = allUsers;
-    if (filter === 'pending') {
-      filteredUsers = allUsers.filter(u => !u.approved);
-      console.log('⏳ Bekleyen kullanıcılar:', filteredUsers.length);
-    } else if (filter === 'approved') {
-      filteredUsers = allUsers.filter(u => u.approved);
-      console.log('✅ Onaylı kullanıcılar:', filteredUsers.length);
-    } else {
-      console.log('📊 Tüm kullanıcılar gösteriliyor:', filteredUsers.length);
+  const loadUsers = async () => {
+    try {
+      let query = supabase.from('users').select('*');
+      
+      if (filter === 'pending') {
+        query = query.eq('approved', false);
+      } else if (filter === 'approved') {
+        query = query.eq('approved', true);
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      console.log('📋 Kullanıcılar yüklendi:', data.length);
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Kullanıcı yükleme hatası:', error);
+      alert('Kullanıcılar yüklenemedi!');
     }
-    
-    console.log('👥 Gösterilecek kullanıcılar:', filteredUsers);
-    setUsers(filteredUsers);
   };
 
-  const approveUser = (userId) => {
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const updatedUsers = allUsers.map(u => 
-      u.id === userId ? { ...u, approved: true, approvedAt: new Date().toISOString() } : u
-    );
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-    alert('Kullanıcı başarıyla onaylandı!');
-    loadUsers();
+  const approveUser = async (userId) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ approved: true, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      alert('Kullanıcı başarıyla onaylandı!');
+      loadUsers();
+    } catch (error) {
+      console.error('Onaylama hatası:', error);
+      alert('Kullanıcı onaylanamadı!');
+    }
   };
 
-  const deleteUser = (userId) => {
+  const deleteUser = async (userId) => {
     if (!window.confirm('Bu kullanıcıyı silmek istediğinizden emin misiniz?')) {
       return;
     }
     
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const updatedUsers = allUsers.filter(u => u.id !== userId);
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-    alert('Kullanıcı silindi!');
-    loadUsers();
+    try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      alert('Kullanıcı silindi!');
+      loadUsers();
+    } catch (error) {
+      console.error('Silme hatası:', error);
+      alert('Kullanıcı silinemedi!');
+    }
   };
 
-  const revokeApproval = (userId) => {
+  const revokeApproval = async (userId) => {
     if (!window.confirm('Bu kullanıcının onayını iptal etmek istediğinizden emin misiniz?')) {
       return;
     }
     
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const updatedUsers = allUsers.map(u => 
-      u.id === userId ? { ...u, approved: false } : u
-    );
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-    alert('Kullanıcı onayı iptal edildi!');
-    loadUsers();
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ approved: false })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      alert('Kullanıcı onayı iptal edildi!');
+      loadUsers();
+    } catch (error) {
+      console.error('Onay iptali hatası:', error);
+      alert('Onay iptal edilemedi!');
+    }
   };
 
-  const changeUserRole = (userId, newRole) => {
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const updatedUsers = allUsers.map(u => 
-      u.id === userId ? { ...u, role: newRole } : u
-    );
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-    alert(`Kullanıcı rolü "${newRole}" olarak güncellendi!`);
-    loadUsers();
+  const changeUserRole = async (userId, newRole) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      alert(`Kullanıcı rolü "${newRole}" olarak güncellendi!`);
+      loadUsers();
+    } catch (error) {
+      console.error('Rol değiştirme hatası:', error);
+      alert('Rol değiştirilemedi!');
+    }
   };
 
   const generateRandomPassword = () => {
@@ -116,10 +149,13 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
 
   const sendLoginCredentials = async (userId) => {
     try {
-      const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-      const user = allUsers.find(u => u.id === userId);
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
       
-      if (!user) {
+      if (error || !user) {
         alert('Kullanıcı bulunamadı!');
         return;
       }
@@ -173,32 +209,39 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
     setEditUserLoading(true);
 
     try {
-      const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-      
       // E-posta değiştiyse ve başka kullanıcı kullanıyorsa hata ver
       if (editUserForm.email !== editingUser.email) {
-        if (allUsers.find(u => u.id !== editingUser.id && u.email === editUserForm.email)) {
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', editUserForm.email)
+          .neq('id', editingUser.id)
+          .single();
+        
+        if (existingUser) {
           throw new Error('Bu e-posta adresi zaten kullanılıyor!');
         }
       }
 
-      const updatedUsers = allUsers.map(u => {
-        if (u.id === editingUser.id) {
-          return {
-            ...u,
-            name: editUserForm.name,
-            email: editUserForm.email,
-            company: editUserForm.company,
-            password: editUserForm.password || u.password, // Şifre boşsa eski şifreyi koru
-            role: editUserForm.role,
-            updatedAt: new Date().toISOString(),
-            updatedBy: 'admin'
-          };
-        }
-        return u;
-      });
+      const updateData = {
+        name: editUserForm.name,
+        email: editUserForm.email,
+        company: editUserForm.company,
+        role: editUserForm.role,
+        updated_at: new Date().toISOString()
+      };
 
-      localStorage.setItem('users', JSON.stringify(updatedUsers));
+      // Şifre doluysa ekle
+      if (editUserForm.password) {
+        updateData.password = editUserForm.password;
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', editingUser.id);
+
+      if (error) throw error;
       
       alert('✅ Kullanıcı bilgileri başarıyla güncellendi!');
       
@@ -227,31 +270,36 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
     setCreateUserLoading(true);
 
     try {
-      const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-      
       // E-posta kontrolü
-      if (allUsers.find(u => u.email === newUserForm.email)) {
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('email')
+        .eq('email', newUserForm.email)
+        .single();
+      
+      if (existingUser) {
         throw new Error('Bu e-posta adresi zaten kullanılıyor!');
       }
 
       // Şifre yoksa otomatik oluştur
       const password = newUserForm.password || generateRandomPassword();
 
-      const newUser = {
-        id: Date.now().toString(),
-        name: newUserForm.name,
-        email: newUserForm.email,
-        company: newUserForm.company,
-        password: password,
-        role: newUserForm.role,
-        approved: true, // Admin oluşturduğu için otomatik onaylı
-        createdAt: new Date().toISOString(),
-        createdBy: 'admin'
-      };
+      // Kullanıcıyı oluştur
+      const { data: newUser, error } = await supabase
+        .from('users')
+        .insert([{
+          name: newUserForm.name,
+          email: newUserForm.email,
+          company: newUserForm.company,
+          password: password,
+          role: newUserForm.role,
+          approved: true, // Admin oluşturduğu için otomatik onaylı
+          created_by: 'admin'
+        }])
+        .select()
+        .single();
 
-      // Kullanıcıyı kaydet
-      allUsers.push(newUser);
-      localStorage.setItem('users', JSON.stringify(allUsers));
+      if (error) throw error;
 
       console.log('✅ Yeni kullanıcı oluşturuldu:', newUser.email);
 
