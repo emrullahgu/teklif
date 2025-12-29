@@ -119,13 +119,7 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
         {
           to_email: user.email,
           to_name: user.name,
-          user_name: user.name,
-          user_email: user.email,
-          user_password: user.password,
-          user_company: user.company || 'Belirtilmemiş',
-          login_url: window.location.origin,
-          from_name: 'Teklif Sistemi',
-          reply_to: 'emrullah.gunay@kobinerji.com'
+          message: `Merhaba ${user.name},\n\nGiriş bilgileriniz:\n\nE-posta: ${user.email}\nŞifre: ${user.password}\nFirma: ${user.company || '-'}\n\nGiriş için: ${window.location.origin}\n\nGüvenlik için giriş yaptıktan sonra şifrenizi değiştirin.`
         },
         '-rEVDm1IKnRaw6jCm'
       );
@@ -183,13 +177,7 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
           {
             to_email: newUser.email,
             to_name: newUser.name,
-            user_name: newUser.name,
-            user_email: newUser.email,
-            user_password: password,
-            user_company: newUser.company || 'Belirtilmemiş',
-            login_url: window.location.origin,
-            from_name: 'Teklif Sistemi',
-            reply_to: 'emrullah.gunay@kobinerji.com'
+            message: `Merhaba ${newUser.name},\n\nSistem yöneticisi tarafından hesabınız oluşturuldu.\n\nGiriş bilgileriniz:\n\nE-posta: ${newUser.email}\nŞifre: ${password}\nFirma: ${newUser.company || '-'}\n\nGiriş için: ${window.location.origin}\n\nGüvenlik için giriş yaptıktan sonra şifrenizi değiştirin.`
           },
           '-rEVDm1IKnRaw6jCm'
         );
