@@ -4916,13 +4916,15 @@ KURALLAR:
                 </div>
 
                 {/* Footer - Sayfa 2 */}
-                <div className="absolute bottom-[10mm] left-0 right-0 border-t border-gray-300 pt-2">
-                  <div className="text-center text-[8pt] text-gray-500">
-                    <p className="font-bold text-gray-800 text-[9pt]">Kobinerji Mühendislik</p>
-                    <p className="text-[7pt] text-gray-600 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
-                    <p className="text-[8pt]">Tel: +90 535 714 52 88</p>
-                    <p className="text-[8pt]">İzmir, Türkiye</p>
-                    <p className="mt-1 text-gray-400">Sayfa 2/2</p>
+                <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-3 text-[8pt] text-gray-600 flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold">Kobinerji Mühendislik</p>
+                    <p className="text-[7pt] text-gray-500 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
+                  </div>
+                  <div className="text-right">
+                    <p>Tel: +90 535 714 52 88</p>
+                    <p>İzmir, Türkiye</p>
+                    <p className="text-gray-400 mt-1">Sayfa 2/2</p>
                   </div>
                 </div>
 
@@ -6824,13 +6826,15 @@ KURALLAR:
                     </div>
 
                     {/* Footer - Page 2 - Always at bottom */}
-                    <div className="absolute bottom-[10mm] left-0 right-0 border-t border-gray-300 pt-2" style={{pageBreakInside: 'avoid'}}>
-                        <div className="text-center text-[8pt] text-gray-500">
-                            <p className="font-bold text-gray-800 text-[9pt]">Kobinerji Mühendislik</p>
-                            <p className="text-[7pt] text-gray-600 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
-                            <p className="text-[8pt]">Tel: +90 535 714 52 88</p>
-                            <p className="text-[8pt]">İzmir, Türkiye</p>
-                            <p className="mt-1 text-gray-400">Sayfa 2/2</p>
+                    <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-3 text-[8pt] text-gray-600 flex justify-between items-center" style={{pageBreakInside: 'avoid'}}>
+                        <div>
+                            <p className="font-semibold">Kobinerji Mühendislik</p>
+                            <p className="text-[7pt] text-gray-500 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
+                        </div>
+                        <div className="text-right">
+                            <p>Tel: +90 535 714 52 88</p>
+                            <p>İzmir, Türkiye</p>
+                            <p className="text-gray-400 mt-1">Sayfa 2/2</p>
                         </div>
                     </div>
                   </div>
