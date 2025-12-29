@@ -14,13 +14,35 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Admin bilgileri
+  const ADMIN_EMAIL = 'emrullah.gunay@koobinerji.com';
+  const ADMIN_PASSWORD = 'Eg8502Eg.';
+
   useEffect(() => {
+    // Admin kullanıcısını otomatik oluştur (yoksa)
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const adminExists = users.find(u => u.email === ADMIN_EMAIL);
+    
+    if (!adminExists) {
+      const adminUser = {
+        id: 'admin-' + Date.now(),
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+        name: 'Admin',
+        company: 'Kob Enerji',
+        approved: true,
+        role: 'admin',
+        createdAt: new Date().toISOString()
+      };
+      users.push(adminUser);
+      localStorage.setItem('users', JSON.stringify(users));
+    }
+
     // LocalStorage'dan kullanıcıyı yükle
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
       const user = JSON.parse(storedUser);
       // Kullanıcı onaylı mı kontrol et
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
       const userInDB = users.find(u => u.email === user.email);
       
       if (userInDB && userInDB.approved) {

@@ -3,11 +3,16 @@ import { AuthProvider, useAuth } from './SimpleAuth';
 import SimpleLogin from './SimpleLogin';
 import SimpleRegister from './SimpleRegister';
 import App from './App';
-import { LogOut, User } from 'lucide-react';
+import SimpleAdminPanel from './SimpleAdminPanel';
+import { LogOut, User, Shield } from 'lucide-react';
 
 const AuthWrapper = () => {
   const { isAuthenticated, loading, currentUser, signOut } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+
+  // Admin kontrolü
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.email === 'emrullah.gunay@koobinerji.com';
 
   if (loading) {
     return (
@@ -29,6 +34,32 @@ const AuthWrapper = () => {
     );
   }
 
+  // Admin paneli gösteriliyorsa
+  if (showAdminPanel) {
+    return (
+      <div>
+        <div className="bg-white border-b shadow-sm">
+          <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+            <button
+              onClick={() => setShowAdminPanel(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition"
+            >
+              ← Ana Sayfa
+            </button>
+            <button
+              onClick={signOut}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Çıkış Yap</span>
+            </button>
+          </div>
+        </div>
+        <SimpleAdminPanel isEmbedded={true} />
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Kullanıcı bilgisi ve çıkış butonu */}
@@ -41,13 +72,24 @@ const AuthWrapper = () => {
               <span className="text-gray-500 text-sm">- {currentUser.company}</span>
             )}
           </div>
-          <button
-            onClick={signOut}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Çıkış Yap</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => setShowAdminPanel(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition duration-200"
+              >
+                <Shield className="w-4 h-4" />
+                <span>Onaylar</span>
+              </button>
+            )}
+            <button
+              onClick={signOut}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Çıkış Yap</span>
+            </button>
+          </div>
         </div>
       </div>
       

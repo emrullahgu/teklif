@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Trash2, Mail, User, Building, RefreshCw } from 'lucide-react';
 
-const SimpleAdminPanel = () => {
+const SimpleAdminPanel = ({ isEmbedded = false }) => {
   const [users, setUsers] = useState([]);
   const [filter, setFilter] = useState('pending');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(isEmbedded); // Embedded ise otomatik authenticated
 
   // Admin bilgileri
   const ADMIN_EMAIL = 'emrullah.gunay@kobinerji.com';
