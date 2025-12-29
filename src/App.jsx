@@ -8,6 +8,7 @@ import * as XLSX from 'xlsx';
 import emailjs from 'emailjs-com';
 import html2pdf from 'html2pdf.js';
 import html2canvas from 'html2canvas';
+import { supabase } from './supabaseClient';
 import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableCell, TableRow, WidthType, BorderStyle, Packer } from 'docx';
 import { saveAs } from 'file-saver';
 import FaturaData from '../fatura/Fatura.json';
@@ -331,16 +332,40 @@ const App = () => {
   const [showSavedQuotations, setShowSavedQuotations] = useState(false);
 
   // Merkezi Teklif Kaydetme Sistemi - Tüm Teklif Türleri
-  const [allSavedProposals, setAllSavedProposals] = useState(() => {
-    const saved = localStorage.getItem('allSavedProposals');
-    return saved ? JSON.parse(saved) : {
-      yg: [],
-      periodic: [],
-      kesif: []
-    };
+  const [allSavedProposals, setAllSavedProposals] = useState({
+    yg: [],
+    periodic: [],
+    kesif: []
   });
   const [showAllProposals, setShowAllProposals] = useState(false);
   const [proposalFilterType, setProposalFilterType] = useState('all'); // 'all', 'yg', 'periodic', 'kesif'
+
+  // Teklifleri Supabase'den yükle
+  React.useEffect(() => {
+    loadAllProposals();
+  }, []);
+
+  const loadAllProposals = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('proposals')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Tip'e göre grupla
+      const grouped = {
+        yg: data?.filter(p => p.type === 'yg') || [],
+        periodic: data?.filter(p => p.type === 'periodic') || [],
+        kesif: data?.filter(p => p.type === 'kesif') || []
+      };
+      
+      setAllSavedProposals(grouped);
+    } catch (error) {
+      console.error('Teklif yükleme hatası:', error);
+    }
+  };
 
   // Gelişmiş Ürün Filtreleme States
   const [markaFilter, setMarkaFilter] = useState('tumu');
@@ -486,21 +511,34 @@ const App = () => {
   };
 
   // Merkezi Teklif Kaydetme Fonksiyonları
-  const saveProposal = (type, data, name) => {
-    const newProposal = {
-      id: Date.now(),
-      type: type, // 'yg', 'periodic', 'kesif'
-      name: name || `${type.toUpperCase()} Teklif ${Date.now()}`,
-      date: new Date().toLocaleDateString('tr-TR'),
-      timestamp: Date.now(),
-      data: data
-    };
+  const saveProposal = async (type, data, name) => {
+    try {
+      const newProposal = {
+        type: type, // 'yg', 'periodic', 'kesif'
+        name: name || `${type.toUpperCase()} Teklif ${Date.now()}`,
+        data: data
+      };
 
-    const updated = { ...allSavedProposals };
-    updated[type] = [...updated[type], newProposal];
-    setAllSavedProposals(updated);
-    localStorage.setItem('allSavedProposals', JSON.stringify(updated));
-    return newProposal;
+      const { data: saved, error } = await supabase
+        .from('proposals')
+        .insert([newProposal])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // State'i güncelle
+      const updated = { ...allSavedProposals };
+      updated[type] = [...updated[type], saved];
+      setAllSavedProposals(updated);
+      
+      alert('✅ Teklif başarıyla kaydedildi!');
+      return saved;
+    } catch (error) {
+      console.error('Teklif kaydetme hatası:', error);
+      alert('❌ Teklif kaydedilemedi!');
+      return null;
+    }
   };
 
   const loadProposal = (proposal) => {
