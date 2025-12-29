@@ -101,6 +101,47 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
     return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
   };
 
+  const sendLoginCredentials = async (userId) => {
+    try {
+      const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+      const user = allUsers.find(u => u.id === userId);
+      
+      if (!user) {
+        alert('Kullanıcı bulunamadı!');
+        return;
+      }
+
+      console.log('📧 Login bilgileri gönderiliyor:', user.email);
+
+      await emailjs.send(
+        'service_5l9ghli',
+        'template_g8ee2jz',
+        {
+          to_email: user.email,
+          to_name: user.name,
+          from_name: 'Teklif Sistemi - Admin',
+          from_email: 'emrullah.gunay@kobinerji.com',
+          company: user.company || '-',
+          subject: 'Giriş Bilgileriniz',
+          message: `Merhaba ${user.name},\n\nGiriş bilgileriniz:\n\n` +
+                   `🔑 E-posta: ${user.email}\n` +
+                   `🔑 Şifre: ${user.password}\n\n` +
+                   `Giriş için: ${window.location.origin}\n\n` +
+                   `Güvenlik için lütfen giriş yaptıktan sonra şifrenizi değiştirin.\n\n` +
+                   `İyi günler dileriz.`
+        },
+        '-rEVDm1IKnRaw6jCm'
+      );
+
+      console.log('✅ Email başarıyla gönderildi');
+      alert(`✅ Login bilgileri ${user.email} adresine gönderildi!`);
+
+    } catch (error) {
+      console.error('❌ Email gönderme hatası:', error);
+      alert('❌ E-posta gönderilemedi! Konsolu kontrol edin.');
+    }
+  };
+
   const createNewUser = async (e) => {
     e.preventDefault();
     setCreateUserError('');
@@ -543,7 +584,7 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
                         {formatDate(user.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                           {!user.approved ? (
                             <>
                               <button
@@ -563,6 +604,14 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
                             </>
                           ) : (
                             <>
+                              <button
+                                onClick={() => sendLoginCredentials(user.id)}
+                                className="inline-flex items-center px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
+                                title="Login bilgilerini mail ile gönder"
+                              >
+                                <Mail className="w-4 h-4 mr-1" />
+                                Bilgileri Gönder
+                              </button>
                               <button
                                 onClick={() => revokeApproval(user.id)}
                                 className="inline-flex items-center px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition"
