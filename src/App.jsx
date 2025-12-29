@@ -343,11 +343,11 @@ const App = () => {
 
   // GES Teklifi States
   const [gesForm, setGesForm] = useState({
-    customerName: 'Mehmet Bey',
-    location: 'Yakaköy / İzmir',
+    customerName: 'MUHAMMET BÜLBÜL',
+    location: 'Kemalpaşa / İZMİR',
     usdRate: 34.50,
     offerDate: new Date().toISOString().split('T')[0],
-    autoPower: 12, // kW
+    autoPower: 25, // kW
     laborRate: 10,
     transportRate: 1,
     overheadRate: 1,
@@ -358,18 +358,98 @@ const App = () => {
   const [gesItems, setGesItems] = useState([]);
 
   const [gesDB] = useState({
+    // Eski veriler (yedek)
     panelPrice: 127.44,
     inverter: 2997,
     battery: 952.19,
     cable: 1.0,
     connector: 0.5,
     panelMount: 25,
-    transport: 250
+    transport: 250,
+    
+    // Yeni Veritabanı - Kategorize Edilmiş Fiyatlar (%35 iskontolu)
+    batteries: {
+      'orbit_51v_100ah_hv': { name: 'ORBİT 51.2 V 100 Ah LiFePO4 Akü-High Voltage-Metal Kasa', price: 920.40, brand: 'ORBİT' },
+      'orbit_51v_50ah_hv': { name: 'ORBİT 51.2 V 050 Ah LiFePO4 Akü-High Voltage-Metal Kasa', price: 651.96, brand: 'ORBİT' },
+      'orbit_51v_100ah_lv': { name: 'ORBİT 51.2 V 100 Ah LiFePO4 Akü-Low Voltage-Ekranlı-Metal Kasa', price: 936.00, brand: 'ORBİT' },
+      'orbit_51v_280ah_lv': { name: 'ORBİT 51.2 V 280 Ah LiFePO4 Akü-Low Voltage-Metal Kasa', price: 2373.19, brand: 'ORBİT' },
+      'orbit_48v_100ah_wall': { name: 'ORBİT 48 V 100 Ah LiFePO4 Akü-Ekranlı Duvar Tipi', price: 950.72, brand: 'ORBİT' },
+      'orbit_48v_100ah_metal': { name: 'ORBİT 48 V 100 Ah LiFePO4 Akü-Ekranlı-Metal Kasa', price: 901.68, brand: 'ORBİT' },
+      'orbit_24v_100ah': { name: 'ORBİT 24 V 100 Ah LiFePO4 Akü-ABS Kasa', price: 479.11, brand: 'ORBİT' },
+      'orbit_24v_210ah': { name: 'ORBİT 24 V 210 Ah LiFePO4 Akü-ABS Kasa', price: 937.47, brand: 'ORBİT' },
+      'orbit_12v_100ah': { name: 'ORBİT 12 V 100 Ah LiFePO4 Akü-ABS Kasa', price: 275.34, brand: 'ORBİT' },
+      'orbit_12v_200ah': { name: 'ORBİT 12 V 200 Ah LiFePO4 Akü-ABS Kasa', price: 479.01, brand: 'ORBİT' },
+      'orbit_12v_420ah': { name: 'ORBİT 12 V 420 Ah LiFePO4 Akü-ABS Kasa', price: 937.47, brand: 'ORBİT' }
+    },
+    
+    bms: {
+      'pace_100a': { name: 'BMS-PACE HV -BCU 100A', price: 1068.60, brand: 'PACE' },
+      'pace_200a': { name: 'BMS-PACE HV-BCU 200A', price: 1514.76, brand: 'PACE' }
+    },
+    
+    panels: {
+      'set_600w': { name: 'PV - GÜNEŞ PANELİ- SET SOLAR 600 WP', price: 170.28, brand: 'SET SOLAR' },
+      'set_460w': { name: 'PV - GÜNEŞ PANELİ- SET SOLAR 460 WP', price: 127.51, brand: 'SET SOLAR' }
+    },
+    
+    inverters: {
+      // Hibrit İnverterler
+      'deye_5kw_mono': { name: 'DEYE 05 KW MONOFAZE HİBRİT İNVERTER', price: 1296.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_8kw_mono': { name: 'DEYE 08 KW MONOFAZE HİBRİT İNVERTER', price: 2052.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_12kw_tri': { name: 'DEYE 12 KW TRİFAZE HİBRİT İNVERTER', price: 2808.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_20kw_hv': { name: 'DEYE 20 KW HIGH VOLTAGE (HV) TRİFAZE HİBRİT İNVERTER', price: 2976.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_20kw_lv': { name: 'DEYE 20 KW LOW VOLTAGE (LV) TRİFAZE HİBRİT İNVERTER', price: 4170.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_25kw_hv': { name: 'DEYE 25 KW HIGH VOLTAGE (HV) TRİFAZE HİBRİT İNVERTER', price: 3552.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_50kw_hv': { name: 'DEYE 50 KW HIGH VOLTAGE TRİFAZE HİBRİT İNVERTER', price: 7080.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_80kw': { name: 'Deye 80kW Hibrit İnverter', price: 10043.28, brand: 'DEYE', type: 'hibrit' },
+      'srp_6kw_mono': { name: 'SRP 06 KW MONOFAZE HİBRİT İNVERTER-LV', price: 1423.50, brand: 'SRP', type: 'hibrit' },
+      'srp_15kw_tri': { name: 'SRP 15 KW TRİFAZE HİBRİT İNVERTER-LV', price: 3590.34, brand: 'SRP', type: 'hibrit' },
+      'srp_30kw_tri': { name: 'SRP 30 KW TRİFAZE HİBRİT İNVERTER-HV', price: 4952.22, brand: 'SRP', type: 'hibrit' },
+      
+      // Offgrid İnverterler
+      'orbit_6.2kw_parallel': { name: 'ORBİT 6.2 KW TAM SİNÜS OFFGRİD İNVERTER-12 PCS PARALLEL', price: 407.99, brand: 'ORBİT', type: 'offgrid' },
+      'orbit_6.2kw_single': { name: 'ORBİT 6.2 KW TAM SİNÜS OFFGRİD İNVERTER-NON PARALLEL', price: 364.84, brand: 'ORBİT', type: 'offgrid' },
+      'srp_5kw_mono': { name: 'SRP 05 KW MONOFAZE OFFGRİD İNVERTER-LV', price: 420.95, brand: 'SRP', type: 'offgrid' },
+      
+      // Ongrid İnverterler
+      'huawei_50ktl': { name: 'HUAWEİ 50 KTL İNVERTER', price: 3946.80, brand: 'HUAWEI', type: 'ongrid' }
+    },
+    
+    cabinets: {
+      'cabinet_5': { name: 'KABİNET-05 GÖZLÜ', price: 612.60, brand: 'ORBİT' },
+      'cabinet_8': { name: 'KABİNET-08 GÖZLÜ', price: 634.67, brand: 'ORBİT' },
+      'cabinet_12': { name: 'KABİNET-12 GÖZLÜ', price: 819.70, brand: 'ORBİT' },
+      'cabinet_16': { name: 'KABİNET-16 GÖZLÜ', price: 1100.10, brand: 'ORBİT' }
+    },
+    
+    cables: {
+      'dc_cable': { name: 'KABLO-DC (Metre)', price: 0.78, brand: 'Genel' },
+      'mc4_connector': { name: 'KONNEKTÖR-MC4', price: 1.63, brand: 'SCTUBLE' }
+    },
+    
+    accessories: {
+      'pole_positive': { name: 'KUTUP BAŞI KONNEKTÖRÜ-POZİTİF', price: 3.51, brand: 'ORBİT' },
+      'pole_negative': { name: 'KUTUP BAŞI KONNEKTÖRÜ-NEGATİF', price: 3.51, brand: 'ORBİT' },
+      'charger_12v': { name: '12V-12A BATTERY CHARGER', price: 31.98, brand: 'ORBİT' },
+      'charger_24v': { name: '24V-100A BATTERY CHARGER', price: 520.03, brand: 'Genel' }
+    },
+    
+    evChargers: {
+      'ev_22kw_single': { name: 'ELEKTRİKLİ ARAÇ ŞARJ İSTASYONU- 22 kW AC (BİREYSEL KULLANIM İÇİN)', price: 616.44, brand: 'BESTCHARGE' },
+      'ev_22kw_shared': { name: 'ELEKTRİKLİ ARAÇ ŞARJ İSTASYONU- 22 kW AC (OCCP-PAYLAŞIMLI)', price: 732.60, brand: 'BESTCHARGE' }
+    }
   });
 
   // Teklifleri Supabase'den yükle
   React.useEffect(() => {
     loadAllProposals();
+  }, []);
+
+  // GES başlangıç paketi yükle
+  React.useEffect(() => {
+    if (gesItems.length === 0) {
+      loadCommercialGESPackage();
+    }
   }, []);
 
   const loadAllProposals = async () => {
@@ -689,22 +769,39 @@ const App = () => {
   // GES Fonksiyonları
   const loadDefaultGESPackage = () => {
     const kw = parseFloat(gesForm.autoPower) || 12;
-    const panelCount = Math.ceil((kw * 1000) / 590);
+    const panelCount = Math.ceil((kw * 1000) / 600); // 600W panel kullanımı
     
     const items = [
-      { brand: 'Jinko', desc: 'Güneş Paneli JKM590N-72HL4-BDV (590 Wp)', qty: panelCount, price: gesDB.panelPrice },
-      { brand: 'DEYE', desc: `DEYE ${kw} KW TRİFAZE HİBRİT İNVERTER`, qty: 1, price: gesDB.inverter },
-      { brand: 'ORBİT', desc: '51.2 V 100 Ah LiFePO4 Akü-High Voltage', qty: 2, price: gesDB.battery },
-      { brand: 'HAS ÇELİK', desc: 'Solar Kablo (Kırmızı) - 6mm', qty: 50, price: gesDB.cable },
-      { brand: 'HAS ÇELİK', desc: 'Solar Kablo (Siyah) - 6mm', qty: 50, price: gesDB.cable },
-      { brand: 'ISO/TSE', desc: 'DC Konnektör Setleri - MC4 Uyumlu', qty: 10, price: gesDB.connector },
+      { brand: gesDB.panels.set_600w.brand, desc: gesDB.panels.set_600w.name, qty: panelCount, price: gesDB.panels.set_600w.price },
+      { brand: gesDB.inverters.deye_12kw_tri.brand, desc: gesDB.inverters.deye_12kw_tri.name, qty: 1, price: gesDB.inverters.deye_12kw_tri.price },
+      { brand: gesDB.batteries.orbit_51v_100ah_hv.brand, desc: gesDB.batteries.orbit_51v_100ah_hv.name, qty: 2, price: gesDB.batteries.orbit_51v_100ah_hv.price },
+      { brand: gesDB.cables.dc_cable.brand, desc: gesDB.cables.dc_cable.name + ' (Kırmızı)', qty: 50, price: gesDB.cables.dc_cable.price },
+      { brand: gesDB.cables.dc_cable.brand, desc: gesDB.cables.dc_cable.name + ' (Siyah)', qty: 50, price: gesDB.cables.dc_cable.price },
+      { brand: gesDB.cables.mc4_connector.brand, desc: gesDB.cables.mc4_connector.name, qty: 10, price: gesDB.cables.mc4_connector.price },
       { brand: 'ABB', desc: 'Pano & Sigorta Takımı - DC/AC koruma', qty: 1, price: 1250 },
       { brand: 'DEYE', desc: 'Deye Smart Meter + Wi-Fi', qty: 1, price: 103 },
-      { brand: 'Konstrüksiyon', desc: 'Alüminyum Alt Yapı Seti', qty: panelCount, price: gesDB.panelMount },
-      { brand: 'Lojistik', desc: 'Nakliye Hizmeti', qty: 1, price: gesDB.transport }
+      { brand: 'Konstrüksiyon', desc: 'Alüminyum Alt Yapı Seti', qty: panelCount, price: 25 },
+      { brand: 'Lojistik', desc: 'Nakliye Hizmeti', qty: 1, price: 250 }
     ];
     
     setGesItems(items);
+    setGesForm({...gesForm, autoPower: kw});
+  };
+
+  const loadCommercialGESPackage = () => {
+    const items = [
+      { brand: gesDB.panels.set_600w.brand, desc: gesDB.panels.set_600w.name, qty: 42, price: gesDB.panels.set_600w.price },
+      { brand: gesDB.inverters.deye_25kw_hv.brand, desc: gesDB.inverters.deye_25kw_hv.name, qty: 1, price: gesDB.inverters.deye_25kw_hv.price },
+      { brand: gesDB.batteries.orbit_51v_100ah_hv.brand, desc: gesDB.batteries.orbit_51v_100ah_hv.name, qty: 20, price: gesDB.batteries.orbit_51v_100ah_hv.price },
+      { brand: gesDB.bms.pace_100a.brand, desc: gesDB.bms.pace_100a.name, qty: 2, price: gesDB.bms.pace_100a.price },
+      { brand: gesDB.cabinets.cabinet_16.brand, desc: gesDB.cabinets.cabinet_16.name, qty: 1, price: gesDB.cabinets.cabinet_16.price },
+      { brand: gesDB.cables.mc4_connector.brand, desc: gesDB.cables.mc4_connector.name, qty: 30, price: gesDB.cables.mc4_connector.price },
+      { brand: gesDB.cables.dc_cable.brand, desc: gesDB.cables.dc_cable.name, qty: 200, price: gesDB.cables.dc_cable.price },
+      { brand: 'Hizmet', desc: 'Ticari Sistem Montaj ve Mühendislik', qty: 1, price: 2000.00 }
+    ];
+    
+    setGesItems(items);
+    setGesForm({...gesForm, autoPower: 25});
   };
 
   const addNewGESRow = () => {
@@ -2794,15 +2891,26 @@ KURALLAR:
                         className="px-3 py-2 text-sm border rounded w-full"
                       />
                     </div>
-                    <button 
-                      onClick={loadDefaultGESPackage}
-                      className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded text-sm font-semibold transition"
-                    >
-                      <Sparkles className="w-4 h-4 inline mr-1"/>
-                      Otomatik Doldur
-                    </button>
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={loadDefaultGESPackage}
+                        className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded text-xs font-semibold transition h-[38px]"
+                        title="12kW Ev Tipi Paket"
+                      >
+                        <Users className="w-3 h-3 inline mr-1"/>
+                        Ev Tipi
+                      </button>
+                      <button 
+                        onClick={loadCommercialGESPackage}
+                        className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded text-xs font-semibold transition h-[38px]"
+                        title="25kW Ticari Paket"
+                      >
+                        <Hammer className="w-3 h-3 inline mr-1"/>
+                        Ticari (25kW)
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">* Mevcut listeyi silip standart Jinko/Deye paketi yükler</p>
+                  <p className="text-xs text-gray-500 mt-2">* Paket butonları mevcut listeyi silip standart şablonları yükler</p>
                 </div>
 
                 {/* Malzeme Listesi */}
