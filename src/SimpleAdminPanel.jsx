@@ -133,27 +133,39 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
       allUsers.push(newUser);
       localStorage.setItem('users', JSON.stringify(allUsers));
 
-      // EmailJS ile login bilgilerini gönder
-      await emailjs.send(
-        'service_5l9ghli',
-        'template_g8ee2jz',
-        {
-          to_email: newUser.email,
-          to_name: newUser.name,
-          from_name: 'Teklif Sistemi - Admin',
-          subject: 'Hesabınız Oluşturuldu',
-          message: `Merhaba ${newUser.name},\n\nSistem yöneticisi tarafından hesabınız oluşturuldu.\n\n` +
-                   `🔑 GİRİŞ BİLGİLERİNİZ:\n` +
-                   `E-posta: ${newUser.email}\n` +
-                   `Şifre: ${password}\n\n` +
-                   `Giriş için: ${window.location.origin}\n\n` +
-                   `Güvenlik için lütfen giriş yaptıktan sonra şifrenizi değiştirin.\n\n` +
-                   `İyi günler dileriz.`
-        },
-        '-rEVDm1IKnRaw6jCm'
-      );
+      console.log('✅ Yeni kullanıcı oluşturuldu:', newUser.email);
 
-      alert(`Kullanıcı başarıyla oluşturuldu ve login bilgileri ${newUser.email} adresine gönderildi!`);
+      // EmailJS ile login bilgilerini gönder
+      try {
+        console.log('📧 Email gönderiliyor:', newUser.email);
+        
+        const emailResult = await emailjs.send(
+          'service_5l9ghli',
+          'template_g8ee2jz',
+          {
+            to_email: newUser.email,
+            to_name: newUser.name,
+            from_name: 'Teklif Sistemi - Admin',
+            from_email: 'emrullah.gunay@kobinerji.com',
+            company: newUser.company || '-',
+            subject: 'Hesabınız Oluşturuldu - Giriş Bilgileriniz',
+            message: `Merhaba ${newUser.name},\n\nSistem yöneticisi tarafından hesabınız oluşturuldu.\n\n` +
+                     `🔑 GİRİŞ BİLGİLERİNİZ:\n` +
+                     `E-posta: ${newUser.email}\n` +
+                     `Şifre: ${password}\n\n` +
+                     `Giriş için: ${window.location.origin}\n\n` +
+                     `Güvenlik için lütfen giriş yaptıktan sonra şifrenizi değiştirin.\n\n` +
+                     `İyi günler dileriz.`
+          },
+          '-rEVDm1IKnRaw6jCm'
+        );
+        
+        console.log('✅ Email başarıyla gönderildi:', emailResult);
+        alert(`✅ Kullanıcı başarıyla oluşturuldu!\n\nLogin bilgileri ${newUser.email} adresine gönderildi.\n\nE-posta: ${newUser.email}\nŞifre: ${password}`);
+      } catch (emailError) {
+        console.error('❌ Email gönderme hatası:', emailError);
+        alert(`⚠️ Kullanıcı oluşturuldu ancak e-posta gönderilemedi!\n\nLütfen manuel olarak iletişime geçin:\nE-posta: ${newUser.email}\nŞifre: ${password}`);
+      }
       
       // Formu temizle
       setNewUserForm({
