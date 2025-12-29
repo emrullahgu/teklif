@@ -4918,10 +4918,9 @@ KURALLAR:
                 {/* Footer - Sayfa 2 */}
                 <div className="absolute bottom-[10mm] left-0 right-0 border-t border-gray-300 pt-2">
                   <div className="text-center text-[8pt] text-gray-500">
-                    <p className="font-bold text-gray-800 text-[9pt]">Kobinerji Mühendislik</p>
-                    <p className="text-[7pt] text-gray-600 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
-                    <p className="text-[8pt]">Tel: +90 535 714 52 88</p>
-                    <p className="text-[8pt]">İzmir, Türkiye</p>
+                    <p className="font-bold text-gray-800 text-[9pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                    <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                    <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
                     <p className="mt-1 text-gray-400">Sayfa 2/2</p>
                   </div>
                 </div>
