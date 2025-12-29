@@ -67,6 +67,16 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
     loadUsers();
   };
 
+  const changeUserRole = (userId, newRole) => {
+    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+    const updatedUsers = allUsers.map(u => 
+      u.id === userId ? { ...u, role: newRole } : u
+    );
+    localStorage.setItem('users', JSON.stringify(updatedUsers));
+    alert(`Kullanıcı rolü "${newRole}" olarak güncellendi!`);
+    loadUsers();
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Bilinmiyor';
     const date = new Date(dateString);
@@ -207,7 +217,16 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
                       Şirket
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Rol
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Kayıt Tarihi
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      İşlemler
+                    </th>
+                  </tr>
+                </thead>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       İşlemler
@@ -251,6 +270,16 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <select
+                          value={user.role || 'user'}
+                          onChange={(e) => changeUserRole(user.id, e.target.value)}
+                          className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="user">Kullanıcı</option>
+                          <option value="admin">Admin</option>
+                        </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {formatDate(user.createdAt)}
