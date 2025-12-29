@@ -857,6 +857,132 @@ const App = () => {
     return currency + amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
+  // GES PDF Export
+  const handleGESPDFExport = async () => {
+    if (!gesForm.customerName || gesItems.length === 0) {
+      alert('Lütfen müşteri bilgilerini doldurun ve malzeme ekleyin.');
+      return;
+    }
+    
+    const page = document.querySelector('.ges-pdf-page');
+    if (!page) {
+      alert('İçerik bulunamadı.');
+      return;
+    }
+    
+    const fileName = `GES_Teklif_${gesForm.customerName.replace(/[^a-z0-9ğüşıöçĞÜŞİÖÇ]/gi, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
+    const targetWidthPx = 793;
+    const SCALE_FACTOR = 2;
+
+    try {
+      // Logo yükle ve base64'e çevir
+      const loadLogo = async () => {
+        return new Promise((resolve, reject) => {
+          if (!logo) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              resolve({
+                data: canvas.toDataURL('image/png'),
+                width: img.width,
+                height: img.height
+              });
+            };
+            img.onerror = reject;
+            img.src = '/fatura_logo.png';
+          } else {
+            // Yüklenen logo varsa onu kullan
+            const img = new Image();
+            img.onload = () => {
+              resolve({
+                data: logo,
+                width: img.width,
+                height: img.height
+              });
+            };
+            img.onerror = reject;
+            img.src = logo;
+          }
+        });
+      };
+
+      const logoInfo = await loadLogo();
+      
+      // Logo boyutlarını hesapla
+      const maxLogoWidth = 60;
+      const maxLogoHeight = 24;
+      const logoAspectRatio = logoInfo.width / logoInfo.height;
+      let logoWidth = maxLogoWidth;
+      let logoHeight = logoWidth / logoAspectRatio;
+      
+      if (logoHeight > maxLogoHeight) {
+        logoHeight = maxLogoHeight;
+        logoWidth = logoHeight * logoAspectRatio;
+      }
+
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      });
+
+      // Logoları gizle
+      const logos = page.querySelectorAll('img');
+      logos.forEach(logo => { logo.style.visibility = 'hidden'; });
+      
+      // Geçici stil ayarları
+      const originalWidth = page.style.width;
+      const originalMargin = page.style.margin;
+      const originalBoxShadow = page.style.boxShadow;
+      
+      page.style.width = '210mm';
+      page.style.margin = '0 auto';
+      page.style.boxShadow = 'none';
+      page.classList.add('pdf-exporting');
+
+      // html2canvas ile yakalama
+      const canvas = await html2canvas(page, {
+        scale: SCALE_FACTOR,
+        width: targetWidthPx,
+        windowWidth: targetWidthPx,
+        useCORS: true,
+        allowTaint: false,
+        letterRendering: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0
+      });
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+      pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
+
+      // Logoları tekrar göster
+      logos.forEach(logo => { logo.style.visibility = 'visible'; });
+
+      // Stil ayarlarını geri al
+      page.style.width = originalWidth;
+      page.style.margin = originalMargin;
+      page.style.boxShadow = originalBoxShadow;
+      page.classList.remove('pdf-exporting');
+
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('PDF oluşturma hatası:', error);
+      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+    }
+  };
+
   // Hızlı Teklif Yardımcı Fonksiyonları
   const addToRecentProducts = (product) => {
     const newRecent = [product, ...recentProducts.filter(p => p.urun !== product.urun)].slice(0, 20);
@@ -3027,15 +3153,35 @@ KURALLAR:
                   </div>
                 </div>
 
-                {/* Kaydet Butonu */}
-                <button 
-                  onClick={saveGESProposal}
-                  disabled={gesItems.length === 0}
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
-                >
-                  <Save className="w-5 h-5 mr-2"/>
-                  Teklifi Kaydet
-                </button>
+                {/* Kaydet ve Export Butonları */}
+                <div className="space-y-2">
+                  <button 
+                    onClick={saveGESProposal}
+                    disabled={gesItems.length === 0}
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <Save className="w-5 h-5 mr-2"/>
+                    Teklifi Kaydet
+                  </button>
+                  
+                  <button 
+                    onClick={handleGESPDFExport}
+                    disabled={gesItems.length === 0}
+                    className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <FileText className="w-5 h-5 mr-2"/>
+                    PDF İndir
+                  </button>
+                  
+                  <button 
+                    onClick={() => window.print()}
+                    disabled={gesItems.length === 0}
+                    className="w-full bg-gray-700 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <Printer className="w-5 h-5 mr-2"/>
+                    Yazdır
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -3045,7 +3191,7 @@ KURALLAR:
                 const totals = calculateGESTotals();
                 const dateObj = new Date(gesForm.offerDate);
                 return (
-                  <div className="bg-white w-[210mm] min-h-[297mm] shadow-2xl p-[10mm] flex flex-col text-[10pt]">
+                  <div className="ges-pdf-page bg-white w-[210mm] min-h-[297mm] shadow-2xl p-[10mm] flex flex-col text-[10pt]">
                     {/* Header */}
                     <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-6">
                       <img 
