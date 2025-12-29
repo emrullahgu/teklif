@@ -1,16 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// ⚠️ ÖNEMLI: Bu bilgileri Supabase dashboard'dan alın
-// 1. https://supabase.com adresine gidin
-// 2. Projenizi oluşturun
-// 3. Settings > API > Project URL ve anon public key'i buraya yapıştırın
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('⚠️ Supabase bilgileri eksik! .env dosyasını kontrol edin.');
-}
+// Supabase bağlantı bilgileri
+const supabaseUrl = 'https://ctylfbmukmoxpzwzeffr.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0eWxmYm11a21veHB6d3plZmZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5ODQyMTMsImV4cCI6MjA4MjU2MDIxM30.kI4bc_zcb1FJ-E_be7HRtEZ4im00KXGE_OHrnPR4POM';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
