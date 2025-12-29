@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Trash2, Mail, User, Building, RefreshCw, UserPlus, Lock, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Trash2, Mail, User, Building, RefreshCw, UserPlus, Lock, AlertCircle, Edit } from 'lucide-react';
 import emailjs from 'emailjs-com';
 
 const SimpleAdminPanel = ({ isEmbedded = false }) => {
@@ -20,6 +20,19 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
   });
   const [createUserLoading, setCreateUserLoading] = useState(false);
   const [createUserError, setCreateUserError] = useState('');
+
+  // Kullanıcı düzenleme state'leri
+  const [showEditUser, setShowEditUser] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editUserForm, setEditUserForm] = useState({
+    name: '',
+    email: '',
+    company: '',
+    password: '',
+    role: 'user'
+  });
+  const [editUserLoading, setEditUserLoading] = useState(false);
+  const [editUserError, setEditUserError] = useState('');
 
   // Admin bilgileri
   const ADMIN_EMAIL = 'emrullah.gunay@kobinerji.com';
@@ -111,7 +124,13 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
         return;
       }
 
+      if (!user.password) {
+        alert('⚠️ Kullanıcının şifresi bulunamadı! Lütfen şifresini sıfırlayın.');
+        return;
+      }
+
       console.log('📧 Login bilgileri gönderiliyor:', user.email);
+      console.log('📧 Gönderilecek şifre:', user.password);
 
       await emailjs.send(
         'service_5l9ghli',
@@ -127,11 +146,78 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
       );
 
       console.log('✅ Email başarıyla gönderildi');
-      alert(`✅ Login bilgileri ${user.email} adresine gönderildi!`);
+      alert(`✅ Login bilgileri ${user.email} adresine gönderildi!\n\nE-posta: ${user.email}\nŞifre: ${user.password}`);
 
     } catch (error) {
       console.error('❌ Email gönderme hatası:', error);
       alert('❌ E-posta gönderilemedi! Konsolu kontrol edin.');
+    }
+  };
+
+  const openEditUser = (user) => {
+    setEditingUser(user);
+    setEditUserForm({
+      name: user.name || '',
+      email: user.email || '',
+      company: user.company || '',
+      password: '', // Şifre boş bırakılır, değiştirilmek istenirse doldurulur
+      role: user.role || 'user'
+    });
+    setEditUserError('');
+    setShowEditUser(true);
+  };
+
+  const updateUser = async (e) => {
+    e.preventDefault();
+    setEditUserError('');
+    setEditUserLoading(true);
+
+    try {
+      const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+      
+      // E-posta değiştiyse ve başka kullanıcı kullanıyorsa hata ver
+      if (editUserForm.email !== editingUser.email) {
+        if (allUsers.find(u => u.id !== editingUser.id && u.email === editUserForm.email)) {
+          throw new Error('Bu e-posta adresi zaten kullanılıyor!');
+        }
+      }
+
+      const updatedUsers = allUsers.map(u => {
+        if (u.id === editingUser.id) {
+          return {
+            ...u,
+            name: editUserForm.name,
+            email: editUserForm.email,
+            company: editUserForm.company,
+            password: editUserForm.password || u.password, // Şifre boşsa eski şifreyi koru
+            role: editUserForm.role,
+            updatedAt: new Date().toISOString(),
+            updatedBy: 'admin'
+          };
+        }
+        return u;
+      });
+
+      localStorage.setItem('users', JSON.stringify(updatedUsers));
+      
+      alert('✅ Kullanıcı bilgileri başarıyla güncellendi!');
+      
+      setShowEditUser(false);
+      setEditingUser(null);
+      setEditUserForm({
+        name: '',
+        email: '',
+        company: '',
+        password: '',
+        role: 'user'
+      });
+      loadUsers();
+
+    } catch (error) {
+      console.error('Kullanıcı güncelleme hatası:', error);
+      setEditUserError(error.message || 'Kullanıcı güncellenirken bir hata oluştu!');
+    } finally {
+      setEditUserLoading(false);
     }
   };
 
@@ -296,6 +382,147 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
             </div>
           </div>
         </div>
+
+        {/* Kullanıcı Düzenleme Modalı */}
+        {showEditUser && editingUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+              <div className="p-6 border-b">
+                <h2 className="text-2xl font-bold text-gray-800">Kullanıcıyı Düzenle</h2>
+                <p className="text-gray-600 text-sm mt-1">{editingUser.email}</p>
+              </div>
+
+              <form onSubmit={updateUser} className="p-6 space-y-4">
+                {editUserError && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-red-700 text-sm">{editUserError}</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ad Soyad *
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={editUserForm.name}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, name: e.target.value })}
+                      required
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Kullanıcı adı"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    E-posta *
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="email"
+                      value={editUserForm.email}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                      required
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="ornek@email.com"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Firma
+                  </label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={editUserForm.company}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, company: e.target.value })}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Firma adı"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Yeni Şifre (Opsiyonel)
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={editUserForm.password}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, password: e.target.value })}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Şifreyi değiştirmek için girin"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Boş bırakılırsa mevcut şifre korunur</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Rol
+                  </label>
+                  <select
+                    value={editUserForm.role}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="user">Kullanıcı</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={editUserLoading}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {editUserLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        <span>Güncelleniyor...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-5 h-5" />
+                        <span>Güncelle</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditUser(false);
+                      setEditingUser(null);
+                      setEditUserError('');
+                      setEditUserForm({
+                        name: '',
+                        email: '',
+                        company: '',
+                        password: '',
+                        role: 'user'
+                      });
+                    }}
+                    disabled={editUserLoading}
+                    className="px-6 py-3 border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-lg transition disabled:opacity-50"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Yeni Kullanıcı Oluşturma Modalı */}
         {showCreateUser && (
@@ -587,6 +814,14 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
                             </>
                           ) : (
                             <>
+                              <button
+                                onClick={() => openEditUser(user)}
+                                className="inline-flex items-center px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition"
+                                title="Kullanıcı bilgilerini düzenle"
+                              >
+                                <Edit className="w-4 h-4 mr-1" />
+                                Düzenle
+                              </button>
                               <button
                                 onClick={() => sendLoginCredentials(user.id)}
                                 className="inline-flex items-center px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
