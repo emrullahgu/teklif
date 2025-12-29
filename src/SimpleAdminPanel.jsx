@@ -117,9 +117,10 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
         'service_5l9ghli',
         'template_5xj0s46',
         {
-          to_email: user.email,
           to_name: user.name,
-          message: `Merhaba ${user.name},\n\nGiriş bilgileriniz:\n\nE-posta: ${user.email}\nŞifre: ${user.password}\nFirma: ${user.company || '-'}\n\nGiriş için: ${window.location.origin}\n\nGüvenlik için giriş yaptıktan sonra şifrenizi değiştirin.`
+          from_name: 'Teklif Sistemi',
+          message: `Giriş Bilgileriniz:\n\nE-posta: ${user.email}\nŞifre: ${user.password}\nFirma: ${user.company || '-'}\n\nGiriş: ${window.location.origin}`,
+          reply_to: 'emrullah.gunay@kobinerji.com'
         },
         '-rEVDm1IKnRaw6jCm'
       );
