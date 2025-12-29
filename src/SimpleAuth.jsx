@@ -56,15 +56,33 @@ export const AuthProvider = ({ children }) => {
 
   const signIn = (email, password) => {
     const users = JSON.parse(localStorage.getItem('users') || '[]');
+    
+    console.log('🔐 Login denemesi:', { email, password });
+    console.log('👥 Tüm kullanıcılar:', users.map(u => ({ email: u.email, password: u.password, approved: u.approved })));
+    
     const user = users.find(u => u.email === email && u.password === password);
     
     if (!user) {
+      // Ayrıntılı hata ayıklama
+      const userByEmail = users.find(u => u.email === email);
+      if (userByEmail) {
+        console.log('❌ E-posta bulundu ama şifre yanlış!');
+        console.log('Girilen şifre:', password);
+        console.log('Kayıtlı şifre:', userByEmail.password);
+        console.log('Şifreler eşit mi?', userByEmail.password === password);
+        console.log('Girilen şifre tipi:', typeof password, 'Uzunluk:', password.length);
+        console.log('Kayıtlı şifre tipi:', typeof userByEmail.password, 'Uzunluk:', userByEmail.password ? userByEmail.password.length : 0);
+      } else {
+        console.log('❌ E-posta bulunamadı!');
+      }
       throw new Error('E-posta veya şifre hatalı!');
     }
     
     if (!user.approved) {
       throw new Error('Hesabınız henüz onaylanmamış. Lütfen admin onayını bekleyin.');
     }
+    
+    console.log('✅ Giriş başarılı!');
     
     // Şifreyi saklama (güvenlik için)
     const userToStore = { ...user };
