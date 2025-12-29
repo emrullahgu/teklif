@@ -1470,8 +1470,9 @@ KURALLAR:
       const appliedRegionCoeff = companyData.regionCoeff !== undefined ? companyData.regionCoeff : params.regionCoeff;
       nominalFee = nominalFee * appliedRegionCoeff;
 
-      // İskonto Uygulaması
-      const appliedDiscountRate = companyData.discountRate !== undefined ? companyData.discountRate : params.discountRate;
+      // İskonto Uygulaması - manualForm.customDiscount kullan
+      const appliedDiscountRate = manualForm.customDiscount !== undefined ? manualForm.customDiscount : 
+                                   (companyData.discountRate !== undefined ? companyData.discountRate : params.discountRate);
 
       const discountAmount = nominalFee * (appliedDiscountRate / 100);
       const offerPrice = nominalFee - discountAmount;
