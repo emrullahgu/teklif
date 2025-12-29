@@ -3704,7 +3704,7 @@ KURALLAR:
                           </tbody>
                         </table>
                         <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-200">
-                          <p className="text-[8pt] text-gray-500 text-center">Yaklaşık TL Karşılığı (Kur: ${gesForm.usdRate})</p>
+                          <p className="text-[8pt] text-gray-500 text-center">Toplam Ödenecek TUTAR TL Karşılığı</p>
                           <p className="text-[12pt] font-black text-gray-800 text-center">{formatMoney(totals.tlTotal, '₺')}</p>
                         </div>
                       </div>
@@ -4918,10 +4918,9 @@ KURALLAR:
                 {/* Footer - Sayfa 2 */}
                 <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] text-center text-[8pt] text-gray-500 border-t pt-2">
                   <p className="font-bold text-gray-800">Kobinerji Mühendislik</p>
-                  <p className="text-[7pt] text-gray-600 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
-                  <p>www.kobinerji.com.tr • info@kobinerji.com.tr</p>
-                  <p>Tel: +90 535 714 52 88 | İzmir, Türkiye</p>
-                  <p className="mt-1 text-gray-400">Sayfa 2/2</p>
+                  <p className="text-[7pt] text-gray-600 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız  Tel: +90 535 714 52 88</p>
+                  <p>İzmir, Türkiye</p>
+                  <p className="mt-1 text-gray-400">Sayfa 1/2</p>
                 </div>
 
                   </div>
