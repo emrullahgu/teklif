@@ -6738,6 +6738,19 @@ KURALLAR:
                       </ul>
                     </div>
                     </div>
+                    
+                    {/* Footer - Sayfa 1 */}
+                    <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-3 text-[8pt] text-gray-600 flex justify-between items-center">
+                      <div>
+                        <p className="font-semibold">Kobinerji Mühendislik</p>
+                        <p className="text-[7pt] text-gray-500 italic">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
+                      </div>
+                      <div className="text-right">
+                        <p>Tel: +90 535 714 52 88</p>
+                        <p>İzmir, Türkiye</p>
+                        <p className="text-gray-400 mt-1">Sayfa 1/2</p>
+                      </div>
+                    </div>
                   </div>
                   
                   {/* SAYFA 2 - Ücretsiz Ek Hizmetler */}
