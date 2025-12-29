@@ -119,8 +119,8 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
         {
           to_name: user.name,
           from_name: 'Teklif Sistemi',
-          message: `Giriş Bilgileriniz:\n\nE-posta: ${user.email}\nŞifre: ${user.password}\nFirma: ${user.company || '-'}\n\nGiriş: ${window.location.origin}`,
-          reply_to: 'emrullah.gunay@kobinerji.com'
+          from_email: 'emrullah.gunay@kobinerji.com',
+          message: `Giriş Bilgileriniz:\n\nE-posta: ${user.email}\nŞifre: ${user.password}\nFirma: ${user.company || '-'}\n\nGiriş: ${window.location.origin}`
         },
         '-rEVDm1IKnRaw6jCm'
       );
