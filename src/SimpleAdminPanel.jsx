@@ -119,16 +119,13 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
         {
           to_email: user.email,
           to_name: user.name,
-          from_name: 'Teklif Sistemi - Admin',
-          from_email: 'emrullah.gunay@kobinerji.com',
-          company: user.company || '-',
-          subject: 'Giriş Bilgileriniz',
-          message: `Merhaba ${user.name},\n\nGiriş bilgileriniz:\n\n` +
-                   `🔑 E-posta: ${user.email}\n` +
-                   `🔑 Şifre: ${user.password}\n\n` +
-                   `Giriş için: ${window.location.origin}\n\n` +
-                   `Güvenlik için lütfen giriş yaptıktan sonra şifrenizi değiştirin.\n\n` +
-                   `İyi günler dileriz.`
+          user_name: user.name,
+          user_email: user.email,
+          user_password: user.password,
+          user_company: user.company || 'Belirtilmemiş',
+          login_url: window.location.origin,
+          from_name: 'Teklif Sistemi',
+          reply_to: 'emrullah.gunay@kobinerji.com'
         },
         '-rEVDm1IKnRaw6jCm'
       );
@@ -186,17 +183,13 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
           {
             to_email: newUser.email,
             to_name: newUser.name,
-            from_name: 'Teklif Sistemi - Admin',
-            from_email: 'emrullah.gunay@kobinerji.com',
-            company: newUser.company || '-',
-            subject: 'Hesabınız Oluşturuldu - Giriş Bilgileriniz',
-            message: `Merhaba ${newUser.name},\n\nSistem yöneticisi tarafından hesabınız oluşturuldu.\n\n` +
-                     `🔑 GİRİŞ BİLGİLERİNİZ:\n` +
-                     `E-posta: ${newUser.email}\n` +
-                     `Şifre: ${password}\n\n` +
-                     `Giriş için: ${window.location.origin}\n\n` +
-                     `Güvenlik için lütfen giriş yaptıktan sonra şifrenizi değiştirin.\n\n` +
-                     `İyi günler dileriz.`
+            user_name: newUser.name,
+            user_email: newUser.email,
+            user_password: password,
+            user_company: newUser.company || 'Belirtilmemiş',
+            login_url: window.location.origin,
+            from_name: 'Teklif Sistemi',
+            reply_to: 'emrullah.gunay@kobinerji.com'
           },
           '-rEVDm1IKnRaw6jCm'
         );

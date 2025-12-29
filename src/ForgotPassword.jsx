@@ -44,9 +44,13 @@ const ForgotPassword = ({ onBackToLogin }) => {
         {
           to_email: email,
           to_name: user.name,
-          from_name: 'Teklif Sistemi',
-          subject: 'Şifre Sıfırlama',
-          message: `Merhaba ${user.name},\n\nYeni geçici şifreniz: ${tempPassword}\n\nGiriş yaptıktan sonra lütfen şifrenizi değiştirin.\n\nGiriş için: ${window.location.origin}`
+          user_name: user.name,
+          user_email: email,
+          user_password: tempPassword,
+          user_company: user.company || 'Belirtilmemiş',
+          login_url: window.location.origin,
+          from_name: 'Teklif Sistemi - Şifre Sıfırlama',
+          reply_to: 'emrullah.gunay@kobinerji.com'
         },
         '-rEVDm1IKnRaw6jCm'
       );
