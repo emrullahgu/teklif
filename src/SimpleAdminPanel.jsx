@@ -4,11 +4,13 @@ import { CheckCircle, XCircle, Clock, Trash2, Mail, User, Building, RefreshCw } 
 const SimpleAdminPanel = () => {
   const [users, setUsers] = useState([]);
   const [filter, setFilter] = useState('pending');
+  const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Admin şifresi - gerçek projelerde bu daha güvenli olmalı
-  const ADMIN_PASSWORD = 'admin123'; // İstediğiniz şifreyi buraya yazın
+  // Admin bilgileri
+  const ADMIN_EMAIL = 'emrullah.gunay@kobinerji.com';
+  const ADMIN_PASSWORD = 'Eg8502Eg.';
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -73,10 +75,10 @@ const SimpleAdminPanel = () => {
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
-    if (adminPassword === ADMIN_PASSWORD) {
+    if (adminEmail === ADMIN_EMAIL && adminPassword === ADMIN_PASSWORD) {
       setIsAuthenticated(true);
     } else {
-      alert('Hatalı şifre!');
+      alert('Hatalı e-posta veya şifre!');
     }
   };
 
@@ -88,7 +90,20 @@ const SimpleAdminPanel = () => {
           <form onSubmit={handleAdminLogin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Admin Şifresi
+                E-posta
+              </label>
+              <input
+                type="email"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="admin@example.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Şifre
               </label>
               <input
                 type="password"
@@ -106,9 +121,6 @@ const SimpleAdminPanel = () => {
               Giriş Yap
             </button>
           </form>
-          <p className="mt-4 text-sm text-gray-500 text-center">
-            Varsayılan şifre: admin123
-          </p>
         </div>
       </div>
     );
