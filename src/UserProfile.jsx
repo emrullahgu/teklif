@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from './SimpleAuth';
-import { User, Lock, Building2, Mail, Save, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { User, Lock, Building2, Mail, Save, X, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 
 const UserProfile = ({ onClose }) => {
-  const { currentUser, updateUser } = useAuth();
+  const { currentUser, updateUser, signOut } = useAuth();
   const [formData, setFormData] = useState({
     name: currentUser?.name || '',
     company: currentUser?.company || '',
@@ -14,6 +14,7 @@ const UserProfile = ({ onClose }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -88,6 +89,22 @@ const UserProfile = ({ onClose }) => {
       setError(error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    try {
+      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      const updatedUsers = users.filter(u => u.id !== currentUser.id);
+      localStorage.setItem('users', JSON.stringify(updatedUsers));
+      
+      // Kullanıcıyı çıkış yap
+      localStorage.removeItem('currentUser');
+      alert('Hesabınız başarıyla silindi!');
+      signOut();
+      onClose();
+    } catch (error) {
+      setError('Hesap silinirken bir hata oluştu!');
     }
   };
 
@@ -277,6 +294,53 @@ const UserProfile = ({ onClose }) => {
               </button>
             </div>
           </form>
+
+          {/* Hesap Silme Bölümü */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2 text-red-600">
+              Tehlikeli Bölge
+            </h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Hesabınızı silmek geri alınamaz bir işlemdir. Tüm verileriniz silinecektir.
+            </p>
+            
+            {!showDeleteConfirm ? (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 hover:bg-red-100 text-red-700 font-semibold rounded-lg transition duration-200"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Hesabımı Sil</span>
+              </button>
+            ) : (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-800 font-semibold mb-3">
+                  ⚠️ Hesabınızı silmek istediğinizden emin misiniz?
+                </p>
+                <p className="text-red-600 text-sm mb-4">
+                  Bu işlem geri alınamaz ve tüm verileriniz kalıcı olarak silinecektir.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Evet, Hesabımı Sil</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
