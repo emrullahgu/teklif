@@ -62,7 +62,7 @@ http://localhost:3000/bordro.html
 
 1. **"GENEL BAKIŞ"** sekmesine geçin
 2. Tüm personellerin özet tablosu görünür
-3. **"ELDEN ÖDENECEK"** sütunu nakit ödeme miktarını gösterir
+3. **"ÖDENECEK"** sütunu nakit ödeme miktarını gösterir
 
 ---
 

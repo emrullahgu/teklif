@@ -102,7 +102,7 @@ http://localhost:3000/bordro.html
 | **AVANS** | Verilen toplam avans |
 | **NET ELE GEÇEN** | Hakediş - Avans |
 | **RESMİ MAAŞ** | SGK üzerinden ödenen |
-| **ELDEN ÖDENECEK** | Net Ele Geçen - Resmi Maaş = **Nakit ödenecek tutar** |
+| **ÖDENECEK** | Net Ele Geçen - Resmi Maaş = **Nakit ödenecek tutar** |
 
 **İŞLEMLER:**
 - 📝 **Düzenle**: Personel bilgilerini güncelle
@@ -126,7 +126,7 @@ Brüt Hakediş =
 
 Net Ele Geçen = Brüt Hakediş - Avanslar
 
-ELDEN ÖDENECEK = Net Ele Geçen - Resmi Maaş
+ÖDENECEK = Net Ele Geçen - Resmi Maaş
 ```
 
 **Örnek:**

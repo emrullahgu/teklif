@@ -724,7 +724,7 @@ export default function BordroTakip() {
           'Brüt Hakediş': stats.grossTotal.toFixed(2),
           'Avanslar': stats.totalAdvances.toFixed(2),
           'Net Hakediş': stats.netPayable.toFixed(2),
-          'Elden Ödenecek': stats.remainingHandPay.toFixed(2)
+          'ÖDENECEK': stats.remainingHandPay.toFixed(2)
         };
       });
 
@@ -1401,7 +1401,7 @@ export default function BordroTakip() {
                                 <th className="p-4 border-b text-right text-red-600">AVANS</th>
                                 <th className="p-4 border-b text-right font-black">NET ELE GEÇEN</th>
                                 <th className="p-4 border-b text-right text-gray-500">RESMİ MAAŞ</th>
-                                <th className="p-4 border-b text-right text-red-600 bg-red-50">ELDEN ÖDENECEK</th>
+                                <th className="p-4 border-b text-right text-red-600 bg-red-50">ÖDENECEK</th>
                                 <th className="p-4 border-b text-center">İŞLEM</th>
                             </tr>
                         </thead>
@@ -1706,7 +1706,7 @@ export default function BordroTakip() {
                         <th className="p-2 border text-right">Gider</th>
                         <th className="p-2 border text-right">Prim</th>
                         <th className="p-2 border text-right">Net Hakediş</th>
-                        <th className="p-2 border text-right">Elden Ödenecek</th>
+                        <th className="p-2 border text-right">ÖDENECEK</th>
                       </tr>
                     </thead>
                     <tbody>
