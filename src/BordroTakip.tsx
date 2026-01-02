@@ -1330,9 +1330,8 @@ export default function BordroTakip() {
                                 <div className="flex justify-between font-bold text-green-700 pt-1 border-t-2"><span>BRÜT HAKEDİŞ:</span><span>{formatCurrency(currentStats.grossTotal)}</span></div>
                                 <div className="flex justify-between border-b pb-1 text-red-600"><span>Avanslar:</span><span>-{formatCurrency(currentStats.totalAdvances)}</span></div>
                                 <div className="flex justify-between font-black text-lg pt-2 bg-blue-50 p-2 rounded"><span>NET HAKEDİŞ:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
-                                <div className="bg-red-50 p-2 rounded border border-red-100 mt-2">
-                                    <div className="flex justify-between text-xs text-red-400"><span>Resmi Düşülen:</span><span>{formatCurrency(currentStats.officialPay)}</span></div>
-                                    <div className="flex justify-between font-bold text-red-600"><span>ELDEN:</span><span>{formatCurrency(currentStats.remainingHandPay)}</span></div>
+                                <div className="bg-green-50 p-2 rounded border border-green-200 mt-2">
+                                    <div className="flex justify-between font-bold text-green-700 text-lg"><span>ÖDENECEK:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
                                 </div>
                             </div>
                         </div>
