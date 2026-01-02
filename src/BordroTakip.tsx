@@ -132,9 +132,10 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
             if (log.type === 'Normal') {
                 totalWorkDays += 1;
             } else if (log.type === 'Pazar' || log.type === 'Resmi Tatil') {
-                totalWorkDays += 1;
+                // Pazar/Tatil ANORMAL gün - normal gün sayısına dahil DEĞİL
+                // Sadece 2x ücret olarak ekstra ödeme
                 totalSundayDays += 1;
-                totalSundayPay += dailyRate; 
+                totalSundayPay += dailyRate * 2; 
             }
             // İzinli ve Raporlu günler çalışılan güne SAYILMAZ
 
