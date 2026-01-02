@@ -171,6 +171,7 @@ export default function BordroTakip() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [currentDate, setCurrentDate] = useState(new Date(2025, 11, 1)); 
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [logo, setLogo] = useState<string | null>(null);
   
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
@@ -606,47 +607,66 @@ export default function BordroTakip() {
       
       const doc = new jsPDF();
       
-      // Header
+      // Logo (eğer varsa)
+      let startY = 20;
+      if (logo) {
+        try {
+          doc.addImage(logo, 'PNG', 15, 10, 30, 30);
+          startY = 45;
+        } catch (e) {
+          console.warn('Logo eklenemedi:', e);
+        }
+      }
+      
+      // Header - Türkçe karakter desteği için Unicode kullan
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(20);
       doc.setTextColor(30, 58, 138);
-      doc.text('KOBİNERJİ MÜHENDİSLİK', 105, 20, { align: 'center' });
+      const title = 'KOBINERJI MUHENDISLIK';
+      doc.text(title, 105, startY, { align: 'center' });
       
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(12);
       doc.setTextColor(100);
-      doc.text('PERSONEL BORDROSU', 105, 28, { align: 'center' });
+      doc.text('PERSONEL BORDROSU', 105, startY + 8, { align: 'center' });
       
       // Çizgi
       doc.setDrawColor(30, 58, 138);
       doc.setLineWidth(0.5);
-      doc.line(20, 32, 190, 32);
+      doc.line(20, startY + 12, 190, startY + 12);
       
       // Personel Bilgileri
       doc.setFontSize(10);
       doc.setTextColor(0);
-      doc.text(`Personel: ${employee.name}`, 20, 42);
-      doc.text(`Dönem: ${new Date(currentYear, currentMonth).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}`, 20, 48);
+      const employeeName = employee.name.replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/Ş/g, 'S').replace(/ş/g, 's')
+        .replace(/Ğ/g, 'G').replace(/ğ/g, 'g').replace(/Ü/g, 'U').replace(/ü/g, 'u')
+        .replace(/Ö/g, 'O').replace(/ö/g, 'o').replace(/Ç/g, 'C').replace(/ç/g, 'c');
+      doc.text(`Personel: ${employeeName}`, 20, startY + 22);
+      
+      const monthNames = ['Ocak', 'Subat', 'Mart', 'Nisan', 'Mayis', 'Haziran', 'Temmuz', 'Agustos', 'Eylul', 'Ekim', 'Kasim', 'Aralik'];
+      doc.text(`Donem: ${monthNames[currentMonth]} ${currentYear}`, 20, startY + 28);
       
       // Bordro Tablosu
       (doc as any).autoTable({
-        startY: 55,
-        head: [['AÇIKLAMA', 'TUTAR']],
+        startY: startY + 35,
+        head: [['ACIKLAMA', 'TUTAR']],
         body: [
-          ['Anlaşılan Net Maaş', `${stats.dailyRate.toFixed(2)} TL x ${stats.totalWorkDays} gün = ${(stats.dailyRate * stats.totalWorkDays).toFixed(2)} TL`],
-          ['Mesai Ücreti', `${stats.hourlyRate.toFixed(2)} TL x ${stats.totalOvertimeHours} saat = ${stats.overtimePay.toFixed(2)} TL`],
-          ['Pazar/Tatil Farkı', `${stats.totalSundayPay.toFixed(2)} TL`],
-          ['Ekstra Ödemeler (Prim/Gider)', `${stats.totalExtras.toFixed(2)} TL`],
+          ['Anlasilan Net Maas', `${stats.dailyRate.toFixed(2)} TL x ${stats.totalWorkDays} gun = ${(stats.dailyRate * stats.totalWorkDays).toFixed(2)} TL`],
+          ['Mesai Ucreti', `${stats.hourlyRate.toFixed(2)} TL x ${stats.totalOvertimeHours} saat = ${stats.overtimePay.toFixed(2)} TL`],
+          ['Pazar/Tatil Farki', `${stats.totalSundayPay.toFixed(2)} TL`],
+          ['Ekstra Odemeler (Prim/Gider)', `${stats.totalExtras.toFixed(2)} TL`],
           ['', ''],
-          ['BRÜT HAKEDİŞ', `${stats.grossTotal.toFixed(2)} TL`],
+          ['BRUT HAKEDIS', `${stats.grossTotal.toFixed(2)} TL`],
           ['Kesinti (Avanslar)', `- ${stats.totalAdvances.toFixed(2)} TL`],
           ['', ''],
-          ['NET HAKEDİŞ', `${stats.netPayable.toFixed(2)} TL`],
-          ['Resmi Maaş (SGK Bordrosu)', `${stats.officialPay.toFixed(2)} TL`],
+          ['NET HAKEDIS', `${stats.netPayable.toFixed(2)} TL`],
+          ['Resmi Maas (SGK Bordrosu)', `${stats.officialPay.toFixed(2)} TL`],
           ['', ''],
-          ['ELDEN ÖDENECEK', `${stats.remainingHandPay.toFixed(2)} TL`]
+          ['ELDEN ODENECEK', `${stats.remainingHandPay.toFixed(2)} TL`]
         ],
         theme: 'grid',
-        headStyles: { fillColor: [30, 58, 138], textColor: 255 },
-        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 3, font: 'helvetica' },
         columnStyles: {
           0: { fontStyle: 'bold', cellWidth: 100 },
           1: { halign: 'right', cellWidth: 70 }
@@ -664,27 +684,36 @@ export default function BordroTakip() {
       if (empData && Object.keys(empData.logs).length > 0) {
         const finalY = (doc as any).lastAutoTable.finalY + 10;
         
+        doc.setFont('helvetica', 'bold');
         doc.setFontSize(11);
         doc.setTextColor(30, 58, 138);
         doc.text('PUANTAJ DETAYLARI', 20, finalY);
         
-        const puantajData = Object.values(empData.logs).map((log: any) => [
-          log.day,
-          getDayName(log.day, currentMonth, currentYear),
-          log.type,
-          log.startTime || '-',
-          log.endTime || '-',
-          log.overtimeHours || 0,
-          log.description || ''
-        ]);
+        const dayNames = ['Pazar', 'Pazartesi', 'Sali', 'Carsamba', 'Persembe', 'Cuma', 'Cumartesi'];
+        const puantajData = Object.values(empData.logs).map((log: any) => {
+          const date = new Date(currentYear, currentMonth, log.day);
+          const dayName = dayNames[date.getDay()];
+          const typeClean = log.type.replace(/ş/g, 's').replace(/İ/g, 'I').replace(/ı/g, 'i');
+          const descClean = (log.description || '').replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g');
+          
+          return [
+            log.day,
+            dayName,
+            typeClean,
+            log.startTime || '-',
+            log.endTime || '-',
+            log.overtimeHours || 0,
+            descClean
+          ];
+        });
 
         (doc as any).autoTable({
           startY: finalY + 5,
-          head: [['Gün', 'Gün Adı', 'Durum', 'Giriş', 'Çıkış', 'Mesai', 'Açıklama']],
+          head: [['Gun', 'Gun Adi', 'Durum', 'Giris', 'Cikis', 'Mesai', 'Aciklama']],
           body: puantajData,
           theme: 'striped',
-          headStyles: { fillColor: [30, 58, 138], fontSize: 8 },
-          styles: { fontSize: 7, cellPadding: 2 },
+          headStyles: { fillColor: [30, 58, 138], fontSize: 8, fontStyle: 'bold' },
+          styles: { fontSize: 7, cellPadding: 2, font: 'helvetica' },
           columnStyles: {
             0: { cellWidth: 15, halign: 'center' },
             1: { cellWidth: 25 },
@@ -701,14 +730,16 @@ export default function BordroTakip() {
       const pageCount = (doc as any).internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
+        doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(150);
-        doc.text('KOBİNERJİ MÜHENDİSLİK', 105, 285, { align: 'center' });
-        doc.text('Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 Kemalpaşa/İzmir', 105, 290, { align: 'center' });
+        doc.text('KOBINERJI MUHENDISLIK', 105, 285, { align: 'center' });
+        doc.text('Kemalpasa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 Kemalpasa/Izmir', 105, 290, { align: 'center' });
         doc.text(`Sayfa ${i} / ${pageCount}`, 190, 290, { align: 'right' });
       }
 
-      doc.save(`Bordro_${employee.name}_${currentYear}_${currentMonth + 1}.pdf`);
+      const cleanName = employee.name.replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
+      doc.save(`Bordro_${cleanName}_${currentYear}_${currentMonth + 1}.pdf`);
       alert('✅ PDF başarıyla indirildi!');
     } catch (error) {
       console.error('PDF export hatası:', error);
@@ -721,35 +752,51 @@ export default function BordroTakip() {
     try {
       const doc = new jsPDF();
       
+      // Logo
+      let startY = 20;
+      if (logo) {
+        try {
+          doc.addImage(logo, 'PNG', 15, 10, 30, 30);
+          startY = 45;
+        } catch (e) {
+          console.warn('Logo eklenemedi:', e);
+        }
+      }
+      
       // Header
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(20);
       doc.setTextColor(30, 58, 138);
-      doc.text('KOBİNERJİ MÜHENDİSLİK', 105, 20, { align: 'center' });
+      doc.text('KOBINERJI MUHENDISLIK', 105, startY, { align: 'center' });
       
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(12);
       doc.setTextColor(100);
-      doc.text('TOPLU BORDRO İCMALİ', 105, 28, { align: 'center' });
-      doc.text(new Date(currentYear, currentMonth).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }).toUpperCase(), 105, 35, { align: 'center' });
+      doc.text('TOPLU BORDRO ICMALI', 105, startY + 8, { align: 'center' });
+      
+      const monthNames = ['OCAK', 'SUBAT', 'MART', 'NISAN', 'MAYIS', 'HAZIRAN', 'TEMMUZ', 'AGUSTOS', 'EYLUL', 'EKIM', 'KASIM', 'ARALIK'];
+      doc.text(`${monthNames[currentMonth]} ${currentYear}`, 105, startY + 15, { align: 'center' });
       
       // Çizgi
       doc.setDrawColor(30, 58, 138);
       doc.setLineWidth(0.5);
-      doc.line(20, 38, 190, 38);
+      doc.line(20, startY + 18, 190, startY + 18);
       
       // Özet Tablo Verisi
       const tableData = employees.map(emp => {
         const empData = appData[emp.id]?.[monthKey];
         const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+        const cleanName = emp.name.replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
         
         return [
-          emp.name,
+          cleanName,
           stats.totalWorkDays,
           stats.totalOvertimeHours,
-          `${stats.grossTotal.toFixed(0)} ₺`,
-          `${stats.totalAdvances.toFixed(0)} ₺`,
-          `${stats.netPayable.toFixed(0)} ₺`,
-          `${stats.officialPay.toFixed(0)} ₺`,
-          `${stats.remainingHandPay.toFixed(0)} ₺`
+          `${stats.grossTotal.toFixed(0)} TL`,
+          `${stats.totalAdvances.toFixed(0)} TL`,
+          `${stats.netPayable.toFixed(0)} TL`,
+          `${stats.officialPay.toFixed(0)} TL`,
+          `${stats.remainingHandPay.toFixed(0)} TL`
         ];
       });
 
@@ -770,20 +817,20 @@ export default function BordroTakip() {
         'TOPLAM',
         '',
         '',
-        `${totals.gross.toFixed(0)} ₺`,
-        `${totals.advances.toFixed(0)} ₺`,
-        `${totals.net.toFixed(0)} ₺`,
-        `${totals.official.toFixed(0)} ₺`,
-        `${totals.hand.toFixed(0)} ₺`
+        `${totals.gross.toFixed(0)} TL`,
+        `${totals.advances.toFixed(0)} TL`,
+        `${totals.net.toFixed(0)} TL`,
+        `${totals.official.toFixed(0)} TL`,
+        `${totals.hand.toFixed(0)} TL`
       ]);
 
       (doc as any).autoTable({
-        startY: 45,
-        head: [['Personel', 'Gün', 'Mesai', 'Brüt', 'Avans', 'Net', 'Resmi', 'Elden']],
+        startY: startY + 25,
+        head: [['Personel', 'Gun', 'Mesai', 'Brut', 'Avans', 'Net', 'Resmi', 'Elden']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: [30, 58, 138], textColor: 255, fontSize: 8 },
-        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [30, 58, 138], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+        styles: { fontSize: 8, cellPadding: 2, font: 'helvetica' },
         columnStyles: {
           0: { cellWidth: 40 },
           1: { cellWidth: 15, halign: 'center' },
@@ -805,10 +852,11 @@ export default function BordroTakip() {
 
       // Footer
       const finalY = (doc as any).lastAutoTable.finalY + 10;
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(150);
-      doc.text('KOBİNERJİ MÜHENDİSLİK', 105, finalY + 5, { align: 'center' });
-      doc.text('Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 Kemalpaşa/İzmir', 105, finalY + 10, { align: 'center' });
+      doc.text('KOBINERJI MUHENDISLIK', 105, finalY + 5, { align: 'center' });
+      doc.text('Kemalpasa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 Kemalpasa/Izmir', 105, finalY + 10, { align: 'center' });
       doc.text('Tel: +90 535 714 52 88 | www.kobinerji.com', 105, finalY + 15, { align: 'center' });
 
       doc.save(`Bordro_Toplu_${currentYear}_${currentMonth + 1}.pdf`);
@@ -926,6 +974,33 @@ export default function BordroTakip() {
           </div>
 
           <div className="flex items-center space-x-2">
+            <div className="relative">
+              <input 
+                type="file" 
+                accept="image/*"
+                id="logo-upload"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      setLogo(event.target?.result as string);
+                      alert('✅ Logo yüklendi! PDF\'lerde görünecek.');
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+              <label 
+                htmlFor="logo-upload"
+                className="bg-blue-800 hover:bg-blue-700 p-2 rounded cursor-pointer inline-flex items-center"
+                title="Logo Yükle (PDF için)"
+              >
+                <Upload className="w-4 h-4"/>
+              </label>
+            </div>
+            
             <button 
               onClick={() => loadEmployees()}
               className="bg-blue-800 hover:bg-blue-700 p-2 rounded"
@@ -972,14 +1047,8 @@ export default function BordroTakip() {
                             <FileDown className="w-4 h-4 mr-2"/> TOPLU PDF
                         </button>
                         <button 
-                            onClick={exportToExcel}
-                            className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700 flex items-center shadow"
-                        >
-                            <Download className="w-4 h-4 mr-2"/> EXCEL
-                        </button>
-                        <button 
                             onClick={openAddModal}
-                            className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 flex items-center shadow"
+                            className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700 flex items-center shadow"
                         >
                             <UserPlus className="w-4 h-4 mr-2"/> YENİ PERSONEL
                         </button>
@@ -1045,7 +1114,6 @@ export default function BordroTakip() {
                                             >
                                                 <ArrowRightCircle className="w-4 h-4"/>
                                             </button>
-                                        </td>
                                         </td>
                                     </tr>
                                 );
