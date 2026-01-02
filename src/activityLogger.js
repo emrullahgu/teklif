@@ -42,7 +42,6 @@ export const logActivity = async (actionType, actionDescription, module = 'syste
         console.error('Log kaydetme hatası:', error);
       }
     }
-    }
   } catch (error) {
     console.error('Log kaydetme hatası:', error);
   }

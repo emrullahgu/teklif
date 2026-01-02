@@ -168,7 +168,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     const grossTotal = baseSalaryCalculated + totalSundayPay + overtimePay + totalExtras;
     const netPayable = grossTotal - totalAdvances;
     
-    const remainingHandPay = netPayable - employee.officialSalary;
+    // ELDEN ÖDENECEK = NET ELE GEÇEN (officialSalary sadece gösterim için)
+    const remainingHandPay = netPayable;
 
     return {
         dailyRate,
@@ -373,6 +374,8 @@ export default function BordroTakip() {
           
           if (error.code === '42P01') {
             alert('⚠️ VERİTABANI HATASI\n\nbordro_employees tablosu bulunamadı!\n\nÇözüm: BORDRO-SUPABASE-KURULUM.md dosyasını okuyun.');
+          } else if (error.code === 'PGRST204' && error.message?.includes('tc_no')) {
+            alert('⚠️ KOLON EKSİK HATASI\n\ntc_no kolonu bordro_employees tablosunda bulunamadı!\n\nÇözüm (Supabase SQL Editor):\nALTER TABLE bordro_employees ADD COLUMN IF NOT EXISTS tc_no TEXT;\n\nDetaylı bilgi: BORDRO-SUPABASE-KURULUM.md');
           } else {
             alert('❌ Personel eklenemedi!\n\nHata: ' + error.message);
           }
@@ -618,6 +621,12 @@ export default function BordroTakip() {
           [monthKey]: { month: currentMonth, year: currentYear, logs: {}, expenses: [] }
         }
       }));
+      
+      // Otomatik olarak tüm günleri Normal/08:00-18:00 ile doldur
+      setTimeout(() => {
+        fillMonthDefaults();
+      }, 300);
+    }
     }
   }, [selectedEmployeeId, monthKey, employees]);
 
@@ -718,12 +727,13 @@ export default function BordroTakip() {
   };
 
   const fillMonthDefaults = () => {
-    if(window.confirm("Tüm boş günleri standart mesai saatleri ile doldurmak istiyor musunuz?")) {
-        for (let i = 1; i <= daysInMonth; i++) {
-            if (!currentData.logs[i]) {
-                 handleLogChange(i, 'type', 'Normal'); 
-            }
-        }
+    // Otomatik olarak TÜM günleri Normal/08:00-18:00 ile doldur
+    for (let i = 1; i <= daysInMonth; i++) {
+      if (!currentData.logs[i] || !currentData.logs[i].type) {
+        handleLogChange(i, 'type', 'Normal');
+        handleLogChange(i, 'startTime', '08:00');
+        handleLogChange(i, 'endTime', '18:00');
+      }
     }
   };
 
@@ -1012,18 +1022,20 @@ export default function BordroTakip() {
         const empData = appData[emp.id]?.[monthKey];
         const stats = calculateEmployeeStats(emp, empData, daysInMonth);
         return {
+          workDays: acc.workDays + stats.totalWorkDays,
+          overtime: acc.overtime + stats.totalOvertimeHours,
           gross: acc.gross + stats.grossTotal,
           advances: acc.advances + stats.totalAdvances,
           net: acc.net + stats.netPayable,
           official: acc.official + stats.officialPay,
           hand: acc.hand + stats.remainingHandPay
         };
-      }, { gross: 0, advances: 0, net: 0, official: 0, hand: 0 });
+      }, { workDays: 0, overtime: 0, gross: 0, advances: 0, net: 0, official: 0, hand: 0 });
 
       tableData.push([
         'TOPLAM',
-        '',
-        '',
+        totals.workDays.toString(),
+        totals.overtime > 0 ? `${totals.overtime} s` : '',
         `${totals.gross.toFixed(0)} TL`,
         `${totals.advances.toFixed(0)} TL`,
         `${totals.net.toFixed(0)} TL`,
@@ -1516,10 +1528,61 @@ export default function BordroTakip() {
                             })}
                             {employees.length === 0 && (
                                 <tr>
-                                    <td colSpan={10} className="p-8 text-center text-gray-400 italic">Henüz personel eklenmemiş. "Yeni Personel" butonuna tıklayarak başlayın.</td>
+                                    <td colSpan={11} className="p-8 text-center text-gray-400 italic">Henüz personel eklenmemiş. "Yeni Personel" butonuna tıklayarak başlayın.</td>
                                 </tr>
                             )}
                         </tbody>
+                        {employees.length > 0 && (
+                            <tfoot className="bg-gradient-to-r from-blue-900 to-blue-700 text-white">
+                                <tr className="font-bold text-base">
+                                    <td className="p-4" colSpan={2}>TOPLAM</td>
+                                    <td className="p-4 text-right">{formatCurrency(employees.reduce((sum, emp) => sum + emp.agreedSalary, 0))}</td>
+                                    <td className="p-4 text-center">
+                                        {employees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            return sum + stats.totalWorkDays;
+                                        }, 0)}
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        {employees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            return sum + stats.totalOvertimeHours;
+                                        }, 0)} s
+                                    </td>
+                                    <td className="p-4 text-right">
+                                        {formatCurrency(employees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            return sum + stats.grossTotal;
+                                        }, 0))}
+                                    </td>
+                                    <td className="p-4 text-right">
+                                        {formatCurrency(employees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            return sum + stats.totalAdvances;
+                                        }, 0))}
+                                    </td>
+                                    <td className="p-4 text-right text-xl">
+                                        {formatCurrency(employees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            return sum + stats.netPayable;
+                                        }, 0))}
+                                    </td>
+                                    <td className="p-4 text-right text-sm opacity-75">
+                                        {formatCurrency(employees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            return sum + stats.officialPay;
+                                        }, 0))}
+                                    </td>
+                                    <td className="p-4 text-right text-xl bg-red-800 border-l-4 border-yellow-300">
+                                        {formatCurrency(employees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            return sum + stats.remainingHandPay;
+                                        }, 0))}
+                                    </td>
+                                    <td className="p-4"></td>
+                                </tr>
+                            </tfoot>
+                        )}
                     </table>
                 </div>
             </div>
