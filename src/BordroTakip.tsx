@@ -176,8 +176,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     const remainingHandPay = netPayable;
 
     return {
-        dailyRate,
-        hourlyRate,
+        dailyRate: employee.agreedSalary / 30,  // Mesai hesabı için gösterim (sabit 30 güne göre)
+        hourlyRate: hourlyRateForOvertime,  // Mesai saatlik ücreti (sabit, 375 TL)
         totalWorkDays,
         totalSundayDays,
         totalOvertimeHours,
@@ -796,8 +796,8 @@ export default function BordroTakip() {
           'TC No': emp.tc_no || '',
           'Anlaşılan Maaş': emp.agreedSalary,
           'Resmi Maaş': emp.officialSalary,
-          'Günlük Ücret': stats.dailyRate.toFixed(2),
-          'Saatlik Ücret': stats.hourlyRate.toFixed(2),
+          'Günlük Mesai Ücret (30 güne göre)': stats.dailyRate.toFixed(2),
+          'Saatlik Mesai Ücret (x1.5)': (stats.hourlyRate * 1.5).toFixed(2),
           'Çalışılan Gün': stats.totalWorkDays,
           'Mesai Saati': stats.totalOvertimeHours,
           'Mesai Ücreti': stats.overtimePay.toFixed(2),
@@ -1637,8 +1637,8 @@ export default function BordroTakip() {
                         
                         {selectedEmployee.id !== '0' && (
                           <div className="space-y-2 text-sm border-t pt-2">
-                               <div className="flex justify-between"><span className="text-gray-500">Günlük Ücret:</span><span className="font-bold">{formatCurrency(currentStats.dailyRate)}</span></div>
-                               <div className="flex justify-between"><span className="text-gray-500">Saatlik Ücret:</span><span className="text-blue-600 font-mono">{formatCurrency(currentStats.hourlyRate)}</span></div>
+                               <div className="flex justify-between"><span className="text-gray-500">Günlük Mesai Ücret:</span><span className="font-bold">{formatCurrency(currentStats.dailyRate)}</span></div>
+                               <div className="flex justify-between"><span className="text-gray-500">Saatlik Mesai (x1.5):</span><span className="text-blue-600 font-mono">{formatCurrency(currentStats.hourlyRate * 1.5)}</span></div>
                           </div>
                         )}
                     </div>
