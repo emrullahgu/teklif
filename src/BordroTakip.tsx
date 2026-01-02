@@ -1320,9 +1320,16 @@ export default function BordroTakip() {
                             <div className="p-4 space-y-2 text-sm">
                                 <div className="flex justify-between border-b pb-1"><span>Çalışma:</span><span className="font-semibold">{formatCurrency(currentStats.totalWorkDays * currentStats.dailyRate)}</span></div>
                                 <div className="flex justify-between border-b pb-1 text-blue-600"><span>Mesai:</span><span className="font-semibold">{formatCurrency(currentStats.overtimePay)}</span></div>
-                                <div className="flex justify-between border-b pb-1 text-orange-600"><span>Pazar Farkı:</span><span className="font-semibold">{formatCurrency(currentStats.totalSundayPay)}</span></div>
-                                <div className="flex justify-between border-b pb-1 text-red-600"><span>Avans:</span><span>-{formatCurrency(currentStats.totalAdvances)}</span></div>
-                                <div className="flex justify-between font-black text-lg pt-2"><span>TOPLAM:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
+                                <div className="flex justify-between border-b pb-1 text-orange-600"><span>Pazar/Tatil Farkı:</span><span className="font-semibold">{formatCurrency(currentStats.totalSundayPay)}</span></div>
+                                {currentStats.totalBonuses > 0 && (
+                                    <div className="flex justify-between border-b pb-1 text-green-600"><span>Prim:</span><span className="font-semibold">+{formatCurrency(currentStats.totalBonuses)}</span></div>
+                                )}
+                                {currentStats.totalExpenses > 0 && (
+                                    <div className="flex justify-between border-b pb-1 text-purple-600"><span>Gider:</span><span className="font-semibold">+{formatCurrency(currentStats.totalExpenses)}</span></div>
+                                )}
+                                <div className="flex justify-between font-bold text-green-700 pt-1 border-t-2"><span>BRÜT HAKEDİŞ:</span><span>{formatCurrency(currentStats.grossTotal)}</span></div>
+                                <div className="flex justify-between border-b pb-1 text-red-600"><span>Avanslar:</span><span>-{formatCurrency(currentStats.totalAdvances)}</span></div>
+                                <div className="flex justify-between font-black text-lg pt-2 bg-blue-50 p-2 rounded"><span>NET HAKEDİŞ:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
                                 <div className="bg-red-50 p-2 rounded border border-red-100 mt-2">
                                     <div className="flex justify-between text-xs text-red-400"><span>Resmi Düşülen:</span><span>{formatCurrency(currentStats.officialPay)}</span></div>
                                     <div className="flex justify-between font-bold text-red-600"><span>ELDEN:</span><span>{formatCurrency(currentStats.remainingHandPay)}</span></div>
