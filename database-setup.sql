@@ -130,7 +130,50 @@ CREATE TRIGGER update_daily_logs_updated_at BEFORE UPDATE ON daily_logs
 CREATE TRIGGER update_expenses_updated_at BEFORE UPDATE ON expenses
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- 8. BAŞLANGIÇ VERİLERİ (Örnek - İsteğe bağlı)
+-- 8. AYLIK BORDRO ÖZETİ TABLOSU (Geçmiş bordroları kaydetmek için)
+CREATE TABLE IF NOT EXISTS monthly_payroll_summary (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  employee_name TEXT NOT NULL,
+  agreed_salary DECIMAL(10,2) NOT NULL,
+  official_salary DECIMAL(10,2) NOT NULL,
+  days_worked INTEGER DEFAULT 0,
+  sunday_days INTEGER DEFAULT 0,
+  overtime_hours DECIMAL(5,2) DEFAULT 0,
+  advances DECIMAL(10,2) DEFAULT 0,
+  expenses DECIMAL(10,2) DEFAULT 0,
+  bonuses DECIMAL(10,2) DEFAULT 0,
+  net_payable DECIMAL(10,2) NOT NULL,
+  hand_pay DECIMAL(10,2) NOT NULL,
+  closed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_by TEXT,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  UNIQUE(employee_id, month, year)
+);
+
+-- İndeks oluştur
+CREATE INDEX IF NOT EXISTS idx_monthly_payroll_date ON monthly_payroll_summary(year, month);
+CREATE INDEX IF NOT EXISTS idx_monthly_payroll_employee ON monthly_payroll_summary(employee_id);
+
+-- RLS aktifleştir
+ALTER TABLE monthly_payroll_summary ENABLE ROW LEVEL SECURITY;
+
+-- RLS politikaları
+CREATE POLICY "Users can view their own payroll summary" ON monthly_payroll_summary
+  FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
+
+CREATE POLICY "Users can insert their own payroll summary" ON monthly_payroll_summary
+  FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+
+CREATE POLICY "Users can update their own payroll summary" ON monthly_payroll_summary
+  FOR UPDATE USING (auth.uid() = user_id OR user_id IS NULL);
+
+CREATE POLICY "Users can delete their own payroll summary" ON monthly_payroll_summary
+  FOR DELETE USING (auth.uid() = user_id OR user_id IS NULL);
+
+-- 9. BAŞLANGIÇ VERİLERİ (Örnek - İsteğe bağlı)
 -- INSERT INTO employees (name, agreed_salary, official_salary) VALUES
 -- ('Azad Balkın', 45000, 17002),
 -- ('Harun Hoşaf', 45000, 17002),

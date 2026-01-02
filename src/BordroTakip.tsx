@@ -171,7 +171,10 @@ export default function BordroTakip() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [currentDate, setCurrentDate] = useState(new Date(2025, 11, 1)); 
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [logo, setLogo] = useState<string | null>(null);
+  const [logo, setLogo] = useState<string | null>(() => {
+    // Logo'yu localStorage'dan yükle
+    return localStorage.getItem('bordro_logo') || null;
+  });
   
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
@@ -180,6 +183,12 @@ export default function BordroTakip() {
   const [appData, setAppData] = useState<Record<string, Record<string, MonthlyData>>>({});
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  
+  // Geçmiş bordro görüntüleme
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyYear, setHistoryYear] = useState(currentDate.getFullYear());
+  const [historyMonth, setHistoryMonth] = useState(currentDate.getMonth());
+  const [historicalData, setHistoricalData] = useState<any[]>([]);
 
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
@@ -403,6 +412,76 @@ export default function BordroTakip() {
     }
   };
 
+  // --- AYLIK BORDRO KAYDET ---
+  const saveMonthlyPayroll = async () => {
+    if (!confirm(`${currentYear} yılı ${MONTHS[currentMonth]} ayı bordrosunu kaydetmek istediğinize emin misiniz? Bu işlem sonrasında geçmiş bordrolar bölümünden görüntüleyebileceksiniz.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Tüm personeller için bordroyu kaydet
+      for (const emp of employees) {
+        const empData = appData[emp.id]?.[monthKey];
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+
+        const payrollData = {
+          employee_id: emp.id,
+          month: currentMonth,
+          year: currentYear,
+          employee_name: emp.name,
+          agreed_salary: emp.agreedSalary,
+          official_salary: emp.officialSalary,
+          days_worked: stats.totalWorkDays,
+          sunday_days: stats.totalSundayDays,
+          overtime_hours: stats.totalOvertimeHours,
+          advances: stats.totalAdvances,
+          expenses: stats.totalExpenses,
+          bonuses: stats.totalBonuses,
+          net_payable: stats.netPayable,
+          hand_pay: stats.remainingHandPay
+        };
+
+        const { error } = await supabase
+          .from('monthly_payroll_summary')
+          .upsert(payrollData, { onConflict: 'employee_id,month,year' });
+
+        if (error) throw error;
+      }
+
+      alert('✅ Aylık bordro başarıyla kaydedildi! Geçmiş Bordrolar bölümünden görüntüleyebilirsiniz.');
+    } catch (error) {
+      console.error('Bordro kaydetme hatası:', error);
+      alert('❌ Bordro kaydedilirken bir hata oluştu!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- GEÇMİŞ BORDROLARI YÜKLE ---
+  const loadHistoricalPayroll = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('monthly_payroll_summary')
+        .select('*')
+        .eq('month', historyMonth)
+        .eq('year', historyYear)
+        .order('employee_name');
+
+      if (error) throw error;
+      
+      setHistoricalData(data || []);
+      setShowHistoryModal(true);
+    } catch (error) {
+      console.error('Geçmiş bordro yükleme hatası:', error);
+      alert('❌ Geçmiş bordro yüklenirken bir hata oluştu!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- İLK YÜKLEME ---
   useEffect(() => {
     loadEmployees();
@@ -611,10 +690,15 @@ export default function BordroTakip() {
       let startY = 20;
       if (logo) {
         try {
-          doc.addImage(logo, 'PNG', 15, 10, 30, 30);
-          startY = 45;
+          // Otomatik format tespiti
+          const format = logo.startsWith('data:image/png') ? 'PNG' : 
+                        logo.startsWith('data:image/jpeg') || logo.startsWith('data:image/jpg') ? 'JPEG' : 'PNG';
+          
+          doc.addImage(logo, format, 15, 10, 35, 35);
+          startY = 50;
+          console.log('✅ Logo PDF\'e eklendi!');
         } catch (e) {
-          console.warn('Logo eklenemedi:', e);
+          console.error('Logo eklenemedi:', e);
         }
       }
       
@@ -756,10 +840,14 @@ export default function BordroTakip() {
       let startY = 20;
       if (logo) {
         try {
-          doc.addImage(logo, 'PNG', 15, 10, 30, 30);
-          startY = 45;
+          const format = logo.startsWith('data:image/png') ? 'PNG' : 
+                        logo.startsWith('data:image/jpeg') || logo.startsWith('data:image/jpg') ? 'JPEG' : 'PNG';
+          
+          doc.addImage(logo, format, 15, 10, 35, 35);
+          startY = 50;
+          console.log('✅ Logo toplu PDF\'e eklendi!');
         } catch (e) {
-          console.warn('Logo eklenemedi:', e);
+          console.error('Logo eklenemedi:', e);
         }
       }
       
@@ -974,6 +1062,27 @@ export default function BordroTakip() {
           </div>
 
           <div className="flex items-center space-x-2">
+            {/* Geçmiş Bordrolar */}
+            <button
+              onClick={() => setShowHistoryModal(true)}
+              className="bg-purple-600 hover:bg-purple-700 px-3 py-2 rounded text-sm font-semibold flex items-center space-x-1"
+              title="Geçmiş Bordroları Görüntüle"
+            >
+              <FileText className="w-4 h-4"/>
+              <span>Geçmiş Bordrolar</span>
+            </button>
+
+            {/* Aylık Bordroyu Kaydet */}
+            <button
+              onClick={saveMonthlyPayroll}
+              disabled={loading}
+              className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded text-sm font-semibold flex items-center space-x-1 disabled:opacity-50"
+              title="Bu ayın bordrosunu kaydet"
+            >
+              <Save className="w-4 h-4"/>
+              <span>Ayı Kapat & Kaydet</span>
+            </button>
+            
             <div className="relative">
               <input 
                 type="file" 
@@ -985,7 +1094,10 @@ export default function BordroTakip() {
                   if (file) {
                     const reader = new FileReader();
                     reader.onload = (event) => {
-                      setLogo(event.target?.result as string);
+                      const logoData = event.target?.result as string;
+                      setLogo(logoData);
+                      // localStorage'a kaydet
+                      localStorage.setItem('bordro_logo', logoData);
                       alert('✅ Logo yüklendi! PDF\'lerde görünecek.');
                     };
                     reader.readAsDataURL(file);
@@ -999,6 +1111,21 @@ export default function BordroTakip() {
               >
                 <Upload className="w-4 h-4"/>
               </label>
+              {logo && (
+                <button
+                  onClick={() => {
+                    if (confirm('Logo\'yu silmek istediğinize emin misiniz?')) {
+                      setLogo(null);
+                      localStorage.removeItem('bordro_logo');
+                      alert('✅ Logo silindi.');
+                    }
+                  }}
+                  className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  title="Logo Sil"
+                >
+                  <X className="w-3 h-3"/>
+                </button>
+              )}
             </div>
             
             <button 
@@ -1289,6 +1416,119 @@ export default function BordroTakip() {
             </div>
         )}
       </main>
+
+      {/* GEÇMİŞ BORDROLAR MODALI */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <div className="bg-purple-600 text-white p-4 flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <FileText className="w-6 h-6"/>
+                <h2 className="text-xl font-bold">Geçmiş Bordrolar</h2>
+              </div>
+              <button onClick={() => setShowHistoryModal(false)} className="hover:bg-purple-700 p-2 rounded">
+                <X className="w-5 h-5"/>
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Tarih Seçici */}
+              <div className="flex items-center space-x-4 mb-6 bg-gray-100 p-4 rounded-lg">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Yıl</label>
+                  <select 
+                    value={historyYear} 
+                    onChange={(e) => setHistoryYear(parseInt(e.target.value))}
+                    className="p-2 border rounded"
+                  >
+                    {Array.from({length: 10}, (_, i) => new Date().getFullYear() - i).map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Ay</label>
+                  <select 
+                    value={historyMonth} 
+                    onChange={(e) => setHistoryMonth(parseInt(e.target.value))}
+                    className="p-2 border rounded"
+                  >
+                    {MONTHS.map((month, idx) => (
+                      <option key={idx} value={idx}>{month}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={loadHistoricalPayroll}
+                  disabled={loading}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-semibold mt-6 disabled:opacity-50"
+                >
+                  {loading ? 'Yükleniyor...' : 'Bordroyu Göster'}
+                </button>
+              </div>
+
+              {/* Geçmiş Bordro Tablosu */}
+              {historicalData.length > 0 ? (
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                  <table className="w-full border-collapse text-sm">
+                    <thead className="bg-purple-600 text-white sticky top-0">
+                      <tr>
+                        <th className="p-2 border text-left">Personel</th>
+                        <th className="p-2 border text-right">Anlaşılan Maaş</th>
+                        <th className="p-2 border text-right">Resmi Maaş</th>
+                        <th className="p-2 border text-center">Çalışılan Gün</th>
+                        <th className="p-2 border text-center">Pazar Günü</th>
+                        <th className="p-2 border text-center">Mesai Saat</th>
+                        <th className="p-2 border text-right">Avans</th>
+                        <th className="p-2 border text-right">Gider</th>
+                        <th className="p-2 border text-right">Prim</th>
+                        <th className="p-2 border text-right">Net Hakediş</th>
+                        <th className="p-2 border text-right">Elden Ödenecek</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historicalData.map((record, idx) => (
+                        <tr key={record.id} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                          <td className="p-2 border font-semibold">{record.employee_name}</td>
+                          <td className="p-2 border text-right">{parseFloat(record.agreed_salary).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right">{parseFloat(record.official_salary).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-center font-semibold">{record.days_worked}</td>
+                          <td className="p-2 border text-center">{record.sunday_days}</td>
+                          <td className="p-2 border text-center">{parseFloat(record.overtime_hours).toFixed(1)}</td>
+                          <td className="p-2 border text-right text-red-600">{parseFloat(record.advances).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right text-orange-600">{parseFloat(record.expenses).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right text-green-600">{parseFloat(record.bonuses).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right font-bold text-blue-700">{parseFloat(record.net_payable).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right font-bold text-green-700">{parseFloat(record.hand_pay).toLocaleString('tr-TR')} ₺</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-purple-100 font-bold">
+                      <tr>
+                        <td colSpan={3} className="p-2 border text-right">TOPLAM:</td>
+                        <td className="p-2 border text-center">{historicalData.reduce((sum, r) => sum + r.days_worked, 0)}</td>
+                        <td className="p-2 border text-center">{historicalData.reduce((sum, r) => sum + r.sunday_days, 0)}</td>
+                        <td className="p-2 border text-center">{historicalData.reduce((sum, r) => sum + parseFloat(r.overtime_hours), 0).toFixed(1)}</td>
+                        <td className="p-2 border text-right text-red-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.advances), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right text-orange-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.expenses), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right text-green-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.bonuses), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right font-bold text-blue-700">{historicalData.reduce((sum, r) => sum + parseFloat(r.net_payable), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right font-bold text-green-700">{historicalData.reduce((sum, r) => sum + parseFloat(r.hand_pay), 0).toLocaleString('tr-TR')} ₺</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center text-gray-500 py-8">
+                  <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300"/>
+                  <p className="text-lg">Seçilen tarihte kayıtlı bordro bulunamadı.</p>
+                  <p className="text-sm mt-2">Bordro kaydetmek için "Ayı Kapat & Kaydet" butonunu kullanın.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
