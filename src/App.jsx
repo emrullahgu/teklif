@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star } from 'lucide-react';
+﻿import React, { useState, useMemo, useRef } from 'react';
+import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote } from 'lucide-react';
+import BordroTakip from './BordroTakip.tsx';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import jsPDF from 'jspdf';
@@ -167,7 +168,7 @@ const PERIODIC_PRICES = {
 
 const App = () => {
   // --- State Definitions ---
-  const [activeTab, setActiveTab] = useState('manual');
+  const [activeTab, setActiveTab] = useState('manual'); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro'
   const [selectedCompany, setSelectedCompany] = useState(null);
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -3014,6 +3015,13 @@ KURALLAR:
             GES Teklifi
           </button>
           <button 
+            onClick={() => setActiveTab('bordro')}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'bordro' ? 'bg-white shadow text-teal-700' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            <Banknote className="w-4 h-4 mr-2"/>
+            Bordro Takip
+          </button>
+          <button 
             onClick={() => setActiveTab('saved')}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'saved' ? 'bg-white shadow text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
@@ -4144,6 +4152,13 @@ KURALLAR:
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Bordro Takip Tab */}
+        {activeTab === 'bordro' && (
+          <div className="max-w-full mx-auto">
+            <BordroTakip />
           </div>
         )}
 
