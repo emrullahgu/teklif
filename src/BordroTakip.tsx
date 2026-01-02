@@ -59,6 +59,7 @@ interface Expense {
 interface Employee {
   id: string;
   name: string;
+  tc_no?: string;
   agreedSalary: number;
   officialSalary: number;
 }
@@ -95,7 +96,7 @@ const isWeekend = (day: number, month: number, year: number) => {
   return { isSaturday: dayIndex === 6, isSunday: dayIndex === 0 };
 };
 
-// --- HESAPLAMA MOTORU ---
+// --- HESAPLAMA MOTORU (İŞ KANUNU'NA UYGUN) ---
 const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefined, daysInMonth: number) => {
     let totalWorkDays = 0;
     let totalSundayDays = 0;
@@ -108,11 +109,16 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     if (!data) {
         return {
             dailyRate: employee.agreedSalary / 30,
-            hourlyRate: (employee.agreedSalary / 225) * 1.5,
+            hourlyRateBase: employee.agreedSalary / 225,
+            hourlyRateOvertime: (employee.agreedSalary / 225) * 1.5,
             totalWorkDays: 0,
             totalSundayDays: 0,
             totalOvertimeHours: 0,
-            overtimePay: 0,
+            brutOvertimePay: 0,
+            sgkDeduction: 0,
+            taxDeduction: 0,
+            stampTaxDeduction: 0,
+            netOvertimePay: 0,
             totalSundayPay: 0,
             totalAdvances: 0,
             totalExpenses: 0,
@@ -125,9 +131,12 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
         };
     }
 
+    // İŞ KANUNU STANDARTLARI
     const dailyRate = employee.agreedSalary / 30;
-    const hourlyRate = (employee.agreedSalary / 225) * 1.5;
+    const hourlyRateBase = employee.agreedSalary / 225; // 225 saat standart aylık çalışma
+    const hourlyRateOvertime = hourlyRateBase * 1.5; // %50 zamlı fazla mesai
 
+    // PUANTAJ VERİLERİNİ TOPLA
     for (let i = 1; i <= daysInMonth; i++) {
         const log = data.logs[i];
         if (log) {
@@ -135,7 +144,7 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
                 totalWorkDays += 1;
             } else if (log.type === 'Pazar' || log.type === 'Resmi Tatil') {
                 // Pazar/Tatil ANORMAL gün - normal gün sayısına dahil DEĞİL
-                // Sadece 2x ücret olarak ekstra ödeme
+                // Sadece 2x ücret olarak ekstra ödeme (1 günlük fazladan yevmiye)
                 totalSundayDays += 1;
                 totalSundayPay += dailyRate * 2; 
             }
@@ -147,27 +156,53 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
         }
     }
 
+    // GİDER/AVANS/PRİM TOPLA
     data.expenses.forEach(exp => {
         if (exp.type === 'Avans') totalAdvances += exp.amount;
         else if (exp.type === 'Gider') totalExpenses += exp.amount;
         else if (exp.type === 'Prim') totalBonuses += exp.amount;
     });
 
+    // FAZLA MESAİ KESİNTİ HESAPLAMALARI (4857 Sayılı İş Kanunu)
+    const brutOvertimePay = totalOvertimeHours * hourlyRateOvertime;
+    
+    // 1) SGK Kesintisi (%14 İşçi Payı + %1 İşsizlik = %15)
+    const sgkDeduction = brutOvertimePay * 0.15;
+    
+    // 2) Gelir Vergisi Matrahı (Brüt - SGK)
+    const taxBase = brutOvertimePay - sgkDeduction;
+    
+    // 3) Gelir Vergisi (Basitleştirilmiş: Ortalama %20 dilimi varsayımı)
+    // Gerçek uygulamada çalışanın yıllık toplam gelirine göre %15, %20 veya %27 olabilir
+    const taxRate = employee.agreedSalary >= 50000 ? 0.27 : employee.agreedSalary >= 35000 ? 0.20 : 0.15;
+    const taxDeduction = taxBase * taxRate;
+    
+    // 4) Damga Vergisi (%0.759)
+    const stampTaxDeduction = brutOvertimePay * 0.00759;
+    
+    // NET MESAİ ÜCRETİ
+    const netOvertimePay = brutOvertimePay - sgkDeduction - taxDeduction - stampTaxDeduction;
+
+    // TOPLAM HESAPLAMALAR
     const totalExtras = totalExpenses + totalBonuses;
     const baseSalaryCalculated = (totalWorkDays * dailyRate);
-    const overtimePay = totalOvertimeHours * hourlyRate;
-    const grossTotal = baseSalaryCalculated + totalSundayPay + overtimePay + totalExtras;
+    const grossTotal = baseSalaryCalculated + totalSundayPay + netOvertimePay + totalExtras;
     const netPayable = grossTotal - totalAdvances;
     
     const remainingHandPay = netPayable - employee.officialSalary;
 
     return {
         dailyRate,
-        hourlyRate,
+        hourlyRateBase,
+        hourlyRateOvertime,
         totalWorkDays,
         totalSundayDays,
         totalOvertimeHours,
-        overtimePay,
+        brutOvertimePay,
+        sgkDeduction,
+        taxDeduction,
+        stampTaxDeduction,
+        netOvertimePay,
         totalSundayPay,
         totalAdvances,
         totalExpenses,
@@ -194,7 +229,7 @@ export default function BordroTakip() {
   
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
-  const [employeeForm, setEmployeeForm] = useState({ name: '', agreedSalary: '', officialSalary: '' });
+  const [employeeForm, setEmployeeForm] = useState({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
 
   const [appData, setAppData] = useState<Record<string, Record<string, MonthlyData>>>({});
   const [loading, setLoading] = useState(false);
@@ -228,6 +263,7 @@ export default function BordroTakip() {
       const formattedEmployees = data.map(emp => ({
         id: emp.id,
         name: emp.name,
+        tc_no: emp.tc_no,
         agreedSalary: parseFloat(emp.agreed_salary),
         officialSalary: parseFloat(emp.official_salary)
       }));
@@ -314,6 +350,7 @@ export default function BordroTakip() {
       
       const employeeData = {
         name: employeeForm.name,
+        tc_no: employeeForm.tcNo || null,
         agreed_salary: parseFloat(employeeForm.agreedSalary),
         official_salary: parseFloat(employeeForm.officialSalary),
         updated_at: new Date().toISOString()
@@ -344,12 +381,47 @@ export default function BordroTakip() {
 
       await loadEmployees();
       setShowEmployeeModal(false);
-      setEmployeeForm({ name: '', agreedSalary: '', officialSalary: '' });
+      setEmployeeForm({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
       setEditingEmployeeId(null);
       
     } catch (error) {
       console.error('Personel kayıt hatası:', error);
       alert('Personel kaydedilirken bir hata oluştu!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Personel Sil
+  const deleteEmployee = async (empId: string, empName: string) => {
+    if (!confirm(`${empName} isimli personeli silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz ve tüm puantaj kayıtları da silinecektir.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Personeli pasif yap (soft delete)
+      const { error } = await supabase
+        .from('bordro_employees')
+        .update({ active: false, updated_at: new Date().toISOString() })
+        .eq('id', empId);
+
+      if (error) throw error;
+      
+      await ActivityLogger.bordroEmployeeDelete(empName);
+      await loadEmployees();
+      
+      // Silinen personel seçiliyse, seçimi temizle
+      if (selectedEmployeeId === empId) {
+        setSelectedEmployeeId(employees.length > 1 ? employees[0].id : '');
+      }
+      
+      alert(`✅ ${empName} başarıyla silindi.`);
+      
+    } catch (error) {
+      console.error('Personel silme hatası:', error);
+      alert('Personel silinirken bir hata oluştu!');
     } finally {
       setLoading(false);
     }
@@ -583,7 +655,7 @@ export default function BordroTakip() {
     });
   };
 
-  const addExpense = async (type: 'Avans' | 'Gider') => {
+  const addExpense = async (type: 'Avans' | 'Gider' | 'Prim') => {
     const amountStr = prompt(`${type} tutarını giriniz (TL):`);
     if (amountStr) {
       const amount = parseFloat(amountStr);
@@ -633,14 +705,15 @@ export default function BordroTakip() {
   };
 
   const openAddModal = () => {
-    setEmployeeForm({ name: '', agreedSalary: '', officialSalary: '' });
+    setEmployeeForm({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
     setEditingEmployeeId(null);
     setShowEmployeeModal(true);
   };
 
   const openEditModal = (emp: Employee) => {
     setEmployeeForm({ 
-        name: emp.name, 
+        name: emp.name,
+        tcNo: emp.tc_no || '',
         agreedSalary: emp.agreedSalary.toString(), 
         officialSalary: emp.officialSalary.toString() 
     });
@@ -664,11 +737,16 @@ export default function BordroTakip() {
         
         return {
           'Personel': emp.name,
+          'TC No': emp.tc_no || '',
           'Anlaşılan Maaş': emp.agreedSalary,
           'Resmi Maaş': emp.officialSalary,
           'Çalışılan Gün': stats.totalWorkDays,
           'Mesai Saati': stats.totalOvertimeHours,
-          'Mesai Ücreti': stats.overtimePay.toFixed(2),
+          'Brüt Mesai': stats.brutOvertimePay.toFixed(2),
+          'SGK Kesintisi': stats.sgkDeduction.toFixed(2),
+          'Gelir Vergisi': stats.taxDeduction.toFixed(2),
+          'Damga Vergisi': stats.stampTaxDeduction.toFixed(2),
+          'Net Mesai': stats.netOvertimePay.toFixed(2),
           'Pazar Farkı': stats.totalSundayPay.toFixed(2),
           'Ekstra Ödemeler': stats.totalExtras.toFixed(2),
           'Brüt Hakediş': stats.grossTotal.toFixed(2),
@@ -756,7 +834,11 @@ export default function BordroTakip() {
         head: [['ACIKLAMA', 'TUTAR']],
         body: [
           ['Anlasilan Net Maas', `${stats.dailyRate.toFixed(2)} TL x ${stats.totalWorkDays} gun = ${(stats.dailyRate * stats.totalWorkDays).toFixed(2)} TL`],
-          ['Mesai Ucreti', `${stats.hourlyRate.toFixed(2)} TL x ${stats.totalOvertimeHours} saat = ${stats.overtimePay.toFixed(2)} TL`],
+          ['Brut Mesai Ucreti', `${stats.hourlyRateOvertime.toFixed(2)} TL x ${stats.totalOvertimeHours} saat = ${stats.brutOvertimePay.toFixed(2)} TL`],
+          ['  - SGK Kesintisi (%15)', `- ${stats.sgkDeduction.toFixed(2)} TL`],
+          ['  - Gelir Vergisi', `- ${stats.taxDeduction.toFixed(2)} TL`],
+          ['  - Damga Vergisi (%0.759)', `- ${stats.stampTaxDeduction.toFixed(2)} TL`],
+          ['Net Mesai Ucreti', `${stats.netOvertimePay.toFixed(2)} TL`],
           ['Pazar/Tatil Farki', `${stats.totalSundayPay.toFixed(2)} TL`],
           ['Ekstra Odemeler (Prim/Gider)', `${stats.totalExtras.toFixed(2)} TL`],
           ['', ''],
@@ -775,7 +857,13 @@ export default function BordroTakip() {
           1: { halign: 'right', cellWidth: 70 }
         },
         didParseCell: function(data: any) {
-          if (data.row.index === 5 || data.row.index === 8 || data.row.index === 11) {
+          // Kesinti satırları için italik stil
+          if (data.row.index >= 2 && data.row.index <= 4) {
+            data.cell.styles.fontStyle = 'italic';
+            data.cell.styles.textColor = [100, 100, 100];
+          }
+          // Ara toplam satırları için vurgulu stil
+          if (data.row.index === 5 || data.row.index === 9 || data.row.index === 12 || data.row.index === 14) {
             data.cell.styles.fillColor = [239, 246, 255];
             data.cell.styles.fontStyle = 'bold';
             data.cell.styles.fontSize = 10;
@@ -997,12 +1085,13 @@ export default function BordroTakip() {
       let updatedCount = 0;
 
       // Her satırı işle
-      for (const row: any of jsonData) {
+      for (const row of jsonData) {
         // Personel ismi çıkar (TC Kimlik No veya diğer kolonlardan)
-        const employeeName = row['İSİM'] || row['AD SOYAD'] || row['PERSONEL'] || '';
-        const agreedSalary = parseFloat(row['ANLAŞILAN MAAŞ'] || row['NET MAAŞ'] || '0') || 0;
-        const officialSalary = parseFloat(row['RESMİ MAAŞ'] || row['SGK MAAŞ'] || '0') || 0;
-        const workDays = parseInt(row['GÜN'] || row['ÇALIŞILAN GÜN'] || '0') || 0;
+        const employeeName = (row as any)['İSİM'] || (row as any)['AD SOYAD'] || (row as any)['PERSONEL'] || '';
+        const tcNo = (row as any)['TC KIMLIK NO'] || (row as any)['TC'] || (row as any)['TC NO'] || '';
+        const agreedSalary = parseFloat((row as any)['ANLAŞILAN MAAŞ'] || (row as any)['NET MAAŞ'] || '0') || 0;
+        const officialSalary = parseFloat((row as any)['RESMİ MAAŞ'] || (row as any)['SGK MAAŞ'] || '0') || 0;
+        const workDays = parseInt((row as any)['GÜN'] || (row as any)['ÇALIŞILAN GÜN'] || '0') || 0;
         
         if (!employeeName) continue;
 
@@ -1015,6 +1104,7 @@ export default function BordroTakip() {
             .from('bordro_employees')
             .insert([{
               name: employeeName,
+              tc_no: tcNo || null,
               agreed_salary: agreedSalary || 30000,
               official_salary: officialSalary || 17002,
               active: true
@@ -1026,6 +1116,7 @@ export default function BordroTakip() {
           employee = {
             id: newEmp.id,
             name: newEmp.name,
+            tc_no: newEmp.tc_no,
             agreedSalary: newEmp.agreed_salary,
             officialSalary: newEmp.official_salary
           };
@@ -1035,14 +1126,25 @@ export default function BordroTakip() {
         // Çalışma günlerini ekle (basit versiyon - her gün Normal olarak)
         if (workDays > 0) {
           for (let day = 1; day <= Math.min(workDays, daysInMonth); day++) {
-            await saveDailyLog(employee.id, day, {
+            const logData = {
+              employee_id: employee.id,
               day,
+              month: currentMonth,
+              year: currentYear,
               type: 'Normal',
-              startTime: '08:00',
-              endTime: '18:00',
-              overtimeHours: 0,
+              start_time: '08:00',
+              end_time: '18:00',
+              overtime_hours: 0,
               description: 'Excel\'den import'
-            });
+            };
+
+            const { error } = await supabase
+              .from('bordro_daily_logs')
+              .upsert(logData, { 
+                onConflict: 'employee_id,day,month,year'
+              });
+
+            if (error) console.error('Log kaydetme hatası:', error);
           }
           updatedCount++;
         }
@@ -1112,6 +1214,20 @@ export default function BordroTakip() {
                             placeholder="Örn: Ahmet Yılmaz" 
                             value={employeeForm.name} 
                             onChange={(e) => setEmployeeForm({...employeeForm, name: e.target.value})} 
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 mb-1">TC Kimlik No</label>
+                          <input 
+                            type="text" 
+                            maxLength={11}
+                            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
+                            placeholder="Örn: 12345678901" 
+                            value={employeeForm.tcNo} 
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              setEmployeeForm({...employeeForm, tcNo: value});
+                            }} 
                           />
                       </div>
                       <div>
@@ -1315,6 +1431,7 @@ export default function BordroTakip() {
                         <thead className="bg-blue-50 text-blue-900 uppercase text-xs font-bold">
                             <tr>
                                 <th className="p-4 border-b">PERSONEL</th>
+                                <th className="p-4 border-b text-center">TC NO</th>
                                 <th className="p-4 border-b text-right">ANLAŞILAN NET</th>
                                 <th className="p-4 border-b text-center">GÜN</th>
                                 <th className="p-4 border-b text-center">MESAİ (S)</th>
@@ -1334,6 +1451,7 @@ export default function BordroTakip() {
                                 return (
                                     <tr key={emp.id} className="hover:bg-blue-50 transition-colors group">
                                         <td className="p-4 font-bold text-gray-700">{emp.name}</td>
+                                        <td className="p-4 text-center text-gray-500 text-xs font-mono">{emp.tc_no || '-'}</td>
                                         <td className="p-4 text-right font-mono text-gray-500">{formatCurrency(emp.agreedSalary)}</td>
                                         <td className="p-4 text-center">
                                             <span className="bg-gray-100 px-2 py-1 rounded text-xs font-bold">{stats.totalWorkDays}</span>
@@ -1357,8 +1475,15 @@ export default function BordroTakip() {
                                                 <Pencil className="w-4 h-4"/>
                                             </button>
                                             <button 
-                                                onClick={() => exportSinglePDF(emp)}
+                                                onClick={() => deleteEmployee(emp.id, emp.name)}
                                                 className="bg-red-100 text-red-700 p-2 rounded-full hover:bg-red-200 transition"
+                                                title="Personeli Sil"
+                                            >
+                                                <Trash2 className="w-4 h-4"/>
+                                            </button>
+                                            <button 
+                                                onClick={() => exportSinglePDF(emp)}
+                                                className="bg-purple-100 text-purple-700 p-2 rounded-full hover:bg-purple-200 transition"
                                                 title="Bordro PDF İndir"
                                             >
                                                 <FileDown className="w-4 h-4"/>
@@ -1420,7 +1545,7 @@ export default function BordroTakip() {
                         {selectedEmployee.id !== '0' && (
                           <div className="space-y-2 text-sm border-t pt-2">
                                <div className="flex justify-between"><span className="text-gray-500">Maaş:</span><span className="font-bold">{formatCurrency(selectedEmployee.agreedSalary)}</span></div>
-                               <div className="flex justify-between"><span className="text-gray-500">Saatlik:</span><span className="text-blue-600 font-mono">{formatCurrency(currentStats.hourlyRate)}</span></div>
+                               <div className="flex justify-between"><span className="text-gray-500">Saatlik (Brüt):</span><span className="text-blue-600 font-mono">{formatCurrency(currentStats.hourlyRateOvertime)}</span></div>
                           </div>
                         )}
                     </div>
@@ -1434,7 +1559,11 @@ export default function BordroTakip() {
                             </div>
                             <div className="p-4 space-y-2 text-sm">
                                 <div className="flex justify-between border-b pb-1"><span>Çalışma:</span><span className="font-semibold">{formatCurrency(currentStats.totalWorkDays * currentStats.dailyRate)}</span></div>
-                                <div className="flex justify-between border-b pb-1 text-blue-600"><span>Mesai:</span><span className="font-semibold">{formatCurrency(currentStats.overtimePay)}</span></div>
+                                <div className="flex justify-between border-b pb-1 text-blue-600"><span>Brüt Mesai:</span><span className="font-semibold">{formatCurrency(currentStats.brutOvertimePay)}</span></div>
+                                <div className="flex justify-between pl-4 text-xs text-gray-500"><span>- SGK Kesintisi:</span><span>-{formatCurrency(currentStats.sgkDeduction)}</span></div>
+                                <div className="flex justify-between pl-4 text-xs text-gray-500"><span>- Gelir Vergisi:</span><span>-{formatCurrency(currentStats.taxDeduction)}</span></div>
+                                <div className="flex justify-between pl-4 text-xs text-gray-500 border-b pb-1"><span>- Damga Vergisi:</span><span>-{formatCurrency(currentStats.stampTaxDeduction)}</span></div>
+                                <div className="flex justify-between border-b pb-1 text-blue-700"><span>Net Mesai:</span><span className="font-semibold">{formatCurrency(currentStats.netOvertimePay)}</span></div>
                                 <div className="flex justify-between border-b pb-1 text-orange-600"><span>Pazar/Tatil Farkı:</span><span className="font-semibold">{formatCurrency(currentStats.totalSundayPay)}</span></div>
                                 {currentStats.totalBonuses > 0 && (
                                     <div className="flex justify-between border-b pb-1 text-green-600"><span>Prim:</span><span className="font-semibold">+{formatCurrency(currentStats.totalBonuses)}</span></div>
