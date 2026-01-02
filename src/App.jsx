@@ -168,7 +168,7 @@ const PERIODIC_PRICES = {
 
 const App = () => {
   // --- State Definitions ---
-  const [activeTab, setActiveTab] = useState('manual'); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro'
+  const [activeTab, setActiveTab] = useState('manual'); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro', 'gorev'
   const [selectedCompany, setSelectedCompany] = useState(null);
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -3022,6 +3022,13 @@ KURALLAR:
             Bordro Takip
           </button>
           <button 
+            onClick={() => setActiveTab('gorev')}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'gorev' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            <CheckCircle className="w-4 h-4 mr-2"/>
+            Görev Takip
+          </button>
+          <button 
             onClick={() => setActiveTab('saved')}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'saved' ? 'bg-white shadow text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
@@ -4159,6 +4166,18 @@ KURALLAR:
         {activeTab === 'bordro' && (
           <div className="max-w-full mx-auto">
             <BordroTakip />
+          </div>
+        )}
+
+        {/* Görev Takip Tab */}
+        {activeTab === 'gorev' && (
+          <div className="h-screen w-full bg-white rounded-lg shadow-lg overflow-hidden">
+            <iframe 
+              src="https://kobinerjiwt.netlify.app/dashboard"
+              className="w-full h-full border-0"
+              title="Görev Takip Sistemi"
+              allow="fullscreen"
+            />
           </div>
         )}
 
