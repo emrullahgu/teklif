@@ -655,7 +655,7 @@ export default function BordroTakip() {
   // --- EXCEL & PDF EXPORT FONKSİYONLARI ---
 
   // Excel Export - Tüm Personel
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     try {
       const exportData = employees.map(emp => {
         const empData = appData[emp.id]?.[monthKey];
@@ -698,7 +698,7 @@ export default function BordroTakip() {
   };
 
   // PDF Export - Tek Personel Bordrosu
-  const exportSinglePDF = (employee: Employee) => {
+  const exportSinglePDF = async (employee: Employee) => {
     try {
       const empData = appData[employee.id]?.[monthKey];
       const stats = calculateEmployeeStats(employee, empData, daysInMonth);
@@ -851,7 +851,7 @@ export default function BordroTakip() {
   };
 
   // PDF Export - Toplu Bordro (Tüm Personel)
-  const exportAllPDF = () => {
+  const exportAllPDF = async () => {
     try {
       const doc = new jsPDF();
       
@@ -1344,9 +1344,10 @@ export default function BordroTakip() {
                         
                         <div className="bg-white p-4 rounded-xl shadow-md">
                             <h4 className="text-xs font-bold text-gray-500 mb-2">HIZLI İŞLEMLER</h4>
-                            <div className="grid grid-cols-2 gap-2 mb-3">
+                            <div className="grid grid-cols-3 gap-2 mb-3">
                                 <button onClick={() => addExpense('Avans')} className="bg-red-100 text-red-700 py-2 rounded text-xs font-bold hover:bg-red-200">AVANS</button>
-                                <button onClick={() => addExpense('Gider')} className="bg-green-100 text-green-700 py-2 rounded text-xs font-bold hover:bg-green-200">GİDER/PRİM</button>
+                                <button onClick={() => addExpense('Gider')} className="bg-orange-100 text-orange-700 py-2 rounded text-xs font-bold hover:bg-orange-200">GİDER</button>
+                                <button onClick={() => addExpense('Prim')} className="bg-green-100 text-green-700 py-2 rounded text-xs font-bold hover:bg-green-200">PRİM</button>
                             </div>
                             <button 
                                 onClick={() => exportSinglePDF(selectedEmployee)} 
