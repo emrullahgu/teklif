@@ -34,6 +34,9 @@ import * as XLSX from 'xlsx';
 // --- SABİTLER ---
 const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
+// Default KOBİNERJİ Logo (base64 encoded PNG)
+const DEFAULT_LOGO = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjYwIiB2aWV3Qm94PSIwIDAgMjAwIDYwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjx0ZXh0IHg9IjEwIiB5PSI0MCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjM2IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iIzY2YmIzMyI+S8OWQsSwTkVSS8SwPC90ZXh0Pjwvc3ZnPg==';
+
 // --- TİP TANIMLAMALARI ---
 
 type DayType = 'Normal' | 'Pazar' | 'Resmi Tatil' | 'Raporlu' | 'İzinli';
@@ -172,7 +175,7 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     const grossTotal = baseSalaryCalculated + totalSundayPay + overtimePay + totalExtras;
     const netPayable = grossTotal - totalAdvances;
     
-    // ELDEN ÖDENECEK = NET ELE GEÇEN (officialSalary sadece gösterim için)
+    // ÖDENECEK ÖDENECEK = NET ELE GEÇEN (officialSalary sadece gösterim için)
     const remainingHandPay = netPayable;
 
     return {
@@ -202,8 +205,8 @@ export default function BordroTakip() {
   const [currentDate, setCurrentDate] = useState(new Date(2025, 11, 1)); 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [logo, setLogo] = useState<string | null>(() => {
-    // Logo'yu localStorage'dan yükle
-    return localStorage.getItem('bordro_logo') || null;
+    // Logo'yu localStorage'dan yükle, yoksa default logo kullan
+    return localStorage.getItem('bordro_logo') || DEFAULT_LOGO;
   });
   
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
@@ -844,10 +847,15 @@ export default function BordroTakip() {
         try {
           // Otomatik format tespiti
           const format = logo.startsWith('data:image/png') ? 'PNG' : 
-                        logo.startsWith('data:image/jpeg') || logo.startsWith('data:image/jpg') ? 'JPEG' : 'PNG';
+                        logo.startsWith('data:image/jpeg') || logo.startsWith('data:image/jpg') ? 'JPEG' : 
+                        logo.startsWith('data:image/svg') ? 'PNG' : 'PNG';
           
-          doc.addImage(logo, format, 15, 10, 35, 35);
-          startY = 50;
+          // Logo boyutlandırma (aspect ratio korunarak, max genişlik 60mm)
+          const logoWidth = 60;
+          const logoHeight = 25; // Yeterli yükseklik
+          
+          doc.addImage(logo, format, 15, 10, logoWidth, logoHeight);
+          startY = 40;
           console.log('✅ Logo PDF\'e eklendi!');
         } catch (e) {
           console.error('Logo eklenemedi:', e);
@@ -993,10 +1001,15 @@ export default function BordroTakip() {
       if (logo) {
         try {
           const format = logo.startsWith('data:image/png') ? 'PNG' : 
-                        logo.startsWith('data:image/jpeg') || logo.startsWith('data:image/jpg') ? 'JPEG' : 'PNG';
+                        logo.startsWith('data:image/jpeg') || logo.startsWith('data:image/jpg') ? 'JPEG' : 
+                        logo.startsWith('data:image/svg') ? 'PNG' : 'PNG';
           
-          doc.addImage(logo, format, 15, 10, 35, 35);
-          startY = 50;
+          // Logo boyutlandırma (aspect ratio korunarak, max genişlik 60mm)
+          const logoWidth = 60;
+          const logoHeight = 25;
+          
+          doc.addImage(logo, format, 15, 10, logoWidth, logoHeight);
+          startY = 40;
           console.log('✅ Logo toplu PDF\'e eklendi!');
         } catch (e) {
           console.error('Logo eklenemedi:', e);
@@ -1068,7 +1081,7 @@ export default function BordroTakip() {
 
       (doc as any).autoTable({
         startY: startY + 25,
-        head: [['Personel', 'Gun', 'Mesai', 'Brut', 'Avans', 'Net', 'Resmi', 'Elden']],
+        head: [['Personel', 'Gun', 'Mesai', 'Brut', 'Avans', 'Net', 'Resmi', 'ÖDENECEK']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [30, 58, 138], textColor: 255, fontSize: 8, fontStyle: 'bold' },
@@ -1387,13 +1400,52 @@ export default function BordroTakip() {
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
+                    // Dosya boyutu kontrolü (max 2MB)
+                    if (file.size > 2 * 1024 * 1024) {
+                      alert('⚠️ Logo dosyası çok büyük! Maksimum 2MB olmalıdır.');
+                      return;
+                    }
+                    
                     const reader = new FileReader();
                     reader.onload = (event) => {
                       const logoData = event.target?.result as string;
-                      setLogo(logoData);
-                      // localStorage'a kaydet
-                      localStorage.setItem('bordro_logo', logoData);
-                      alert('✅ Logo yüklendi! PDF\'lerde görünecek.');
+                      
+                      // Logo'yu boyutlandır
+                      const img = new Image();
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Maksimum boyutlar (aspect ratio korunacak)
+                        const MAX_WIDTH = 400;
+                        const MAX_HEIGHT = 200;
+                        
+                        let width = img.width;
+                        let height = img.height;
+                        
+                        // Oranı koru
+                        if (width > height) {
+                          if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                          }
+                        } else {
+                          if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                          }
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx?.drawImage(img, 0, 0, width, height);
+                        
+                        const resizedLogo = canvas.toDataURL('image/png', 0.9);
+                        setLogo(resizedLogo);
+                        localStorage.setItem('bordro_logo', resizedLogo);
+                        alert('✅ Logo yüklendi ve boyutlandırıldı! PDF\'lerde görünecek.');
+                      };
+                      img.src = logoData;
                     };
                     reader.readAsDataURL(file);
                   }
@@ -1406,17 +1458,17 @@ export default function BordroTakip() {
               >
                 <Upload className="w-4 h-4"/>
               </label>
-              {logo && (
+              {logo && logo !== DEFAULT_LOGO && (
                 <button
                   onClick={() => {
-                    if (confirm('Logo\'yu silmek istediğinize emin misiniz?')) {
-                      setLogo(null);
+                    if (confirm('Yüklediğiniz logo\' yu silip varsayılan logo\'ya dönmek istiyor musunuz?')) {
+                      setLogo(DEFAULT_LOGO);
                       localStorage.removeItem('bordro_logo');
-                      alert('✅ Logo silindi.');
+                      alert('✅ Varsayılan logo\'ya dönüldü.');
                     }
                   }}
                   className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                  title="Logo Sil"
+                  title="Varsayılan Logo'ya Dön"
                 >
                   <X className="w-3 h-3"/>
                 </button>
@@ -1638,7 +1690,7 @@ export default function BordroTakip() {
                         {selectedEmployee.id !== '0' && (
                           <div className="space-y-2 text-sm border-t pt-2">
                                <div className="flex justify-between"><span className="text-gray-500">Günlük Mesai Ücret:</span><span className="font-bold">{formatCurrency(currentStats.dailyRate)}</span></div>
-                               <div className="flex justify-between"><span className="text-gray-500">Saatlik Mesai (x1.5):</span><span className="text-blue-600 font-mono">{formatCurrency(currentStats.hourlyRate * 1.5)}</span></div>
+                               <div className="flex justify-between"><span className="text-gray-500">Saatlik Mesai:</span><span className="text-blue-600 font-mono">{formatCurrency(currentStats.hourlyRate)}</span></div>
                           </div>
                         )}
                     </div>
