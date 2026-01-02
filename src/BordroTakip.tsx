@@ -96,20 +96,25 @@ const isWeekend = (day: number, month: number, year: number) => {
 // --- HESAPLAMA MOTORU ---
 const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefined, daysInMonth: number) => {
     let totalWorkDays = 0;
+    let totalSundayDays = 0;
     let totalOvertimeHours = 0;
     let totalSundayPay = 0;
     let totalAdvances = 0;
-    let totalExtras = 0;
+    let totalExpenses = 0;
+    let totalBonuses = 0;
 
     if (!data) {
         return {
             dailyRate: employee.agreedSalary / 30,
             hourlyRate: (employee.agreedSalary / 225) * 1.5,
             totalWorkDays: 0,
+            totalSundayDays: 0,
             totalOvertimeHours: 0,
             overtimePay: 0,
             totalSundayPay: 0,
             totalAdvances: 0,
+            totalExpenses: 0,
+            totalBonuses: 0,
             totalExtras: 0,
             grossTotal: 0,
             netPayable: 0,
@@ -128,10 +133,10 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
                 totalWorkDays += 1;
             } else if (log.type === 'Pazar' || log.type === 'Resmi Tatil') {
                 totalWorkDays += 1;
+                totalSundayDays += 1;
                 totalSundayPay += dailyRate; 
-            } else if (log.type === 'İzinli' || log.type === 'Raporlu') {
-                totalWorkDays += 1;
             }
+            // İzinli ve Raporlu günler çalışılan güne SAYILMAZ
 
             if (log.overtimeHours > 0) {
                 totalOvertimeHours += log.overtimeHours;
@@ -141,9 +146,11 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
 
     data.expenses.forEach(exp => {
         if (exp.type === 'Avans') totalAdvances += exp.amount;
-        else if (exp.type === 'Gider' || exp.type === 'Prim') totalExtras += exp.amount;
+        else if (exp.type === 'Gider') totalExpenses += exp.amount;
+        else if (exp.type === 'Prim') totalBonuses += exp.amount;
     });
 
+    const totalExtras = totalExpenses + totalBonuses;
     const baseSalaryCalculated = (totalWorkDays * dailyRate);
     const overtimePay = totalOvertimeHours * hourlyRate;
     const grossTotal = baseSalaryCalculated + totalSundayPay + overtimePay + totalExtras;
@@ -155,10 +162,13 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
         dailyRate,
         hourlyRate,
         totalWorkDays,
+        totalSundayDays,
         totalOvertimeHours,
         overtimePay,
         totalSundayPay,
         totalAdvances,
+        totalExpenses,
+        totalBonuses,
         totalExtras,
         grossTotal,
         netPayable,
