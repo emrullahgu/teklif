@@ -2987,6 +2987,13 @@ KURALLAR:
             Dashboard & İstatistikler
           </button>
           <button 
+            onClick={() => setActiveTab('gorev')}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'gorev' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            <CheckCircle className="w-4 h-4 mr-2"/>
+            Görev Takip
+          </button>
+          <button 
             onClick={() => setActiveTab('manual')}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'manual' ? 'bg-white shadow text-blue-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
@@ -3020,13 +3027,6 @@ KURALLAR:
           >
             <Banknote className="w-4 h-4 mr-2"/>
             Bordro Takip
-          </button>
-          <button 
-            onClick={() => setActiveTab('gorev')}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'gorev' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            <CheckCircle className="w-4 h-4 mr-2"/>
-            Görev Takip
           </button>
           <button 
             onClick={() => setActiveTab('saved')}
