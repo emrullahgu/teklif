@@ -20,9 +20,14 @@ import {
   Pencil,
   RefreshCw,
   Download,
-  Upload
+  Upload,
+  FileDown,
+  FileText
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 // --- TİP TANIMLAMALARI ---
 
@@ -549,9 +554,269 @@ export default function BordroTakip() {
       setActiveTab('detail');
   };
 
-  // Excel Export
-  const exportToExcel = async () => {
-    alert('Excel export özelliği yakında eklenecek!');
+  // --- EXCEL & PDF EXPORT FONKSİYONLARI ---
+
+  // Excel Export - Tüm Personel
+  const exportToExcel = () => {
+    try {
+      const exportData = employees.map(emp => {
+        const empData = appData[emp.id]?.[monthKey];
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+        
+        return {
+          'Personel': emp.name,
+          'Anlaşılan Maaş': emp.agreedSalary,
+          'Resmi Maaş': emp.officialSalary,
+          'Çalışılan Gün': stats.totalWorkDays,
+          'Mesai Saati': stats.totalOvertimeHours,
+          'Mesai Ücreti': stats.overtimePay.toFixed(2),
+          'Pazar Farkı': stats.totalSundayPay.toFixed(2),
+          'Ekstra Ödemeler': stats.totalExtras.toFixed(2),
+          'Brüt Hakediş': stats.grossTotal.toFixed(2),
+          'Avanslar': stats.totalAdvances.toFixed(2),
+          'Net Hakediş': stats.netPayable.toFixed(2),
+          'Elden Ödenecek': stats.remainingHandPay.toFixed(2)
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `${currentYear}-${currentMonth + 1}`);
+      
+      // Kolon genişlikleri
+      ws['!cols'] = [
+        { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, 
+        { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+        { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }
+      ];
+
+      XLSX.writeFile(wb, `Bordro_${currentYear}_${currentMonth + 1}.xlsx`);
+      alert('✅ Excel dosyası başarıyla indirildi!');
+    } catch (error) {
+      console.error('Excel export hatası:', error);
+      alert('❌ Excel oluşturulurken hata oluştu!');
+    }
+  };
+
+  // PDF Export - Tek Personel Bordrosu
+  const exportSinglePDF = (employee: Employee) => {
+    try {
+      const empData = appData[employee.id]?.[monthKey];
+      const stats = calculateEmployeeStats(employee, empData, daysInMonth);
+      
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(30, 58, 138);
+      doc.text('KOBİNERJİ MÜHENDİSLİK', 105, 20, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.setTextColor(100);
+      doc.text('PERSONEL BORDROSU', 105, 28, { align: 'center' });
+      
+      // Çizgi
+      doc.setDrawColor(30, 58, 138);
+      doc.setLineWidth(0.5);
+      doc.line(20, 32, 190, 32);
+      
+      // Personel Bilgileri
+      doc.setFontSize(10);
+      doc.setTextColor(0);
+      doc.text(`Personel: ${employee.name}`, 20, 42);
+      doc.text(`Dönem: ${new Date(currentYear, currentMonth).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}`, 20, 48);
+      
+      // Bordro Tablosu
+      (doc as any).autoTable({
+        startY: 55,
+        head: [['AÇIKLAMA', 'TUTAR']],
+        body: [
+          ['Anlaşılan Net Maaş', `${stats.dailyRate.toFixed(2)} TL x ${stats.totalWorkDays} gün = ${(stats.dailyRate * stats.totalWorkDays).toFixed(2)} TL`],
+          ['Mesai Ücreti', `${stats.hourlyRate.toFixed(2)} TL x ${stats.totalOvertimeHours} saat = ${stats.overtimePay.toFixed(2)} TL`],
+          ['Pazar/Tatil Farkı', `${stats.totalSundayPay.toFixed(2)} TL`],
+          ['Ekstra Ödemeler (Prim/Gider)', `${stats.totalExtras.toFixed(2)} TL`],
+          ['', ''],
+          ['BRÜT HAKEDİŞ', `${stats.grossTotal.toFixed(2)} TL`],
+          ['Kesinti (Avanslar)', `- ${stats.totalAdvances.toFixed(2)} TL`],
+          ['', ''],
+          ['NET HAKEDİŞ', `${stats.netPayable.toFixed(2)} TL`],
+          ['Resmi Maaş (SGK Bordrosu)', `${stats.officialPay.toFixed(2)} TL`],
+          ['', ''],
+          ['ELDEN ÖDENECEK', `${stats.remainingHandPay.toFixed(2)} TL`]
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [30, 58, 138], textColor: 255 },
+        styles: { fontSize: 9, cellPadding: 3 },
+        columnStyles: {
+          0: { fontStyle: 'bold', cellWidth: 100 },
+          1: { halign: 'right', cellWidth: 70 }
+        },
+        didParseCell: function(data: any) {
+          if (data.row.index === 5 || data.row.index === 8 || data.row.index === 11) {
+            data.cell.styles.fillColor = [239, 246, 255];
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fontSize = 10;
+          }
+        }
+      });
+
+      // Puantaj Detayları
+      if (empData && Object.keys(empData.logs).length > 0) {
+        const finalY = (doc as any).lastAutoTable.finalY + 10;
+        
+        doc.setFontSize(11);
+        doc.setTextColor(30, 58, 138);
+        doc.text('PUANTAJ DETAYLARI', 20, finalY);
+        
+        const puantajData = Object.values(empData.logs).map((log: any) => [
+          log.day,
+          getDayName(log.day, currentMonth, currentYear),
+          log.type,
+          log.startTime || '-',
+          log.endTime || '-',
+          log.overtimeHours || 0,
+          log.description || ''
+        ]);
+
+        (doc as any).autoTable({
+          startY: finalY + 5,
+          head: [['Gün', 'Gün Adı', 'Durum', 'Giriş', 'Çıkış', 'Mesai', 'Açıklama']],
+          body: puantajData,
+          theme: 'striped',
+          headStyles: { fillColor: [30, 58, 138], fontSize: 8 },
+          styles: { fontSize: 7, cellPadding: 2 },
+          columnStyles: {
+            0: { cellWidth: 15, halign: 'center' },
+            1: { cellWidth: 25 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 20, halign: 'center' },
+            4: { cellWidth: 20, halign: 'center' },
+            5: { cellWidth: 20, halign: 'center' },
+            6: { cellWidth: 40 }
+          }
+        });
+      }
+
+      // Footer
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text('KOBİNERJİ MÜHENDİSLİK', 105, 285, { align: 'center' });
+        doc.text('Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 Kemalpaşa/İzmir', 105, 290, { align: 'center' });
+        doc.text(`Sayfa ${i} / ${pageCount}`, 190, 290, { align: 'right' });
+      }
+
+      doc.save(`Bordro_${employee.name}_${currentYear}_${currentMonth + 1}.pdf`);
+      alert('✅ PDF başarıyla indirildi!');
+    } catch (error) {
+      console.error('PDF export hatası:', error);
+      alert('❌ PDF oluşturulurken hata oluştu!');
+    }
+  };
+
+  // PDF Export - Toplu Bordro (Tüm Personel)
+  const exportAllPDF = () => {
+    try {
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(30, 58, 138);
+      doc.text('KOBİNERJİ MÜHENDİSLİK', 105, 20, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.setTextColor(100);
+      doc.text('TOPLU BORDRO İCMALİ', 105, 28, { align: 'center' });
+      doc.text(new Date(currentYear, currentMonth).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }).toUpperCase(), 105, 35, { align: 'center' });
+      
+      // Çizgi
+      doc.setDrawColor(30, 58, 138);
+      doc.setLineWidth(0.5);
+      doc.line(20, 38, 190, 38);
+      
+      // Özet Tablo Verisi
+      const tableData = employees.map(emp => {
+        const empData = appData[emp.id]?.[monthKey];
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+        
+        return [
+          emp.name,
+          stats.totalWorkDays,
+          stats.totalOvertimeHours,
+          `${stats.grossTotal.toFixed(0)} ₺`,
+          `${stats.totalAdvances.toFixed(0)} ₺`,
+          `${stats.netPayable.toFixed(0)} ₺`,
+          `${stats.officialPay.toFixed(0)} ₺`,
+          `${stats.remainingHandPay.toFixed(0)} ₺`
+        ];
+      });
+
+      // Toplamlar
+      const totals = employees.reduce((acc, emp) => {
+        const empData = appData[emp.id]?.[monthKey];
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+        return {
+          gross: acc.gross + stats.grossTotal,
+          advances: acc.advances + stats.totalAdvances,
+          net: acc.net + stats.netPayable,
+          official: acc.official + stats.officialPay,
+          hand: acc.hand + stats.remainingHandPay
+        };
+      }, { gross: 0, advances: 0, net: 0, official: 0, hand: 0 });
+
+      tableData.push([
+        'TOPLAM',
+        '',
+        '',
+        `${totals.gross.toFixed(0)} ₺`,
+        `${totals.advances.toFixed(0)} ₺`,
+        `${totals.net.toFixed(0)} ₺`,
+        `${totals.official.toFixed(0)} ₺`,
+        `${totals.hand.toFixed(0)} ₺`
+      ]);
+
+      (doc as any).autoTable({
+        startY: 45,
+        head: [['Personel', 'Gün', 'Mesai', 'Brüt', 'Avans', 'Net', 'Resmi', 'Elden']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [30, 58, 138], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 15, halign: 'center' },
+          2: { cellWidth: 15, halign: 'center' },
+          3: { cellWidth: 25, halign: 'right' },
+          4: { cellWidth: 25, halign: 'right' },
+          5: { cellWidth: 25, halign: 'right' },
+          6: { cellWidth: 25, halign: 'right' },
+          7: { cellWidth: 25, halign: 'right', fillColor: [254, 242, 242] }
+        },
+        didParseCell: function(data: any) {
+          if (data.row.index === tableData.length - 1) {
+            data.cell.styles.fillColor = [30, 58, 138];
+            data.cell.styles.textColor = 255;
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      });
+
+      // Footer
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text('KOBİNERJİ MÜHENDİSLİK', 105, finalY + 5, { align: 'center' });
+      doc.text('Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 Kemalpaşa/İzmir', 105, finalY + 10, { align: 'center' });
+      doc.text('Tel: +90 535 714 52 88 | www.kobinerji.com', 105, finalY + 15, { align: 'center' });
+
+      doc.save(`Bordro_Toplu_${currentYear}_${currentMonth + 1}.pdf`);
+      alert('✅ Toplu bordro PDF\'i başarıyla indirildi!');
+    } catch (error) {
+      console.error('PDF export hatası:', error);
+      alert('❌ PDF oluşturulurken hata oluştu!');
+    }
   };
 
   return (
@@ -695,6 +960,20 @@ export default function BordroTakip() {
                         <button 
                             onClick={exportToExcel}
                             className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700 flex items-center shadow"
+                            title="Excel'e Aktar"
+                        >
+                            <FileSpreadsheet className="w-4 h-4 mr-2"/> EXCEL
+                        </button>
+                        <button 
+                            onClick={exportAllPDF}
+                            className="bg-red-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-red-700 flex items-center shadow"
+                            title="Toplu Bordro PDF"
+                        >
+                            <FileDown className="w-4 h-4 mr-2"/> TOPLU PDF
+                        </button>
+                        <button 
+                            onClick={exportToExcel}
+                            className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700 flex items-center shadow"
                         >
                             <Download className="w-4 h-4 mr-2"/> EXCEL
                         </button>
@@ -753,12 +1032,20 @@ export default function BordroTakip() {
                                                 <Pencil className="w-4 h-4"/>
                                             </button>
                                             <button 
+                                                onClick={() => exportSinglePDF(emp)}
+                                                className="bg-red-100 text-red-700 p-2 rounded-full hover:bg-red-200 transition"
+                                                title="Bordro PDF İndir"
+                                            >
+                                                <FileDown className="w-4 h-4"/>
+                                            </button>
+                                            <button 
                                                 onClick={() => goToDetail(emp.id)}
                                                 className="bg-blue-100 text-blue-700 p-2 rounded-full hover:bg-blue-200 transition"
                                                 title="Puantaj Girişi"
                                             >
                                                 <ArrowRightCircle className="w-4 h-4"/>
                                             </button>
+                                        </td>
                                         </td>
                                     </tr>
                                 );
@@ -836,10 +1123,17 @@ export default function BordroTakip() {
                         
                         <div className="bg-white p-4 rounded-xl shadow-md">
                             <h4 className="text-xs font-bold text-gray-500 mb-2">HIZLI İŞLEMLER</h4>
-                            <div className="flex gap-2">
-                                <button onClick={() => addExpense('Avans')} className="flex-1 bg-red-100 text-red-700 py-2 rounded text-xs font-bold hover:bg-red-200">AVANS</button>
-                                <button onClick={() => addExpense('Gider')} className="flex-1 bg-green-100 text-green-700 py-2 rounded text-xs font-bold hover:bg-green-200">GİDER/PRİM</button>
+                            <div className="grid grid-cols-2 gap-2 mb-3">
+                                <button onClick={() => addExpense('Avans')} className="bg-red-100 text-red-700 py-2 rounded text-xs font-bold hover:bg-red-200">AVANS</button>
+                                <button onClick={() => addExpense('Gider')} className="bg-green-100 text-green-700 py-2 rounded text-xs font-bold hover:bg-green-200">GİDER/PRİM</button>
                             </div>
+                            <button 
+                                onClick={() => exportSinglePDF(selectedEmployee)} 
+                                className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white py-2 rounded text-xs font-bold hover:from-red-600 hover:to-red-700 flex items-center justify-center shadow-lg"
+                            >
+                                <FileDown className="w-4 h-4 mr-2"/>
+                                BORDRO PDF İNDİR
+                            </button>
                             <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
                                 {currentData.expenses.map(e => (
                                     <div key={e.id} className="flex justify-between text-xs bg-gray-50 p-1 rounded border">
