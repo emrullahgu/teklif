@@ -84,6 +84,26 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
     }
   };
 
+  const toggleBordroAccess = async (userId, currentAccess) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          can_access_bordro: !currentAccess, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      alert(!currentAccess ? '✅ Bordro yetkisi verildi!' : '❌ Bordro yetkisi kaldırıldı!');
+      loadUsers();
+    } catch (error) {
+      console.error('Bordro yetki hatası:', error);
+      alert('Bordro yetkisi güncellenemedi!');
+    }
+  };
+
   const deleteUser = async (userId) => {
     if (!window.confirm('Bu kullanıcıyı silmek istediğinizden emin misiniz?')) {
       return;
@@ -862,8 +882,29 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
                           ) : (
                             <>
                               <button
+                                onClick={() => toggleBordroAccess(user.id, user.can_access_bordro)}
+                                className={`inline-flex items-center px-3 py-1 ${
+                                  user.can_access_bordro 
+                                    ? 'bg-orange-500 hover:bg-orange-600' 
+                                    : 'bg-green-500 hover:bg-green-600'
+                                } text-white rounded-lg transition text-xs`}
+                                title={user.can_access_bordro ? 'Bordro yetkisini kaldır' : 'Bordro yetkisi ver'}
+                              >
+                                {user.can_access_bordro ? (
+                                  <>
+                                    <XCircle className="w-4 h-4 mr-1" />
+                                    Bordro Kaldır
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle className="w-4 h-4 mr-1" />
+                                    Bordro Ver
+                                  </>
+                                )}
+                              </button>
+                              <button
                                 onClick={() => openEditUser(user)}
-                                className="inline-flex items-center px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition"
+                                className="inline-flex items-center px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition text-xs"
                                 title="Kullanıcı bilgilerini düzenle"
                               >
                                 <Edit className="w-4 h-4 mr-1" />
@@ -871,7 +912,7 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
                               </button>
                               <button
                                 onClick={() => sendLoginCredentials(user.id)}
-                                className="inline-flex items-center px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
+                                className="inline-flex items-center px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition text-xs"
                                 title="Login bilgilerini mail ile gönder"
                               >
                                 <Mail className="w-4 h-4 mr-1" />

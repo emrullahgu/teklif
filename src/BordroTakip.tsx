@@ -209,6 +209,10 @@ export default function BordroTakip() {
     return localStorage.getItem('bordro_logo') || DEFAULT_LOGO;
   });
   
+  // Yetki kontrolü
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   const [employeeForm, setEmployeeForm] = useState({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
@@ -227,6 +231,41 @@ export default function BordroTakip() {
   const currentYear = currentDate.getFullYear();
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const monthKey = `${currentYear}-${currentMonth}`;
+
+  // --- YETKİ KONTROLÜ ---
+  const checkBordroAccess = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.log('❌ Kullanıcı girişi yapılmamış');
+        setHasAccess(false);
+        setCheckingAccess(false);
+        return;
+      }
+
+      // Kullanıcının bordro yetkisini kontrol et
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('can_access_bordro, email, role')
+        .eq('email', user.email)
+        .single();
+
+      if (error) {
+        console.error('Yetki kontrolü hatası:', error);
+        setHasAccess(false);
+      } else {
+        console.log('✅ Yetki kontrolü:', userData);
+        setHasAccess(userData?.can_access_bordro === true || userData?.role === 'admin');
+      }
+      
+      setCheckingAccess(false);
+    } catch (error) {
+      console.error('Yetki kontrolü hatası:', error);
+      setHasAccess(false);
+      setCheckingAccess(false);
+    }
+  };
 
   // --- SUPABASE CRUD FONKSİYONLARI ---
 
@@ -614,8 +653,14 @@ export default function BordroTakip() {
 
   // --- İLK YÜKLEME ---
   useEffect(() => {
-    loadEmployees();
+    checkBordroAccess();
   }, []);
+
+  useEffect(() => {
+    if (hasAccess) {
+      loadEmployees();
+    }
+  }, [hasAccess]);
 
   // Personel listesi yüklendiğinde, tüm personeller için aylık verileri yükle
   useEffect(() => {
@@ -662,6 +707,47 @@ export default function BordroTakip() {
   const currentStats = useMemo(() => 
     calculateEmployeeStats(selectedEmployee, currentData, daysInMonth), 
   [selectedEmployee, currentData, daysInMonth]);
+
+  // Yetki kontrolü sırasında loading göster
+  if (checkingAccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">Yetkiniz kontrol ediliyor...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Yetkisiz erişim engelleme
+  if (hasAccess === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100">
+        <div className="bg-white rounded-2xl shadow-2xl p-12 max-w-md text-center">
+          <div className="mb-6">
+            <AlertCircle className="w-24 h-24 text-red-500 mx-auto" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-800 mb-4">Erişim Engellendi</h1>
+          <p className="text-gray-600 mb-6">
+            Bu sayfayı görüntülemek için yetkiniz bulunmamaktadır.
+          </p>
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 text-left">
+            <p className="text-sm text-red-700">
+              <strong>📋 Bordro Modülü Yetkisi Gerekli</strong><br/>
+              Lütfen sistem yöneticinizle iletişime geçin.
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.href = '/'}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition"
+          >
+            Ana Sayfaya Dön
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // --- HANDLERS ---
 
