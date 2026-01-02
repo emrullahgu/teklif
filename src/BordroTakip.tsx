@@ -226,13 +226,29 @@ export default function BordroTakip() {
   const loadEmployees = async () => {
     try {
       setLoading(true);
+      console.log('📋 Personeller yükleniyor...');
+      
       const { data, error } = await supabase
         .from('bordro_employees')
         .select('*')
         .eq('active', true)
         .order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Supabase hatası:', error);
+        
+        // Tablo yoksa kullanıcıya açık mesaj göster
+        if (error.code === '42P01') {
+          alert('⚠️ VERİTABANI HATASI\n\n"bordro_employees" tablosu bulunamadı!\n\n👉 Çözüm:\n1. Supabase Dashboard\'a gidin\n2. SQL Editor\'ı açın\n3. database-setup.sql dosyasındaki SQL\'leri çalıştırın\n\nDetaylı bilgi için BORDRO-SUPABASE-KURULUM.md dosyasına bakın.');
+        } else if (error.code === 'PGRST116' || error.message?.includes('RLS')) {
+          alert('⚠️ ERİŞİM HATASI\n\nRow Level Security (RLS) politikaları hatalı!\n\n👉 Çözüm:\n1. Supabase Dashboard → Database → Policies\n2. bordro_employees tablosu için politikaları kontrol edin\n3. Geçici olarak RLS\'i devre dışı bırakabilirsiniz:\n\nALTER TABLE bordro_employees DISABLE ROW LEVEL SECURITY;');
+        } else {
+          alert('❌ Personel listesi yüklenemedi!\n\nHata: ' + error.message + '\n\nSupabase bağlantınızı kontrol edin.');
+        }
+        throw error;
+      }
+
+      console.log('✅ Personeller yüklendi:', data?.length || 0, 'kişi');
 
       const formattedEmployees = data.map(emp => ({
         id: emp.id,
@@ -248,8 +264,7 @@ export default function BordroTakip() {
         setSelectedEmployeeId(formattedEmployees[0].id);
       }
     } catch (error) {
-      console.error('Personel yükleme hatası:', error);
-      alert('Personeller yüklenirken bir hata oluştu!');
+      console.error('❌ Personel yükleme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -315,12 +330,13 @@ export default function BordroTakip() {
   // Personel Kaydet/Güncelle
   const saveEmployee = async () => {
     if (!employeeForm.name || !employeeForm.agreedSalary || !employeeForm.officialSalary) {
-      alert("Lütfen tüm alanları doldurunuz.");
+      alert("⚠️ Lütfen tüm zorunlu alanları doldurunuz:\n• Personel Adı\n• Ödenecek Maaş\n• Göstermelik Maaş");
       return;
     }
 
     try {
       setLoading(true);
+      console.log('💾 Personel kaydediliyor...', employeeForm);
       
       const employeeData = {
         name: employeeForm.name,
@@ -332,21 +348,38 @@ export default function BordroTakip() {
 
       if (editingEmployeeId) {
         // GÜNCELLEME
+        console.log('🔄 Güncelleniyor:', editingEmployeeId);
         const { error } = await supabase
           .from('bordro_employees')
           .update(employeeData)
           .eq('id', editingEmployeeId);
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Güncelleme hatası:', error);
+          throw error;
+        }
+        console.log('✅ Personel güncellendi');
         await ActivityLogger.bordroEmployeeUpdate(employeeForm.name);
       } else {
         // YENİ EKLEME
+        console.log('➕ Yeni personel ekleniyor...');
         const { data, error } = await supabase
           .from('bordro_employees')
           .insert([{ ...employeeData, active: true }])
           .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Ekleme hatası:', error);
+          
+          if (error.code === '42P01') {
+            alert('⚠️ VERİTABANI HATASI\n\nbordro_employees tablosu bulunamadı!\n\nÇözüm: BORDRO-SUPABASE-KURULUM.md dosyasını okuyun.');
+          } else {
+            alert('❌ Personel eklenemedi!\n\nHata: ' + error.message);
+          }
+          throw error;
+        }
+        
+        console.log('✅ Personel eklendi:', data);
         if (data && data[0]) {
           setSelectedEmployeeId(data[0].id);
         }
@@ -358,9 +391,11 @@ export default function BordroTakip() {
       setEmployeeForm({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
       setEditingEmployeeId(null);
       
+      alert('✅ Personel başarıyla kaydedildi!');
+      
     } catch (error) {
-      console.error('Personel kayıt hatası:', error);
-      alert('Personel kaydedilirken bir hata oluştu!');
+      console.error('❌ Personel kayıt hatası:', error);
+      // Hata mesajı zaten yukarıda gösterildi
     } finally {
       setLoading(false);
     }
@@ -404,6 +439,8 @@ export default function BordroTakip() {
   // Puantaj Kaydı Kaydet
   const saveDailyLog = async (day: number, log: DailyLog) => {
     try {
+      setSaveStatus('saving');
+      
       const logData = {
         employee_id: selectedEmployeeId,
         day,
@@ -416,19 +453,27 @@ export default function BordroTakip() {
         description: log.description
       };
 
-      const { error } = await supabase
+      console.log('📝 Puantaj kaydediliyor:', logData);
+
+      const { data, error } = await supabase
         .from('bordro_daily_logs')
         .upsert(logData, { 
           onConflict: 'employee_id,day,month,year'
-        });
+        })
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Supabase hatası:', error);
+        throw error;
+      }
       
+      console.log('✅ Puantaj kaydedildi:', data);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
       
     } catch (error) {
-      console.error('Puantaj kayıt hatası:', error);
+      console.error('❌ Puantaj kayıt hatası:', error);
+      alert('⚠️ Puantaj kaydedilemedi! Veritabanı bağlantısını kontrol edin.\n\nHata: ' + (error as any)?.message);
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 2000);
     }
@@ -586,6 +631,8 @@ export default function BordroTakip() {
   // --- HANDLERS ---
 
   const handleLogChange = (day: number, field: keyof DailyLog, value: any) => {
+    console.log(`📝 Değişiklik: Gün ${day}, Alan: ${field}, Değer:`, value);
+    
     setAppData(prev => {
       const newData = { ...prev };
       if(!newData[selectedEmployeeId]) newData[selectedEmployeeId] = {};
@@ -622,8 +669,10 @@ export default function BordroTakip() {
         currentLogs[day].overtimeHours = autoOvertime > 0 ? autoOvertime : 0;
       }
 
-      // Veritabanına Kaydet
-      saveDailyLog(day, currentLogs[day]);
+      console.log('📊 Güncellenmiş log:', currentLogs[day]);
+      
+      // Async kaydet (state güncellemesinden sonra)
+      setTimeout(() => saveDailyLog(day, currentLogs[day]), 100);
 
       return newData;
     });
@@ -1193,20 +1242,24 @@ export default function BordroTakip() {
                           />
                       </div>
                       <div>
-                          <label className="block text-xs font-bold text-gray-500 mb-1">Anlaşılan Net Maaş (Gerçek)</label>
+                          <label className="block text-xs font-bold text-green-700 mb-1">
+                            <span className="text-lg">💵</span> Anlaşılan Net Maaş (ÖDENECEK)
+                          </label>
                           <input 
                             type="number" 
-                            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
+                            className="w-full p-2 border-2 border-green-500 rounded focus:ring-2 focus:ring-green-500 font-bold" 
                             placeholder="Örn: 90000" 
                             value={employeeForm.agreedSalary} 
                             onChange={(e) => setEmployeeForm({...employeeForm, agreedSalary: e.target.value})} 
                           />
                       </div>
                       <div>
-                          <label className="block text-xs font-bold text-gray-500 mb-1">Resmi Net Maaş (SGK)</label>
+                          <label className="block text-xs font-bold text-gray-400 mb-1">
+                            <span className="text-sm">📝</span> Resmi Maaş (Göstermelik - SGK)
+                          </label>
                           <input 
                             type="number" 
-                            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
+                            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-gray-400 bg-gray-50 text-gray-600" 
                             placeholder="Örn: 17002" 
                             value={employeeForm.officialSalary} 
                             onChange={(e) => setEmployeeForm({...employeeForm, officialSalary: e.target.value})} 
@@ -1394,13 +1447,13 @@ export default function BordroTakip() {
                             <tr>
                                 <th className="p-4 border-b">PERSONEL</th>
                                 <th className="p-4 border-b text-center">TC NO</th>
-                                <th className="p-4 border-b text-right">ANLAŞILAN NET</th>
+                                <th className="p-4 border-b text-right text-green-700">💵 ÖDENECEK MAAŞ</th>
                                 <th className="p-4 border-b text-center">GÜN</th>
                                 <th className="p-4 border-b text-center">MESAİ (S)</th>
                                 <th className="p-4 border-b text-right text-green-700">HAKEDİŞ TOP.</th>
                                 <th className="p-4 border-b text-right text-red-600">AVANS</th>
                                 <th className="p-4 border-b text-right font-black">NET ELE GEÇEN</th>
-                                <th className="p-4 border-b text-right text-gray-500">RESMİ MAAŞ</th>
+                                <th className="p-4 border-b text-right text-gray-400 text-xs">📝 Göstermelik</th>
                                 <th className="p-4 border-b text-right text-red-600 bg-red-50">ÖDENECEK</th>
                                 <th className="p-4 border-b text-center">İŞLEM</th>
                             </tr>

@@ -13,7 +13,7 @@ export const logActivity = async (actionType, actionDescription, module = 'syste
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
-      console.warn('Log kaydı için kullanıcı bulunamadı');
+      // Sessizce devam et - kullanıcı girişi yapmamış olabilir
       return;
     }
 
@@ -35,9 +35,13 @@ export const logActivity = async (actionType, actionDescription, module = 'syste
       .insert([logData]);
 
     if (error) {
-      console.error('Log kaydetme hatası:', error);
-    } else {
-      console.log(`✅ Log kaydedildi: ${actionType} - ${actionDescription}`);
+      // Tablo yoksa veya RLS hatası varsa sessiz ol
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.log('ℹ️ Activity logs tablosu henüz oluşturulmamış');
+      } else {
+        console.error('Log kaydetme hatası:', error);
+      }
+    }
     }
   } catch (error) {
     console.error('Log kaydetme hatası:', error);
