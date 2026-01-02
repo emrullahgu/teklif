@@ -122,20 +122,22 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
             grossTotal: 0,
             netPayable: 0,
             officialPay: employee.officialSalary,
-            remainingHandPay: 0 - employee.officialSalary
+            remainingHandPay: 0
         };
     }
 
     // HESAPLAMA MANTIĞI
     // Günlük Ücret = Anlaşılan Net Maaş / AYDAKİ GÜN SAYISI (28, 29, 30 veya 31)
-    // Saatlik Ücret = Günlük Ücret / 8
+    // Mesai Saatlik Ücret = Anlaşılan Net Maaş / 30 / 8 (HER ZAMAN 30 güne göre, sabit)
     // Pazar/Tatil = 2 * Günlük Ücret
-    // Fazla Mesai = Saatlik Ücret (direkt, kesintisiz)
+    // Fazla Mesai = Saatlik Ücret (30 güne göre) × 1.5
     // BÖYLECE: 30 günlük ayda 30 gün çalışırsa = Anlaşılan Net Maaş
     //          31 günlük ayda 31 gün çalışırsa = Anlaşılan Net Maaş (AYNI!)
+    //          Mesai: 2 saat × 375 TL × 1.5 = 1,125 TL
     
-    const dailyRate = employee.agreedSalary / daysInMonth;
-    const hourlyRate = dailyRate / 8;
+    const dailyRate = employee.agreedSalary / daysInMonth; // Normal günler için
+    const hourlyRateForOvertime = (employee.agreedSalary / 30) / 8; // Mesai için sabit (90,000/30/8 = 375 TL)
+    const hourlyRate = dailyRate / 8; // Gösterim için
 
     // PUANTAJ VERİLERİNİ TOPLA
     for (let i = 1; i <= daysInMonth; i++) {
@@ -166,7 +168,7 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     // TOPLAM HESAPLAMALAR
     const totalExtras = totalExpenses + totalBonuses;
     const baseSalaryCalculated = (totalWorkDays * dailyRate);
-    const overtimePay = totalOvertimeHours * hourlyRate; // Direkt saatlik ücret
+    const overtimePay = totalOvertimeHours * hourlyRateForOvertime * 1.5; // Mesai: Sabit saatlik × 1.5
     const grossTotal = baseSalaryCalculated + totalSundayPay + overtimePay + totalExtras;
     const netPayable = grossTotal - totalAdvances;
     
@@ -276,6 +278,8 @@ export default function BordroTakip() {
   // Aylık Verileri Yükle
   const loadMonthlyData = async (employeeId: string) => {
     try {
+      console.log('📥 Aylık veri yükleniyor:', employeeId, monthKey);
+      
       // Puantaj Kayıtları
       const { data: logsData, error: logsError } = await supabase
         .from('bordro_daily_logs')
@@ -284,7 +288,10 @@ export default function BordroTakip() {
         .eq('month', currentMonth)
         .eq('year', currentYear);
 
-      if (logsError) throw logsError;
+      if (logsError) {
+        console.error('❌ Puantaj yükleme hatası:', logsError);
+        // Hata olsa bile devam et, boş veri ile
+      }
 
       // Giderler
       const { data: expensesData, error: expensesError } = await supabase
@@ -294,11 +301,14 @@ export default function BordroTakip() {
         .eq('month', currentMonth)
         .eq('year', currentYear);
 
-      if (expensesError) throw expensesError;
+      if (expensesError) {
+        console.error('❌ Gider yükleme hatası:', expensesError);
+        // Hata olsa bile devam et, boş veri ile
+      }
 
       // State'e Dönüştür
       const logs: Record<number, DailyLog> = {};
-      logsData.forEach(log => {
+      (logsData || []).forEach(log => {
         logs[log.day] = {
           day: log.day,
           type: log.type,
@@ -309,13 +319,15 @@ export default function BordroTakip() {
         };
       });
 
-      const expenses: Expense[] = expensesData.map(exp => ({
+      const expenses: Expense[] = (expensesData || []).map(exp => ({
         id: exp.id,
         type: exp.type,
         amount: parseFloat(exp.amount),
         description: exp.description || '',
         date: exp.date
       }));
+
+      console.log('✅ Veri yüklendi:', Object.keys(logs).length, 'gün,', expenses.length, 'gider');
 
       setAppData(prev => ({
         ...prev,
@@ -326,7 +338,7 @@ export default function BordroTakip() {
       }));
 
     } catch (error) {
-      console.error('Aylık veri yükleme hatası:', error);
+      console.error('❌ Aylık veri yükleme hatası:', error);
     }
   };
 
@@ -601,6 +613,16 @@ export default function BordroTakip() {
   useEffect(() => {
     loadEmployees();
   }, []);
+
+  // Personel listesi yüklendiğinde, tüm personeller için aylık verileri yükle
+  useEffect(() => {
+    if (employees.length > 0) {
+      console.log('👥 Tüm personeller için veri yükleniyor...');
+      employees.forEach(emp => {
+        loadMonthlyData(emp.id);
+      });
+    }
+  }, [employees.length, monthKey]);
 
   // Personel veya Ay Değiştiğinde Verileri Yükle
   useEffect(() => {
