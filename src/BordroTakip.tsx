@@ -698,8 +698,11 @@ export default function BordroTakip() {
         let autoOvertime = 0;
 
         if (log.type === 'Normal') {
-            if (isSaturday && endHour > 13) autoOvertime = endHour - 13;
-            else if (!isSaturday && !isSunday && endHour > 18) autoOvertime = endHour - 18;
+            // Sadece normal hafta içi günlerde 18:00'den sonrası otomatik mesai
+            // Cumartesi ve Pazar günlerinde otomatik mesai YAPMA (kullanıcı manuel ekler)
+            if (!isSaturday && !isSunday && endHour > 18) {
+              autoOvertime = endHour - 18;
+            }
         }
         currentLogs[day].overtimeHours = autoOvertime > 0 ? autoOvertime : 0;
       }
