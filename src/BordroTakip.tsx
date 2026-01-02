@@ -1459,14 +1459,13 @@ export default function BordroTakip() {
                             <tr>
                                 <th className="p-4 border-b">PERSONEL</th>
                                 <th className="p-4 border-b text-center">TC NO</th>
-                                <th className="p-4 border-b text-right text-green-700">💵 ÖDENECEK MAAŞ</th>
+                                <th className="p-4 border-b text-right text-green-700">💵 ANLAŞILAN NET MAAŞ</th>
                                 <th className="p-4 border-b text-center">GÜN</th>
                                 <th className="p-4 border-b text-center">MESAİ (S)</th>
                                 <th className="p-4 border-b text-right text-green-700">HAKEDİŞ TOP.</th>
                                 <th className="p-4 border-b text-right text-red-600">AVANS</th>
-                                <th className="p-4 border-b text-right font-black">NET ELE GEÇEN</th>
+                                <th className="p-4 border-b text-right font-black text-red-600 bg-red-50">💰 ÖDENECEK</th>
                                 <th className="p-4 border-b text-right text-gray-400 text-xs">📝 Göstermelik</th>
-                                <th className="p-4 border-b text-right text-red-600 bg-red-50">ÖDENECEK</th>
                                 <th className="p-4 border-b text-center">İŞLEM</th>
                             </tr>
                         </thead>
@@ -1490,9 +1489,8 @@ export default function BordroTakip() {
                                         </td>
                                         <td className="p-4 text-right text-green-700 font-semibold">{formatCurrency(stats.grossTotal)}</td>
                                         <td className="p-4 text-right text-red-600">{stats.totalAdvances > 0 ? formatCurrency(stats.totalAdvances) : '-'}</td>
-                                        <td className="p-4 text-right font-black text-gray-900 text-base">{formatCurrency(stats.netPayable)}</td>
+                                        <td className="p-4 text-right font-black text-red-600 bg-red-50 border-l-4 border-red-300 text-lg">{formatCurrency(stats.netPayable)}</td>
                                         <td className="p-4 text-right text-gray-400 text-xs">{formatCurrency(stats.officialPay)}</td>
-                                        <td className="p-4 text-right font-bold text-red-600 bg-red-50 border-l-4 border-red-200">{formatCurrency(stats.remainingHandPay)}</td>
                                         <td className="p-4 text-center flex justify-center space-x-2">
                                             <button 
                                                 onClick={() => openEditModal(emp)}
@@ -1528,7 +1526,7 @@ export default function BordroTakip() {
                             })}
                             {employees.length === 0 && (
                                 <tr>
-                                    <td colSpan={11} className="p-8 text-center text-gray-400 italic">Henüz personel eklenmemiş. "Yeni Personel" butonuna tıklayarak başlayın.</td>
+                                    <td colSpan={10} className="p-8 text-center text-gray-400 italic">Henüz personel eklenmemiş. "Yeni Personel" butonuna tıklayarak başlayın.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -1561,7 +1559,7 @@ export default function BordroTakip() {
                                             return sum + stats.totalAdvances;
                                         }, 0))}
                                     </td>
-                                    <td className="p-4 text-right text-xl">
+                                    <td className="p-4 text-right text-xl bg-red-800 border-l-4 border-yellow-300">
                                         {formatCurrency(employees.reduce((sum, emp) => {
                                             const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
                                             return sum + stats.netPayable;
@@ -1571,12 +1569,6 @@ export default function BordroTakip() {
                                         {formatCurrency(employees.reduce((sum, emp) => {
                                             const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
                                             return sum + stats.officialPay;
-                                        }, 0))}
-                                    </td>
-                                    <td className="p-4 text-right text-xl bg-red-800 border-l-4 border-yellow-300">
-                                        {formatCurrency(employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
-                                            return sum + stats.remainingHandPay;
                                         }, 0))}
                                     </td>
                                     <td className="p-4"></td>
