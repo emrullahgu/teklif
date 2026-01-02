@@ -25,6 +25,7 @@ import {
   FileText
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import ActivityLogger from './activityLogger';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -325,6 +326,7 @@ export default function BordroTakip() {
           .eq('id', editingEmployeeId);
 
         if (error) throw error;
+        await ActivityLogger.bordroEmployeeUpdate(employeeForm.name);
       } else {
         // YENİ EKLEME
         const { data, error } = await supabase
@@ -336,6 +338,7 @@ export default function BordroTakip() {
         if (data && data[0]) {
           setSelectedEmployeeId(data[0].id);
         }
+        await ActivityLogger.bordroEmployeeCreate(employeeForm.name);
       }
 
       await loadEmployees();
@@ -464,6 +467,7 @@ export default function BordroTakip() {
         if (error) throw error;
       }
 
+      await ActivityLogger.bordroMonthlySave(currentMonth + 1, currentYear, employees.length);
       alert('✅ Aylık bordro başarıyla kaydedildi! Geçmiş Bordrolar bölümünden görüntüleyebilirsiniz.');
     } catch (error) {
       console.error('Bordro kaydetme hatası:', error);
@@ -685,6 +689,7 @@ export default function BordroTakip() {
       ];
 
       XLSX.writeFile(wb, `Bordro_${currentYear}_${currentMonth + 1}.xlsx`);
+      await ActivityLogger.bordroExportExcel(currentMonth + 1, currentYear);
       alert('✅ Excel dosyası başarıyla indirildi!');
     } catch (error) {
       console.error('Excel export hatası:', error);
@@ -837,6 +842,7 @@ export default function BordroTakip() {
 
       const cleanName = employee.name.replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
       doc.save(`Bordro_${cleanName}_${currentYear}_${currentMonth + 1}.pdf`);
+      await ActivityLogger.bordroExportPDF(employee.name);
       alert('✅ PDF başarıyla indirildi!');
     } catch (error) {
       console.error('PDF export hatası:', error);
@@ -961,6 +967,7 @@ export default function BordroTakip() {
       doc.text('Tel: +90 535 714 52 88 | www.kobinerji.com', 105, finalY + 15, { align: 'center' });
 
       doc.save(`Bordro_Toplu_${currentYear}_${currentMonth + 1}.pdf`);
+      await ActivityLogger.bordroExportAllPDF(currentMonth + 1, currentYear);
       alert('✅ Toplu bordro PDF\'i başarıyla indirildi!');
     } catch (error) {
       console.error('PDF export hatası:', error);

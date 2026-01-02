@@ -173,7 +173,36 @@ CREATE POLICY "Users can update their own payroll summary" ON monthly_payroll_su
 CREATE POLICY "Users can delete their own payroll summary" ON monthly_payroll_summary
   FOR DELETE USING (auth.uid() = user_id OR user_id IS NULL);
 
--- 9. BAŞLANGIÇ VERİLERİ (Örnek - İsteğe bağlı)
+-- 10. AKTİVİTE LOG TABLOSU (Tüm kullanıcı işlemlerini kaydet)
+CREATE TABLE IF NOT EXISTS activity_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_email TEXT,
+  action_type TEXT NOT NULL,
+  action_description TEXT NOT NULL,
+  module TEXT NOT NULL, -- 'bordro', 'teklif', 'fatura', 'login' vs.
+  related_id TEXT, -- İlgili kayıt ID'si (opsiyonel)
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- İndeksler
+CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_module ON activity_logs(module, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_date ON activity_logs(created_at DESC);
+
+-- RLS aktifleştir
+ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
+
+-- RLS politikaları - Herkes kendi loglarını görebilir
+CREATE POLICY "Users can view their own logs" ON activity_logs
+  FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
+
+CREATE POLICY "Users can insert their own logs" ON activity_logs
+  FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+
+-- 11. BAŞLANGIÇ VERİLERİ (Örnek - İsteğe bağlı)
 -- INSERT INTO employees (name, agreed_salary, official_salary) VALUES
 -- ('Azad Balkın', 45000, 17002),
 -- ('Harun Hoşaf', 45000, 17002),

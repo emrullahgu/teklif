@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import ActivityLogger from './activityLogger';
 
 const AuthContext = createContext();
 
@@ -98,6 +99,10 @@ export const AuthProvider = ({ children }) => {
 
       localStorage.setItem('currentUser', JSON.stringify(userToStore));
       setCurrentUser(userToStore);
+      
+      // Login log kaydı
+      await ActivityLogger.login(user.email);
+      
       return userToStore;
     } catch (error) {
       console.error('❌ Login hatası:', error);
@@ -106,8 +111,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signOut = () => {
+    const userEmail = currentUser?.email;
     localStorage.removeItem('currentUser');
     setCurrentUser(null);
+    
+    // Logout log kaydı
+    if (userEmail) {
+      ActivityLogger.logout(userEmail);
+    }
   };
 
   const register = async (userData) => {
