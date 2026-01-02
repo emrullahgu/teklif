@@ -758,9 +758,8 @@ export default function BordroTakip() {
           ['Kesinti (Avanslar)', `- ${stats.totalAdvances.toFixed(2)} TL`],
           ['', ''],
           ['NET HAKEDIS', `${stats.netPayable.toFixed(2)} TL`],
-          ['Resmi Maas (SGK Bordrosu)', `${stats.officialPay.toFixed(2)} TL`],
           ['', ''],
-          ['ELDEN ODENECEK', `${stats.remainingHandPay.toFixed(2)} TL`]
+          ['ODENECEK', `${stats.netPayable.toFixed(2)} TL`]
         ],
         theme: 'grid',
         headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
