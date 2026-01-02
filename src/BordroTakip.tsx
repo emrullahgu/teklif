@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Download,
   Upload,
+  UploadCloud,
   FileDown,
   FileText
 } from 'lucide-react';
@@ -975,6 +976,95 @@ export default function BordroTakip() {
     }
   };
 
+  // Excel Import - Bordro Verilerini İçe Aktar
+  const importFromExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      if (jsonData.length === 0) {
+        alert('Excel dosyası boş!');
+        return;
+      }
+
+      let importedCount = 0;
+      let updatedCount = 0;
+
+      // Her satırı işle
+      for (const row: any of jsonData) {
+        // Personel ismi çıkar (TC Kimlik No veya diğer kolonlardan)
+        const employeeName = row['İSİM'] || row['AD SOYAD'] || row['PERSONEL'] || '';
+        const agreedSalary = parseFloat(row['ANLAŞILAN MAAŞ'] || row['NET MAAŞ'] || '0') || 0;
+        const officialSalary = parseFloat(row['RESMİ MAAŞ'] || row['SGK MAAŞ'] || '0') || 0;
+        const workDays = parseInt(row['GÜN'] || row['ÇALIŞILAN GÜN'] || '0') || 0;
+        
+        if (!employeeName) continue;
+
+        // Personeli kontrol et veya ekle
+        let employee = employees.find(e => e.name.toLowerCase() === employeeName.toLowerCase());
+        
+        if (!employee) {
+          // Yeni personel ekle
+          const { data: newEmp, error } = await supabase
+            .from('bordro_employees')
+            .insert([{
+              name: employeeName,
+              agreed_salary: agreedSalary || 30000,
+              official_salary: officialSalary || 17002,
+              active: true
+            }])
+            .select()
+            .single();
+
+          if (error) throw error;
+          employee = {
+            id: newEmp.id,
+            name: newEmp.name,
+            agreedSalary: newEmp.agreed_salary,
+            officialSalary: newEmp.official_salary
+          };
+          importedCount++;
+        }
+
+        // Çalışma günlerini ekle (basit versiyon - her gün Normal olarak)
+        if (workDays > 0) {
+          for (let day = 1; day <= Math.min(workDays, daysInMonth); day++) {
+            await saveDailyLog(employee.id, day, {
+              day,
+              type: 'Normal',
+              startTime: '08:00',
+              endTime: '18:00',
+              overtimeHours: 0,
+              description: 'Excel\'den import'
+            });
+          }
+          updatedCount++;
+        }
+      }
+
+      await loadEmployees();
+      if (selectedEmployeeId) {
+        await loadMonthlyData(selectedEmployeeId);
+      }
+
+      alert(`✅ Excel import tamamlandı!\n${importedCount} yeni personel eklendi\n${updatedCount} personel güncellendi`);
+      
+      // Input'u temizle
+      event.target.value = '';
+    } catch (error) {
+      console.error('Excel import hatası:', error);
+      alert('❌ Excel dosyası işlenirken hata oluştu!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 font-sans relative flex flex-col">
       
@@ -1082,6 +1172,25 @@ export default function BordroTakip() {
           </div>
 
           <div className="flex items-center space-x-2">
+            {/* Excel Import */}
+            <div className="relative">
+              <input 
+                type="file" 
+                accept=".xlsx,.xls"
+                id="excel-import"
+                className="hidden"
+                onChange={importFromExcel}
+              />
+              <label 
+                htmlFor="excel-import"
+                className="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm font-semibold flex items-center space-x-1 cursor-pointer"
+                title="Excel'den Bordro İçe Aktar"
+              >
+                <UploadCloud className="w-4 h-4"/>
+                <span>Excel İçe Aktar</span>
+              </label>
+            </div>
+
             {/* Geçmiş Bordrolar */}
             <button
               onClick={() => setShowHistoryModal(true)}
