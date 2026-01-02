@@ -108,8 +108,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
 
     if (!data) {
         return {
-            dailyRate: employee.agreedSalary / 30,
-            hourlyRate: (employee.agreedSalary / 30) / 8,
+            dailyRate: employee.agreedSalary / daysInMonth,
+            hourlyRate: (employee.agreedSalary / daysInMonth) / 8,
             totalWorkDays: 0,
             totalSundayDays: 0,
             totalOvertimeHours: 0,
@@ -127,12 +127,14 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     }
 
     // HESAPLAMA MANTIĞI
-    // Günlük Ücret = Anlaşılan Net Maaş / 30
+    // Günlük Ücret = Anlaşılan Net Maaş / AYDAKİ GÜN SAYISI (28, 29, 30 veya 31)
     // Saatlik Ücret = Günlük Ücret / 8
     // Pazar/Tatil = 2 * Günlük Ücret
     // Fazla Mesai = Saatlik Ücret (direkt, kesintisiz)
+    // BÖYLECE: 30 günlük ayda 30 gün çalışırsa = Anlaşılan Net Maaş
+    //          31 günlük ayda 31 gün çalışırsa = Anlaşılan Net Maaş (AYNI!)
     
-    const dailyRate = employee.agreedSalary / 30;
+    const dailyRate = employee.agreedSalary / daysInMonth;
     const hourlyRate = dailyRate / 8;
 
     // PUANTAJ VERİLERİNİ TOPLA
