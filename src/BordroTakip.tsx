@@ -627,7 +627,6 @@ export default function BordroTakip() {
         fillMonthDefaults();
       }, 300);
     }
-    }
   }, [selectedEmployeeId, monthKey, employees]);
 
   const currentData = appData[selectedEmployeeId]?.[monthKey] || { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
