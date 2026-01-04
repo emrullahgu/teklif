@@ -673,9 +673,12 @@ export default function BordroTakip() {
     setAppData(prev => {
       const newData = { ...prev };
       if(!newData[selectedEmployeeId]) newData[selectedEmployeeId] = {};
-      if(!newData[selectedEmployeeId][monthKey]) newData[selectedEmployeeId][monthKey] = { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
+      if(!newData[selectedEmployeeId][monthKey]) {
+        newData[selectedEmployeeId][monthKey] = { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
+      }
 
-      const currentLogs = newData[selectedEmployeeId][monthKey].logs;
+      // Mevcut logs'u al veya yeni oluştur
+      const currentLogs = { ...newData[selectedEmployeeId][monthKey].logs };
       
       if (!currentLogs[day]) {
         const { isSaturday, isSunday } = isWeekend(day, currentMonth, currentYear);
@@ -687,8 +690,12 @@ export default function BordroTakip() {
           overtimeHours: 0,
           description: ''
         };
+      } else {
+        // Mevcut log'u clone et
+        currentLogs[day] = { ...currentLogs[day] };
       }
 
+      // Alan güncelle
       (currentLogs[day] as any)[field] = value;
 
       // Otomatik Mesai Hesaplama
@@ -707,6 +714,15 @@ export default function BordroTakip() {
       }
 
       console.log('📊 Güncellenmiş log:', currentLogs[day]);
+      
+      // IMMUTABILITY: Yeni nested object oluştur
+      newData[selectedEmployeeId] = {
+        ...newData[selectedEmployeeId],
+        [monthKey]: {
+          ...newData[selectedEmployeeId][monthKey],
+          logs: currentLogs
+        }
+      };
       
       // Async kaydet (state güncellemesinden sonra)
       setTimeout(() => saveDailyLog(day, currentLogs[day]), 100);
@@ -740,11 +756,29 @@ export default function BordroTakip() {
       date: advanceForm.date
     };
 
+    // State güncellemesi - IMMUTABILITY KORUNARAK
     setAppData(prev => {
        const newData = {...prev};
-       if(!newData[selectedEmployeeId][monthKey]) newData[selectedEmployeeId][monthKey] = { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
        
-       newData[selectedEmployeeId][monthKey].expenses.push(newExpense);
+       // Eğer personel verisi yoksa oluştur
+       if(!newData[selectedEmployeeId]) {
+         newData[selectedEmployeeId] = {};
+       }
+       
+       // Eğer ay verisi yoksa oluştur
+       if(!newData[selectedEmployeeId][monthKey]) {
+         newData[selectedEmployeeId][monthKey] = { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
+       }
+       
+       // IMMUTABILITY: Yeni nested object ve array oluştur
+       newData[selectedEmployeeId] = {
+         ...newData[selectedEmployeeId],
+         [monthKey]: {
+           ...newData[selectedEmployeeId][monthKey],
+           expenses: [...newData[selectedEmployeeId][monthKey].expenses, newExpense]
+         }
+       };
+       
        return newData;
     });
 
@@ -759,9 +793,19 @@ export default function BordroTakip() {
 
   const deleteExpense = async (id: string) => {
     if (window.confirm('Bu kaydı silmek istediğinizden emin misiniz?')) {
+      // State güncellemesi - IMMUTABILITY KORUNARAK
       setAppData(prev => {
           const newData = {...prev};
-          newData[selectedEmployeeId][monthKey].expenses = newData[selectedEmployeeId][monthKey].expenses.filter(e => e.id !== id);
+          
+          // IMMUTABILITY: Yeni nested object ve filtered array oluştur
+          newData[selectedEmployeeId] = {
+            ...newData[selectedEmployeeId],
+            [monthKey]: {
+              ...newData[selectedEmployeeId][monthKey],
+              expenses: newData[selectedEmployeeId][monthKey].expenses.filter(e => e.id !== id)
+            }
+          };
+          
           return newData;
       });
 
