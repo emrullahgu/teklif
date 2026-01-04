@@ -215,6 +215,10 @@ export default function BordroTakip() {
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   
+  // Avans Modal
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [advanceForm, setAdvanceForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], type: 'Avans' as 'Avans' | 'Gider' | 'Prim' });
+  
   // Geçmiş bordro görüntüleme
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyYear, setHistoryYear] = useState(currentDate.getFullYear());
@@ -711,31 +715,46 @@ export default function BordroTakip() {
     });
   };
 
-  const addExpense = async (type: 'Avans' | 'Gider' | 'Prim') => {
-    const amountStr = prompt(`${type} tutarını giriniz (TL):`);
-    if (amountStr) {
-      const amount = parseFloat(amountStr);
-      if (!isNaN(amount)) {
-        const newExpense: Expense = {
-          id: crypto.randomUUID(),
-          type,
-          amount,
-          description: 'Manuel Giriş',
-          date: new Date().toISOString().split('T')[0]
-        };
+  const addExpense = (type: 'Avans' | 'Gider' | 'Prim') => {
+    setAdvanceForm({ 
+      amount: '', 
+      date: new Date().toISOString().split('T')[0], 
+      type 
+    });
+    setShowAdvanceModal(true);
+  };
 
-        setAppData(prev => {
-           const newData = {...prev};
-           if(!newData[selectedEmployeeId][monthKey]) newData[selectedEmployeeId][monthKey] = { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
-           
-           newData[selectedEmployeeId][monthKey].expenses.push(newExpense);
-           return newData;
-        });
-
-        // Veritabanına Kaydet
-        await saveExpense(newExpense);
-      }
+  const handleAdvanceSubmit = async () => {
+    if (!advanceForm.amount || isNaN(parseFloat(advanceForm.amount))) {
+      alert('⚠️ Lütfen geçerli bir tutar giriniz!');
+      return;
     }
+
+    const amount = parseFloat(advanceForm.amount);
+    
+    const newExpense: Expense = {
+      id: crypto.randomUUID(),
+      type: advanceForm.type,
+      amount,
+      description: `Manuel ${advanceForm.type} (${advanceForm.date})`,
+      date: advanceForm.date
+    };
+
+    setAppData(prev => {
+       const newData = {...prev};
+       if(!newData[selectedEmployeeId][monthKey]) newData[selectedEmployeeId][monthKey] = { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
+       
+       newData[selectedEmployeeId][monthKey].expenses.push(newExpense);
+       return newData;
+    });
+
+    // Veritabanına Kaydet
+    await saveExpense(newExpense);
+    
+    // Modal'ı kapat ve formu sıfırla
+    setShowAdvanceModal(false);
+    setAdvanceForm({ amount: '', date: new Date().toISOString().split('T')[0], type: 'Avans' });
+    alert(`✅ ${advanceForm.type} başarıyla eklendi!`);
   };
 
   const deleteExpense = async (id: string) => {
@@ -1317,6 +1336,78 @@ export default function BordroTakip() {
           </div>
       )}
 
+      {/* MODAL: Avans/Gider/Prim Ekle */}
+      {showAdvanceModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl p-6 w-96">
+                  <div className="flex justify-between items-center mb-4 border-b pb-2">
+                      <h3 className="font-bold text-lg" style={{color: advanceForm.type === 'Avans' ? '#dc2626' : advanceForm.type === 'Gider' ? '#ea580c' : '#16a34a'}}>
+                          🔹 {advanceForm.type} Ekle
+                      </h3>
+                      <button onClick={() => {
+                        setShowAdvanceModal(false);
+                        setAdvanceForm({ amount: '', date: new Date().toISOString().split('T')[0], type: 'Avans' });
+                      }} className="text-gray-400 hover:text-red-500"><X className="w-5 h-5"/></button>
+                  </div>
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-xs font-bold text-gray-600 mb-2">
+                            📅 Tarih <span className="text-red-600">*</span>
+                          </label>
+                          <input 
+                            type="date" 
+                            className="w-full p-3 border-2 border-blue-400 rounded focus:ring-2 focus:ring-blue-500 font-semibold" 
+                            value={advanceForm.date} 
+                            onChange={(e) => setAdvanceForm({...advanceForm, date: e.target.value})} 
+                          />
+                          <div className="text-xs text-gray-500 mt-1">
+                            Seçilen: {new Date(advanceForm.date).toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-600 mb-2">
+                            💰 Tutar (TL) <span className="text-red-600">*</span>
+                          </label>
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            min="0"
+                            className="w-full p-3 border-2 border-green-500 rounded focus:ring-2 focus:ring-green-500 font-bold text-lg" 
+                            placeholder="0.00" 
+                            value={advanceForm.amount} 
+                            onChange={(e) => setAdvanceForm({...advanceForm, amount: e.target.value})} 
+                          />
+                      </div>
+                      <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                        <p className="text-sm text-gray-600">
+                          <strong>Personel:</strong> {selectedEmployee.name}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          <strong>Ay/Yıl:</strong> {MONTHS[currentMonth]} {currentYear}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button 
+                          onClick={handleAdvanceSubmit}
+                          className="flex-1 bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 transition shadow"
+                        >
+                          ✅ KAYDET
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setShowAdvanceModal(false);
+                            setAdvanceForm({ amount: '', date: new Date().toISOString().split('T')[0], type: 'Avans' });
+                          }}
+                          className="flex-1 bg-gray-400 text-white py-3 rounded font-bold hover:bg-gray-500 transition shadow"
+                        >
+                          ❌ İPTAL
+                        </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* HEADER */}
       <header className="bg-blue-900 text-white p-4 shadow-lg sticky top-0 z-40">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center space-y-3 md:space-y-0">
@@ -1693,15 +1784,33 @@ export default function BordroTakip() {
                                 BORDRO PDF İNDİR
                             </button>
                             <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
-                                {currentData.expenses.map(e => (
-                                    <div key={e.id} className="flex justify-between text-xs bg-gray-50 p-1 rounded border">
-                                        <span className={e.type === 'Avans' ? 'text-red-600' : 'text-green-600'}>{e.type}</span>
+                                {currentData.expenses.length > 0 ? (
+                                  currentData.expenses.map(e => (
+                                    <div key={e.id} className="flex justify-between items-start text-xs bg-gray-50 p-2 rounded border hover:bg-blue-50 transition">
+                                        <div className="flex-1">
+                                          <div className={`font-bold ${e.type === 'Avans' ? 'text-red-600' : e.type === 'Gider' ? 'text-orange-600' : 'text-green-600'}`}>
+                                            {e.type}
+                                          </div>
+                                          <div className="text-gray-500 text-[10px] mt-0.5">
+                                            📅 {new Date(e.date).toLocaleDateString('tr-TR')}
+                                          </div>
+                                        </div>
                                         <div className="flex items-center space-x-2">
-                                            <span>{formatCurrency(e.amount)}</span>
-                                            <button onClick={() => deleteExpense(e.id)}><Trash2 className="w-3 h-3 text-gray-400 hover:text-red-600"/></button>
+                                            <span className="font-bold">{formatCurrency(e.amount)}</span>
+                                            <button 
+                                              onClick={() => deleteExpense(e.id)}
+                                              className="p-1 hover:bg-red-100 rounded"
+                                            >
+                                              <Trash2 className="w-3 h-3 text-gray-400 hover:text-red-600"/>
+                                            </button>
                                         </div>
                                     </div>
-                                ))}
+                                  ))
+                                ) : (
+                                  <div className="text-center text-gray-400 text-xs py-2 italic">
+                                    Henüz kayıt yok
+                                  </div>
+                                )}
                             </div>
                         </div>
                       </>
