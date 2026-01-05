@@ -105,6 +105,7 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     let totalAdvances = 0;
     let totalExpenses = 0;
     let totalBonuses = 0;
+    let totalAbsentDays = 0; // Gelmediği günler
 
     if (!data) {
         return {
@@ -115,6 +116,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
             totalOvertimeHours: 0,
             overtimePay: 0,
             totalSundayPay: 0,
+            totalAbsentDays: 0,
+            absentDeduction: 0,
             totalAdvances: 0,
             totalExpenses: 0,
             totalBonuses: 0,
@@ -127,18 +130,19 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     }
 
     // HESAPLAMA MANTIĞI
-    // Günlük Ücret = Anlaşılan Net Maaş / AYDAKİ GÜN SAYISI (28, 29, 30 veya 31)
+    // Günlük Ücret = Anlaşılan Net Maaş / 30 (sabit)
     // Mesai Saatlik Ücret = Anlaşılan Net Maaş / 30 / 8 (HER ZAMAN 30 güne göre, sabit)
     // Pazar/Tatil = Normal gün + 1 günlük ek fark (sabit 30 güne göre: 90,000/30 = 3,000 TL)
+    // Gelmedi = Anlaşılan Maaş'tan KESİNTİ (90,000/30 = 3,000 TL/gün)
     // Fazla Mesai = Saatlik Ücret (30 güne göre) × 1.5
     // BÖYLECE: 
-    //   - 30 günlük ayda 30 gün çalışırsa = 90,000 TL
-    //   - 31 günlük ayda 31 gün çalışırsa = 90,000 TL (AYNI!)
+    //   - 30 gün tam çalışırsa = 90,000 TL
+    //   - 2 gün gelmedi = 90,000 - 6,000 = 84,000 TL
     //   - Pazar çalışma: 90,000 + 3,000 TL (ek fark)
     //   - Mesai: 5 saat × 375 TL × 1.5 = 2,812.50 TL
     
     const dailyRate = employee.agreedSalary / daysInMonth; // Normal günler için (değişken)
-    const dailyRateFixed = employee.agreedSalary / 30; // Pazar/Tatil farkı için sabit (90,000/30 = 3,000 TL)
+    const dailyRateFixed = employee.agreedSalary / 30; // Pazar/Tatil farkı ve kesinti için sabit (90,000/30 = 3,000 TL)
     const hourlyRateForOvertime = (employee.agreedSalary / 30) / 8; // Mesai için sabit (90,000/30/8 = 375 TL)
     const hourlyRate = dailyRate / 8; // Gösterim için
 
@@ -153,12 +157,17 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
                 totalWorkDays += 1; // Normal gün olarak say
                 totalSundayDays += 1;
                 totalSundayPay += dailyRateFixed; // Ek fark: 90,000/30 = 3,000 TL
+            } else if (log.type === 'İzinli' || log.type === 'Raporlu') {
+                // İzinli ve Raporlu günler çalışılan güne sayılmaz, kesinti de yapılmaz
             }
-            // İzinli ve Raporlu günler çalışılan güne SAYILMAZ
+            // Boş günler (gelmedi) için kesinti yapılacak
 
             if (log.overtimeHours > 0) {
                 totalOvertimeHours += log.overtimeHours;
             }
+        } else {
+            // Eğer log yoksa, o gün boş demektir (Gelmedi)
+            totalAbsentDays += 1;
         }
     }
 
@@ -172,7 +181,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     // TOPLAM HESAPLAMALAR
     const totalExtras = totalExpenses + totalBonuses;
     const overtimePay = totalOvertimeHours * hourlyRateForOvertime * 1.5; // Mesai: Sabit saatlik × 1.5
-    const grossTotal = employee.agreedSalary + totalSundayPay + overtimePay + totalExtras; // Anlaşılan Maaş + Ekstralar
+    const absentDeduction = totalAbsentDays * dailyRateFixed; // Gelmediği günler için kesinti: 2 gün × 3,000 = 6,000 TL
+    const grossTotal = employee.agreedSalary + totalSundayPay + overtimePay + totalExtras - absentDeduction; // Anlaşılan Maaş - Gelmedi + Ekstralar
     const netPayable = grossTotal - totalAdvances;
     
     // ÖDENECEK ÖDENECEK = NET ELE GEÇEN (officialSalary sadece gösterim için)
@@ -186,6 +196,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
         totalOvertimeHours,
         overtimePay,
         totalSundayPay,
+        totalAbsentDays,
+        absentDeduction,
         totalAdvances,
         totalExpenses,
         totalBonuses,
@@ -1844,6 +1856,12 @@ export default function BordroTakip() {
                                   <span>Anlaşılan Maaş:</span>
                                   <span className="font-semibold">{formatCurrency(selectedEmployee.agreedSalary)}</span>
                                 </div>
+                                {currentStats.absentDeduction > 0 && (
+                                  <div className="flex justify-between border-b pb-1 text-red-600">
+                                    <span>Gelmedi ({currentStats.totalAbsentDays} gün):</span>
+                                    <span className="font-semibold">-{formatCurrency(currentStats.absentDeduction)}</span>
+                                  </div>
+                                )}
                                 {currentStats.overtimePay > 0 && (
                                   <div className="flex justify-between border-b pb-1 text-blue-600">
                                     <span>Mesai ({currentStats.totalOvertimeHours} saat):</span>
