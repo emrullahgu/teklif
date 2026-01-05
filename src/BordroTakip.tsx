@@ -129,13 +129,16 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     // HESAPLAMA MANTIĞI
     // Günlük Ücret = Anlaşılan Net Maaş / AYDAKİ GÜN SAYISI (28, 29, 30 veya 31)
     // Mesai Saatlik Ücret = Anlaşılan Net Maaş / 30 / 8 (HER ZAMAN 30 güne göre, sabit)
-    // Pazar/Tatil = 2 * Günlük Ücret
+    // Pazar/Tatil = Normal gün + 1 günlük ek fark (sabit 30 güne göre: 90,000/30 = 3,000 TL)
     // Fazla Mesai = Saatlik Ücret (30 güne göre) × 1.5
-    // BÖYLECE: 30 günlük ayda 30 gün çalışırsa = Anlaşılan Net Maaş
-    //          31 günlük ayda 31 gün çalışırsa = Anlaşılan Net Maaş (AYNI!)
-    //          Mesai: 2 saat × 375 TL × 1.5 = 1,125 TL
+    // BÖYLECE: 
+    //   - 30 günlük ayda 30 gün çalışırsa = 90,000 TL
+    //   - 31 günlük ayda 31 gün çalışırsa = 90,000 TL (AYNI!)
+    //   - Pazar çalışma: 90,000 + 3,000 TL (ek fark)
+    //   - Mesai: 5 saat × 375 TL × 1.5 = 2,812.50 TL
     
-    const dailyRate = employee.agreedSalary / daysInMonth; // Normal günler için
+    const dailyRate = employee.agreedSalary / daysInMonth; // Normal günler için (değişken)
+    const dailyRateFixed = employee.agreedSalary / 30; // Pazar/Tatil farkı için sabit (90,000/30 = 3,000 TL)
     const hourlyRateForOvertime = (employee.agreedSalary / 30) / 8; // Mesai için sabit (90,000/30/8 = 375 TL)
     const hourlyRate = dailyRate / 8; // Gösterim için
 
@@ -146,9 +149,10 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
             if (log.type === 'Normal') {
                 totalWorkDays += 1;
             } else if (log.type === 'Pazar' || log.type === 'Resmi Tatil') {
-                // Pazar/Tatil = 2 * Günlük Ücret
+                // Pazar/Tatil = Normal gün sayılır + 1 günlük EK fark (sabit 30 güne göre)
+                totalWorkDays += 1; // Normal gün olarak say
                 totalSundayDays += 1;
-                totalSundayPay += dailyRate * 2; 
+                totalSundayPay += dailyRateFixed; // Ek fark: 90,000/30 = 3,000 TL
             }
             // İzinli ve Raporlu günler çalışılan güne SAYILMAZ
 
@@ -461,6 +465,12 @@ export default function BordroTakip() {
   // Puantaj Kaydı Kaydet
   const saveDailyLog = async (day: number, log: DailyLog) => {
     try {
+      // Geçersiz/boş kayıtları kaydetme
+      if (!log.type) {
+        console.log('⏭️ Boş kayıt atlandı:', day);
+        return;
+      }
+
       setSaveStatus('saving');
       
       const logData = {
@@ -540,6 +550,25 @@ export default function BordroTakip() {
     } catch (error) {
       console.error('Gider silme hatası:', error);
       alert('Gider silinirken bir hata oluştu!');
+    }
+  };
+
+  // Puantaj Sil (Boş bırakılan günler için)
+  const deleteDailyLog = async (day: number) => {
+    try {
+      const { error } = await supabase
+        .from('bordro_daily_logs')
+        .delete()
+        .eq('employee_id', selectedEmployeeId)
+        .eq('day', day)
+        .eq('month', currentMonth)
+        .eq('year', currentYear);
+
+      if (error) throw error;
+      console.log('✅ Puantaj silindi:', day);
+      
+    } catch (error) {
+      console.error('Puantaj silme hatası:', error);
     }
   };
 
@@ -715,17 +744,34 @@ export default function BordroTakip() {
 
       console.log('📊 Güncellenmiş log:', currentLogs[day]);
       
-      // IMMUTABILITY: Yeni nested object oluştur
-      newData[selectedEmployeeId] = {
-        ...newData[selectedEmployeeId],
-        [monthKey]: {
-          ...newData[selectedEmployeeId][monthKey],
-          logs: currentLogs
-        }
-      };
-      
-      // Async kaydet (state güncellemesinden sonra)
-      setTimeout(() => saveDailyLog(day, currentLogs[day]), 100);
+      // Eğer type boş/null yapıldıysa, günü tamamen sil
+      if (field === 'type' && (!value || value === '')) {
+        delete currentLogs[day];
+        
+        // IMMUTABILITY: Yeni nested object oluştur (silme ile)
+        newData[selectedEmployeeId] = {
+          ...newData[selectedEmployeeId],
+          [monthKey]: {
+            ...newData[selectedEmployeeId][monthKey],
+            logs: currentLogs
+          }
+        };
+        
+        // Database'den de sil
+        setTimeout(() => deleteDailyLog(day), 100);
+      } else {
+        // IMMUTABILITY: Yeni nested object oluştur
+        newData[selectedEmployeeId] = {
+          ...newData[selectedEmployeeId],
+          [monthKey]: {
+            ...newData[selectedEmployeeId][monthKey],
+            logs: currentLogs
+          }
+        };
+        
+        // Async kaydet (state güncellemesinden sonra)
+        setTimeout(() => saveDailyLog(day, currentLogs[day]), 100);
+      }
 
       return newData;
     });
@@ -1795,17 +1841,38 @@ export default function BordroTakip() {
                                 <Banknote className="w-5 h-5 text-green-400"/>
                             </div>
                             <div className="p-4 space-y-2 text-sm">
-                                <div className="flex justify-between border-b pb-1"><span>Çalışma:</span><span className="font-semibold">{formatCurrency(currentStats.totalWorkDays * currentStats.dailyRate)}</span></div>
-                                <div className="flex justify-between border-b pb-1 text-blue-600"><span>Mesai:</span><span className="font-semibold">{formatCurrency(currentStats.overtimePay)}</span></div>
-                                <div className="flex justify-between border-b pb-1 text-orange-600"><span>Pazar/Tatil Farkı:</span><span className="font-semibold">{formatCurrency(currentStats.totalSundayPay)}</span></div>
+                                <div className="flex justify-between border-b pb-1">
+                                  <span>Temel Maaş ({currentStats.totalWorkDays} gün):</span>
+                                  <span className="font-semibold">{formatCurrency(currentStats.totalWorkDays * currentStats.dailyRate)}</span>
+                                </div>
+                                {currentStats.overtimePay > 0 && (
+                                  <div className="flex justify-between border-b pb-1 text-blue-600">
+                                    <span>Mesai ({currentStats.totalOvertimeHours} saat):</span>
+                                    <span className="font-semibold">+{formatCurrency(currentStats.overtimePay)}</span>
+                                  </div>
+                                )}
+                                {currentStats.totalSundayPay > 0 && (
+                                  <div className="flex justify-between border-b pb-1 text-orange-600">
+                                    <span>Pazar/Tatil Farkı:</span>
+                                    <span className="font-semibold">+{formatCurrency(currentStats.totalSundayPay)}</span>
+                                  </div>
+                                )}
                                 {currentStats.totalBonuses > 0 && (
                                     <div className="flex justify-between border-b pb-1 text-green-600"><span>Prim:</span><span className="font-semibold">+{formatCurrency(currentStats.totalBonuses)}</span></div>
                                 )}
                                 {currentStats.totalExpenses > 0 && (
                                     <div className="flex justify-between border-b pb-1 text-purple-600"><span>Gider:</span><span className="font-semibold">+{formatCurrency(currentStats.totalExpenses)}</span></div>
                                 )}
-                                <div className="flex justify-between font-bold text-green-700 pt-1 border-t-2"><span>BRÜT HAKEDİŞ:</span><span>{formatCurrency(currentStats.grossTotal)}</span></div>
-                                <div className="flex justify-between border-b pb-1 text-red-600"><span>Avanslar:</span><span>-{formatCurrency(currentStats.totalAdvances)}</span></div>
+                                <div className="flex justify-between font-bold text-green-700 pt-2 border-t-2 text-base bg-green-50 p-2 rounded">
+                                  <span>BRÜT HAKEDİŞ:</span>
+                                  <span>{formatCurrency(currentStats.grossTotal)}</span>
+                                </div>
+                                {currentStats.totalAdvances > 0 && (
+                                  <div className="flex justify-between border-b pb-1 text-red-600">
+                                    <span>Avanslar:</span>
+                                    <span className="font-semibold">-{formatCurrency(currentStats.totalAdvances)}</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between font-black text-lg pt-2 bg-blue-50 p-2 rounded"><span>NET HAKEDİŞ:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
                                 <div className="bg-green-50 p-2 rounded border border-green-200 mt-2">
                                     <div className="flex justify-between font-bold text-green-700 text-lg"><span>ÖDENECEK:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
@@ -1907,8 +1974,8 @@ export default function BordroTakip() {
                                                     <div className="font-normal text-[9px]">{getDayName(day, currentMonth, currentYear).slice(0,3)}</div>
                                                 </td>
                                                 <td className="p-1 border">
-                                                    <select className={`w-full p-1 border rounded text-xs ${log.type === 'Pazar' ? 'text-red-600 font-bold' : ''}`} value={log.type || ''} onChange={(e) => handleLogChange(day, 'type', e.target.value)}>
-                                                        <option value="">Seçiniz</option>
+                                                    <select className={`w-full p-1 border rounded text-xs ${log.type === 'Pazar' ? 'text-red-600 font-bold' : ''} ${!log.type ? 'text-gray-400' : ''}`} value={log.type || ''} onChange={(e) => handleLogChange(day, 'type', e.target.value)}>
+                                                        <option value="">Gelmedi/Boş</option>
                                                         <option value="Normal">Normal</option>
                                                         <option value="Pazar">Pazar (x2)</option>
                                                         <option value="Resmi Tatil">Tatil (x2)</option>
