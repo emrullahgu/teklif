@@ -928,7 +928,7 @@ export default function BordroTakip() {
           'Avanslar': stats.totalAdvances.toFixed(2),
           'Net Hakediş': stats.netPayable.toFixed(2),
           'Resmi Maaş (Ödenecek)': stats.officialPay.toFixed(2),
-          'El Altından': (stats.netPayable - stats.officialPay).toFixed(2),
+          'Ek Ödeme': (stats.netPayable - stats.officialPay).toFixed(2),
           'TOPLAM ÖDENECEK': stats.netPayable.toFixed(2)
         };
       });
@@ -1025,7 +1025,7 @@ export default function BordroTakip() {
           ['NET HAKEDIS', `${stats.netPayable.toFixed(2)} TL`],
           ['', ''],
           ['Resmi Maas', `${stats.officialPay.toFixed(2)} TL`],
-          ['El Altindan', `${(stats.netPayable - stats.officialPay).toFixed(2)} TL`],
+          ['Ek Odeme', `${(stats.netPayable - stats.officialPay).toFixed(2)} TL`],
           ['', ''],
           ['TOPLAM ODENECEK', `${stats.netPayable.toFixed(2)} TL`]
         ],
@@ -1047,7 +1047,7 @@ export default function BordroTakip() {
 
       // Puantaj Detayları
       if (empData && Object.keys(empData.logs).length > 0) {
-        const finalY = (doc as any).lastAutoTable.finalY + 10;
+        let finalY = (doc as any).lastAutoTable.finalY + 10;
         
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(11);
@@ -1087,6 +1087,98 @@ export default function BordroTakip() {
             4: { cellWidth: 20, halign: 'center' },
             5: { cellWidth: 20, halign: 'center' },
             6: { cellWidth: 40 }
+          }
+        });
+        
+        finalY = (doc as any).lastAutoTable.finalY + 10;
+      } else {
+        let finalY = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Gelmediği Günler (Absent Days)
+      if (empData) {
+        const absentDays = [];
+        for (let i = 1; i <= daysInMonth; i++) {
+          if (!empData.logs[i]) {
+            const date = new Date(currentYear, currentMonth, i);
+            const dayNames = ['Pazar', 'Pazartesi', 'Sali', 'Carsamba', 'Persembe', 'Cuma', 'Cumartesi'];
+            absentDays.push([i, dayNames[date.getDay()], `${i}/${currentMonth + 1}/${currentYear}`]);
+          }
+        }
+        
+        if (absentDays.length > 0) {
+          const currentY = (doc as any).lastAutoTable.finalY + 10;
+          
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(11);
+          doc.setTextColor(220, 38, 38);
+          doc.text('GELMEDI/BOS GUNLER (Kesinti Yapildi)', 20, currentY);
+          
+          (doc as any).autoTable({
+            startY: currentY + 5,
+            head: [['Gun', 'Gun Adi', 'Tarih']],
+            body: absentDays,
+            theme: 'grid',
+            headStyles: { fillColor: [220, 38, 38], fontSize: 8, fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 2, font: 'helvetica' },
+            columnStyles: {
+              0: { cellWidth: 30, halign: 'center' },
+              1: { cellWidth: 50 },
+              2: { cellWidth: 60, halign: 'center' }
+            }
+          });
+        }
+      }
+
+      // Avans/Gider/Prim Detayları
+      if (empData && empData.expenses.length > 0) {
+        const currentY = (doc as any).lastAutoTable.finalY + 10;
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(30, 58, 138);
+        doc.text('AVANS/GIDER/PRIM DETAYLARI', 20, currentY);
+        
+        const expenseData = empData.expenses.map((exp: Expense) => {
+          const typeClean = exp.type.replace(/İ/g, 'I').replace(/ı/g, 'i');
+          const descClean = (exp.description || '').replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
+          const dateFormatted = new Date(exp.date).toLocaleDateString('tr-TR');
+          
+          return [
+            dateFormatted,
+            typeClean,
+            `${exp.amount.toFixed(2)} TL`,
+            descClean
+          ];
+        });
+
+        (doc as any).autoTable({
+          startY: currentY + 5,
+          head: [['Tarih', 'Tip', 'Tutar', 'Aciklama']],
+          body: expenseData,
+          theme: 'striped',
+          headStyles: { fillColor: [30, 58, 138], fontSize: 8, fontStyle: 'bold' },
+          styles: { fontSize: 8, cellPadding: 2, font: 'helvetica' },
+          columnStyles: {
+            0: { cellWidth: 30, halign: 'center' },
+            1: { cellWidth: 30, halign: 'center' },
+            2: { cellWidth: 30, halign: 'right' },
+            3: { cellWidth: 80 }
+          },
+          didParseCell: function(data: any) {
+            if (data.column.index === 1) {
+              const cellText = data.cell.text[0];
+              if (cellText === 'Avans') {
+                data.cell.styles.textColor = [220, 38, 38];
+                data.cell.styles.fontStyle = 'bold';
+              } else if (cellText === 'Gider') {
+                data.cell.styles.textColor = [249, 115, 22];
+                data.cell.styles.fontStyle = 'bold';
+              } else if (cellText === 'Prim') {
+                data.cell.styles.textColor = [34, 197, 94];
+                data.cell.styles.fontStyle = 'bold';
+              }
+            }
           }
         });
       }
@@ -1202,7 +1294,7 @@ export default function BordroTakip() {
 
       (doc as any).autoTable({
         startY: startY + 25,
-        head: [['Personel', 'Gun', 'Mesai', 'Brut', 'Avans', 'Net', 'Resmi', 'El Altindan']],
+        head: [['Personel', 'Gun', 'Mesai', 'Brut', 'Avans', 'Net', 'Resmi', 'Ek Odeme']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [30, 58, 138], textColor: 255, fontSize: 8, fontStyle: 'bold' },
@@ -1694,7 +1786,7 @@ export default function BordroTakip() {
                                 <th className="p-4 border-b text-right text-green-700">HAKEDİŞ TOP.</th>
                                 <th className="p-4 border-b text-right text-red-600">AVANS</th>
                                 <th className="p-4 border-b text-right font-black text-red-600 bg-red-50">💰 RESMİ MAAŞ</th>
-                                <th className="p-4 border-b text-right font-black text-green-600 bg-green-50">💵 EL ALTINDAN</th>
+                                <th className="p-4 border-b text-right font-black text-green-600 bg-green-50">💵 EK ÖDEME</th>
                                 <th className="p-4 border-b text-right font-black text-blue-600 bg-blue-50">💰 TOPLAM</th>
                                 <th className="p-4 border-b text-center">İŞLEM</th>
                             </tr>
@@ -1904,7 +1996,7 @@ export default function BordroTakip() {
                                         <span>{formatCurrency(currentStats.officialPay)}</span>
                                     </div>
                                     <div className="flex justify-between font-bold text-green-700 text-sm">
-                                        <span>El Altından:</span>
+                                        <span>Ek Ödeme:</span>
                                         <span>{formatCurrency(currentStats.netPayable - currentStats.officialPay)}</span>
                                     </div>
                                     <div className="flex justify-between font-black text-green-700 text-lg border-t-2 border-green-300 pt-1">
@@ -2101,7 +2193,7 @@ export default function BordroTakip() {
                         <th className="p-2 border text-right">Prim</th>
                         <th className="p-2 border text-right">Net Hakediş</th>
                         <th className="p-2 border text-right bg-red-600">Resmi Maaş</th>
-                        <th className="p-2 border text-right bg-green-600">El Altından</th>
+                        <th className="p-2 border text-right bg-green-600">Ek Ödeme</th>
                       </tr>
                     </thead>
                     <tbody>
