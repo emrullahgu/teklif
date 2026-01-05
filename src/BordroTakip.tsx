@@ -171,9 +171,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
 
     // TOPLAM HESAPLAMALAR
     const totalExtras = totalExpenses + totalBonuses;
-    const baseSalaryCalculated = (totalWorkDays * dailyRate);
     const overtimePay = totalOvertimeHours * hourlyRateForOvertime * 1.5; // Mesai: Sabit saatlik × 1.5
-    const grossTotal = baseSalaryCalculated + totalSundayPay + overtimePay + totalExtras;
+    const grossTotal = employee.agreedSalary + totalSundayPay + overtimePay + totalExtras; // Anlaşılan Maaş + Ekstralar
     const netPayable = grossTotal - totalAdvances;
     
     // ÖDENECEK ÖDENECEK = NET ELE GEÇEN (officialSalary sadece gösterim için)
@@ -1842,8 +1841,8 @@ export default function BordroTakip() {
                             </div>
                             <div className="p-4 space-y-2 text-sm">
                                 <div className="flex justify-between border-b pb-1">
-                                  <span>Temel Maaş ({currentStats.totalWorkDays} gün):</span>
-                                  <span className="font-semibold">{formatCurrency(currentStats.totalWorkDays * currentStats.dailyRate)}</span>
+                                  <span>Anlaşılan Maaş:</span>
+                                  <span className="font-semibold">{formatCurrency(selectedEmployee.agreedSalary)}</span>
                                 </div>
                                 {currentStats.overtimePay > 0 && (
                                   <div className="flex justify-between border-b pb-1 text-blue-600">
@@ -1853,7 +1852,7 @@ export default function BordroTakip() {
                                 )}
                                 {currentStats.totalSundayPay > 0 && (
                                   <div className="flex justify-between border-b pb-1 text-orange-600">
-                                    <span>Pazar/Tatil Farkı:</span>
+                                    <span>Pazar/Tatil Farkı ({currentStats.totalSundayDays} gün):</span>
                                     <span className="font-semibold">+{formatCurrency(currentStats.totalSundayPay)}</span>
                                   </div>
                                 )}
