@@ -927,7 +927,9 @@ export default function BordroTakip() {
           'Brüt Hakediş': stats.grossTotal.toFixed(2),
           'Avanslar': stats.totalAdvances.toFixed(2),
           'Net Hakediş': stats.netPayable.toFixed(2),
-          'ÖDENECEK': stats.remainingHandPay.toFixed(2)
+          'Resmi Maaş (Ödenecek)': stats.officialPay.toFixed(2),
+          'El Altından': (stats.netPayable - stats.officialPay).toFixed(2),
+          'TOPLAM ÖDENECEK': stats.netPayable.toFixed(2)
         };
       });
 
@@ -1022,7 +1024,10 @@ export default function BordroTakip() {
           ['', ''],
           ['NET HAKEDIS', `${stats.netPayable.toFixed(2)} TL`],
           ['', ''],
-          ['ODENECEK', `${stats.netPayable.toFixed(2)} TL`]
+          ['Resmi Maas', `${stats.officialPay.toFixed(2)} TL`],
+          ['El Altindan', `${(stats.netPayable - stats.officialPay).toFixed(2)} TL`],
+          ['', ''],
+          ['TOPLAM ODENECEK', `${stats.netPayable.toFixed(2)} TL`]
         ],
         theme: 'grid',
         headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
@@ -1032,7 +1037,7 @@ export default function BordroTakip() {
           1: { halign: 'right', cellWidth: 70 }
         },
         didParseCell: function(data: any) {
-          if (data.row.index === 5 || data.row.index === 8 || data.row.index === 10) {
+          if (data.row.index === 5 || data.row.index === 8 || data.row.index === 13) {
             data.cell.styles.fillColor = [239, 246, 255];
             data.cell.styles.fontStyle = 'bold';
             data.cell.styles.fontSize = 10;
@@ -1165,7 +1170,7 @@ export default function BordroTakip() {
           `${stats.totalAdvances.toFixed(0)} TL`,
           `${stats.netPayable.toFixed(0)} TL`,
           `${stats.officialPay.toFixed(0)} TL`,
-          `${stats.remainingHandPay.toFixed(0)} TL`
+          `${(stats.netPayable - stats.officialPay).toFixed(0)} TL`
         ];
       });
 
@@ -1180,7 +1185,7 @@ export default function BordroTakip() {
           advances: acc.advances + stats.totalAdvances,
           net: acc.net + stats.netPayable,
           official: acc.official + stats.officialPay,
-          hand: acc.hand + stats.remainingHandPay
+          hand: acc.hand + (stats.netPayable - stats.officialPay)
         };
       }, { workDays: 0, overtime: 0, gross: 0, advances: 0, net: 0, official: 0, hand: 0 });
 
@@ -1197,7 +1202,7 @@ export default function BordroTakip() {
 
       (doc as any).autoTable({
         startY: startY + 25,
-        head: [['Personel', 'Gun', 'Mesai', 'Brut', 'Avans', 'Net', 'Resmi', 'ÖDENECEK']],
+        head: [['Personel', 'Gun', 'Mesai', 'Brut', 'Avans', 'Net', 'Resmi', 'El Altindan']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [30, 58, 138], textColor: 255, fontSize: 8, fontStyle: 'bold' },
@@ -1688,8 +1693,9 @@ export default function BordroTakip() {
                                 <th className="p-4 border-b text-center">MESAİ (S)</th>
                                 <th className="p-4 border-b text-right text-green-700">HAKEDİŞ TOP.</th>
                                 <th className="p-4 border-b text-right text-red-600">AVANS</th>
-                                <th className="p-4 border-b text-right font-black text-red-600 bg-red-50">💰 ÖDENECEK</th>
-                                <th className="p-4 border-b text-right text-gray-400 text-xs">📝 Göstermelik</th>
+                                <th className="p-4 border-b text-right font-black text-red-600 bg-red-50">💰 RESMİ MAAŞ</th>
+                                <th className="p-4 border-b text-right font-black text-green-600 bg-green-50">💵 EL ALTINDAN</th>
+                                <th className="p-4 border-b text-right font-black text-blue-600 bg-blue-50">💰 TOPLAM</th>
                                 <th className="p-4 border-b text-center">İŞLEM</th>
                             </tr>
                         </thead>
@@ -1713,8 +1719,9 @@ export default function BordroTakip() {
                                         </td>
                                         <td className="p-4 text-right text-green-700 font-semibold">{formatCurrency(stats.grossTotal)}</td>
                                         <td className="p-4 text-right text-red-600">{stats.totalAdvances > 0 ? formatCurrency(stats.totalAdvances) : '-'}</td>
-                                        <td className="p-4 text-right font-black text-red-600 bg-red-50 border-l-4 border-red-300 text-lg">{formatCurrency(stats.netPayable)}</td>
-                                        <td className="p-4 text-right text-gray-400 text-xs">{formatCurrency(stats.officialPay)}</td>
+                                        <td className="p-4 text-right font-black text-red-600 bg-red-50 border-l-4 border-red-300">{formatCurrency(stats.officialPay)}</td>
+                                        <td className="p-4 text-right font-black text-green-600 bg-green-50">{formatCurrency(stats.netPayable - stats.officialPay)}</td>
+                                        <td className="p-4 text-right font-black text-blue-600 bg-blue-50 border-l-4 border-blue-300 text-lg">{formatCurrency(stats.netPayable)}</td>
                                         <td className="p-4 text-center flex justify-center space-x-2">
                                             <button 
                                                 onClick={() => openEditModal(emp)}
@@ -1891,8 +1898,19 @@ export default function BordroTakip() {
                                   </div>
                                 )}
                                 <div className="flex justify-between font-black text-lg pt-2 bg-blue-50 p-2 rounded"><span>NET HAKEDİŞ:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
-                                <div className="bg-green-50 p-2 rounded border border-green-200 mt-2">
-                                    <div className="flex justify-between font-bold text-green-700 text-lg"><span>ÖDENECEK:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
+                                <div className="bg-green-50 p-2 rounded border border-green-200 mt-2 space-y-1">
+                                    <div className="flex justify-between font-bold text-green-700 text-sm border-b border-green-200 pb-1">
+                                        <span>Resmi Maaş:</span>
+                                        <span>{formatCurrency(currentStats.officialPay)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-bold text-green-700 text-sm">
+                                        <span>El Altından:</span>
+                                        <span>{formatCurrency(currentStats.netPayable - currentStats.officialPay)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-black text-green-700 text-lg border-t-2 border-green-300 pt-1">
+                                        <span>TOPLAM ÖDENECEK:</span>
+                                        <span>{formatCurrency(currentStats.netPayable)}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2075,7 +2093,6 @@ export default function BordroTakip() {
                       <tr>
                         <th className="p-2 border text-left">Personel</th>
                         <th className="p-2 border text-right">Anlaşılan Maaş</th>
-                        <th className="p-2 border text-right">Resmi Maaş</th>
                         <th className="p-2 border text-center">Çalışılan Gün</th>
                         <th className="p-2 border text-center">Pazar Günü</th>
                         <th className="p-2 border text-center">Mesai Saat</th>
@@ -2083,7 +2100,8 @@ export default function BordroTakip() {
                         <th className="p-2 border text-right">Gider</th>
                         <th className="p-2 border text-right">Prim</th>
                         <th className="p-2 border text-right">Net Hakediş</th>
-                        <th className="p-2 border text-right">ÖDENECEK</th>
+                        <th className="p-2 border text-right bg-red-600">Resmi Maaş</th>
+                        <th className="p-2 border text-right bg-green-600">El Altından</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2091,7 +2109,6 @@ export default function BordroTakip() {
                         <tr key={record.id} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                           <td className="p-2 border font-semibold">{record.employee_name}</td>
                           <td className="p-2 border text-right">{parseFloat(record.agreed_salary).toLocaleString('tr-TR')} ₺</td>
-                          <td className="p-2 border text-right">{parseFloat(record.official_salary).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-center font-semibold">{record.days_worked}</td>
                           <td className="p-2 border text-center">{record.sunday_days}</td>
                           <td className="p-2 border text-center">{parseFloat(record.overtime_hours).toFixed(1)}</td>
@@ -2099,13 +2116,14 @@ export default function BordroTakip() {
                           <td className="p-2 border text-right text-orange-600">{parseFloat(record.expenses).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right text-green-600">{parseFloat(record.bonuses).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right font-bold text-blue-700">{parseFloat(record.net_payable).toLocaleString('tr-TR')} ₺</td>
-                          <td className="p-2 border text-right font-bold text-green-700">{parseFloat(record.hand_pay).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right font-bold text-red-700 bg-red-50">{parseFloat(record.official_salary).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right font-bold text-green-700 bg-green-50">{parseFloat(record.hand_pay).toLocaleString('tr-TR')} ₺</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-purple-100 font-bold">
                       <tr>
-                        <td colSpan={3} className="p-2 border text-right">TOPLAM:</td>
+                        <td colSpan={2} className="p-2 border text-right">TOPLAM:</td>
                         <td className="p-2 border text-center">{historicalData.reduce((sum, r) => sum + r.days_worked, 0)}</td>
                         <td className="p-2 border text-center">{historicalData.reduce((sum, r) => sum + r.sunday_days, 0)}</td>
                         <td className="p-2 border text-center">{historicalData.reduce((sum, r) => sum + parseFloat(r.overtime_hours), 0).toFixed(1)}</td>
@@ -2113,7 +2131,8 @@ export default function BordroTakip() {
                         <td className="p-2 border text-right text-orange-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.expenses), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right text-green-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.bonuses), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right font-bold text-blue-700">{historicalData.reduce((sum, r) => sum + parseFloat(r.net_payable), 0).toLocaleString('tr-TR')} ₺</td>
-                        <td className="p-2 border text-right font-bold text-green-700">{historicalData.reduce((sum, r) => sum + parseFloat(r.hand_pay), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right font-bold text-red-700 bg-red-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.official_salary), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right font-bold text-green-700 bg-green-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.hand_pay), 0).toLocaleString('tr-TR')} ₺</td>
                       </tr>
                     </tfoot>
                   </table>
