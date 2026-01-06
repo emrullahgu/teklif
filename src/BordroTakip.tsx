@@ -54,6 +54,8 @@ interface Expense {
   amount: number;
   description: string;
   date: string;
+  installment_total?: number;  // Toplam taksit sayısı
+  installment_current?: number; // Şu anki taksit numarası
 }
 
 interface Employee {
@@ -232,7 +234,13 @@ export default function BordroTakip() {
   
   // Avans Modal
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
-  const [advanceForm, setAdvanceForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], type: 'Avans' as 'Avans' | 'Gider' | 'Prim' });
+  const [advanceForm, setAdvanceForm] = useState({ 
+    amount: '', 
+    date: new Date().toISOString().split('T')[0], 
+    type: 'Avans' as 'Avans' | 'Gider' | 'Prim',
+    installmentTotal: '1', // Toplam taksit sayısı
+    installmentCurrent: '1' // Şu anki taksit numarası
+  });
   
   // Geçmiş bordro görüntüleme
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -344,7 +352,9 @@ export default function BordroTakip() {
         type: exp.type,
         amount: parseFloat(exp.amount),
         description: exp.description || '',
-        date: exp.date
+        date: exp.date,
+        installment_total: exp.installment_total || 1,
+        installment_current: exp.installment_current || 1
       }));
 
       console.log('✅ Veri yüklendi:', Object.keys(logs).length, 'gün,', expenses.length, 'gider');
@@ -533,7 +543,9 @@ export default function BordroTakip() {
         type: expense.type,
         amount: expense.amount,
         description: expense.description,
-        date: expense.date
+        date: expense.date,
+        installment_total: expense.installment_total || 1,
+        installment_current: expense.installment_current || 1
       };
 
       const { error } = await supabase
@@ -792,7 +804,9 @@ export default function BordroTakip() {
     setAdvanceForm({ 
       amount: '', 
       date: new Date().toISOString().split('T')[0], 
-      type 
+      type,
+      installmentTotal: '1',
+      installmentCurrent: '1'
     });
     setShowAdvanceModal(true);
   };
@@ -804,13 +818,22 @@ export default function BordroTakip() {
     }
 
     const amount = parseFloat(advanceForm.amount);
+    const installmentTotal = parseInt(advanceForm.installmentTotal) || 1;
+    const installmentCurrent = parseInt(advanceForm.installmentCurrent) || 1;
+
+    if (installmentCurrent > installmentTotal || installmentCurrent < 1) {
+      alert('⚠️ Geçersiz taksit numarası! Şu anki taksit, toplam taksit sayısından büyük olamaz.');
+      return;
+    }
     
     const newExpense: Expense = {
       id: crypto.randomUUID(),
       type: advanceForm.type,
       amount,
       description: `Manuel ${advanceForm.type} (${advanceForm.date})`,
-      date: advanceForm.date
+      date: advanceForm.date,
+      installment_total: installmentTotal,
+      installment_current: installmentCurrent
     };
 
     // State güncellemesi - IMMUTABILITY KORUNARAK
@@ -844,8 +867,16 @@ export default function BordroTakip() {
     
     // Modal'ı kapat ve formu sıfırla
     setShowAdvanceModal(false);
-    setAdvanceForm({ amount: '', date: new Date().toISOString().split('T')[0], type: 'Avans' });
-    alert(`✅ ${advanceForm.type} başarıyla eklendi!`);
+    setAdvanceForm({ 
+      amount: '', 
+      date: new Date().toISOString().split('T')[0], 
+      type: 'Avans',
+      installmentTotal: '1',
+      installmentCurrent: '1'
+    });
+    
+    const installmentText = installmentTotal > 1 ? ` (${installmentCurrent}/${installmentTotal} taksit)` : '';
+    alert(`✅ ${advanceForm.type} başarıyla eklendi!${installmentText}`);
   };
 
   const deleteExpense = async (id: string) => {
@@ -1141,12 +1172,15 @@ export default function BordroTakip() {
         
         const expenseData = empData.expenses.map((exp: Expense) => {
           const typeClean = exp.type.replace(/İ/g, 'I').replace(/ı/g, 'i');
+          const installmentInfo = exp.type === 'Avans' && (exp.installment_total || 1) > 1 
+            ? ` (${exp.installment_current}/${exp.installment_total} taksit)` 
+            : '';
           const descClean = (exp.description || '').replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
           const dateFormatted = new Date(exp.date).toLocaleDateString('tr-TR');
           
           return [
             dateFormatted,
-            typeClean,
+            typeClean + installmentInfo,
             `${exp.amount.toFixed(2)} TL`,
             descClean
           ];
@@ -1544,7 +1578,13 @@ export default function BordroTakip() {
                       </h3>
                       <button onClick={() => {
                         setShowAdvanceModal(false);
-                        setAdvanceForm({ amount: '', date: new Date().toISOString().split('T')[0], type: 'Avans' });
+                        setAdvanceForm({ 
+                          amount: '', 
+                          date: new Date().toISOString().split('T')[0], 
+                          type: 'Avans',
+                          installmentTotal: '1',
+                          installmentCurrent: '1'
+                        });
                       }} className="text-gray-400 hover:text-red-500"><X className="w-5 h-5"/></button>
                   </div>
                   <div className="space-y-4">
@@ -1576,6 +1616,47 @@ export default function BordroTakip() {
                             onChange={(e) => setAdvanceForm({...advanceForm, amount: e.target.value})} 
                           />
                       </div>
+                      
+                      {advanceForm.type === 'Avans' && (
+                        <div className="bg-yellow-50 p-3 rounded border border-yellow-300">
+                          <label className="block text-xs font-bold text-gray-700 mb-2">
+                            📊 Taksit Bilgileri
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Toplam Taksit</label>
+                              <input 
+                                type="number" 
+                                min="1"
+                                max="12"
+                                className="w-full p-2 border-2 border-yellow-400 rounded focus:ring-2 focus:ring-yellow-500 font-bold" 
+                                value={advanceForm.installmentTotal} 
+                                onChange={(e) => setAdvanceForm({
+                                  ...advanceForm, 
+                                  installmentTotal: e.target.value,
+                                  installmentCurrent: Math.min(parseInt(e.target.value) || 1, parseInt(advanceForm.installmentCurrent) || 1).toString()
+                                })} 
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Şu Anki Taksit</label>
+                              <input 
+                                type="number" 
+                                min="1"
+                                max={advanceForm.installmentTotal}
+                                className="w-full p-2 border-2 border-yellow-400 rounded focus:ring-2 focus:ring-yellow-500 font-bold" 
+                                value={advanceForm.installmentCurrent} 
+                                onChange={(e) => setAdvanceForm({...advanceForm, installmentCurrent: e.target.value})} 
+                              />
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-600 mt-2">
+                            💡 Her ay {formatCurrency(parseFloat(advanceForm.amount) || 0)} kesilecek
+                            {parseInt(advanceForm.installmentTotal) > 1 && ` (${advanceForm.installmentCurrent}/${advanceForm.installmentTotal})`}
+                          </div>
+                        </div>
+                      )}
+                      
                       <div className="bg-blue-50 p-3 rounded border border-blue-200">
                         <p className="text-sm text-gray-600">
                           <strong>Personel:</strong> {selectedEmployee.name}
@@ -1594,7 +1675,13 @@ export default function BordroTakip() {
                         <button 
                           onClick={() => {
                             setShowAdvanceModal(false);
-                            setAdvanceForm({ amount: '', date: new Date().toISOString().split('T')[0], type: 'Avans' });
+                            setAdvanceForm({ 
+                              amount: '', 
+                              date: new Date().toISOString().split('T')[0], 
+                              type: 'Avans',
+                              installmentTotal: '1',
+                              installmentCurrent: '1'
+                            });
                           }}
                           className="flex-1 bg-gray-400 text-white py-3 rounded font-bold hover:bg-gray-500 transition shadow"
                         >
@@ -2028,6 +2115,11 @@ export default function BordroTakip() {
                                         <div className="flex-1">
                                           <div className={`font-bold ${e.type === 'Avans' ? 'text-red-600' : e.type === 'Gider' ? 'text-orange-600' : 'text-green-600'}`}>
                                             {e.type}
+                                            {e.type === 'Avans' && (e.installment_total || 1) > 1 && (
+                                              <span className="ml-1 text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded">
+                                                {e.installment_current}/{e.installment_total}
+                                              </span>
+                                            )}
                                           </div>
                                           <div className="text-gray-500 text-[10px] mt-0.5">
                                             📅 {new Date(e.date).toLocaleDateString('tr-TR')}
