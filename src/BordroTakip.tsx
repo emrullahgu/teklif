@@ -175,7 +175,12 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
 
     // GİDER/AVANS/PRİM TOPLA
     data.expenses.forEach(exp => {
-        if (exp.type === 'Avans') totalAdvances += exp.amount;
+        if (exp.type === 'Avans') {
+            // Taksitli avans ise toplam tutarı taksit sayısına böl
+            const installmentTotal = exp.installment_total || 1;
+            const monthlyAmount = exp.amount / installmentTotal;
+            totalAdvances += monthlyAmount;
+        }
         else if (exp.type === 'Gider') totalExpenses += exp.amount;
         else if (exp.type === 'Prim') totalBonuses += exp.amount;
     });
@@ -1040,26 +1045,44 @@ export default function BordroTakip() {
       const monthNames = ['Ocak', 'Subat', 'Mart', 'Nisan', 'Mayis', 'Haziran', 'Temmuz', 'Agustos', 'Eylul', 'Ekim', 'Kasim', 'Aralik'];
       doc.text(`Donem: ${monthNames[currentMonth]} ${currentYear}`, 20, startY + 28);
       
+      // Avans detayları için body oluştur
+      const bordroBody: any[] = [
+        ['Anlasilan Net Maas', `${stats.dailyRate.toFixed(2)} TL x ${stats.totalWorkDays} gun = ${(stats.dailyRate * stats.totalWorkDays).toFixed(2)} TL`],
+        ['Mesai Ucreti', `${stats.hourlyRate.toFixed(2)} TL x ${stats.totalOvertimeHours} saat = ${stats.overtimePay.toFixed(2)} TL`],
+        ['Pazar/Tatil Farki', `${stats.totalSundayPay.toFixed(2)} TL`],
+        ['Ekstra Odemeler (Prim/Gider)', `${stats.totalExtras.toFixed(2)} TL`],
+        ['', ''],
+        ['BRUT HAKEDIS', `${stats.grossTotal.toFixed(2)} TL`],
+        ['Kesinti (Avanslar)', `- ${stats.totalAdvances.toFixed(2)} TL`]
+      ];
+      
+      // Avans detaylarını ekle
+      if (empData && empData.expenses) {
+        const avanslar = empData.expenses.filter((e: Expense) => e.type === 'Avans');
+        avanslar.forEach((avans: Expense) => {
+          const dateStr = new Date(avans.date).toLocaleDateString('tr-TR').replace(/İ/g, 'I').replace(/ı/g, 'i');
+          const installmentInfo = (avans.installment_total || 1) > 1 
+            ? ` (${avans.installment_current}/${avans.installment_total} taksit)` 
+            : '';
+          bordroBody.push([`  - Avans ${dateStr}${installmentInfo}`, `- ${avans.amount.toFixed(2)} TL`]);
+        });
+      }
+      
+      bordroBody.push(
+        ['', ''],
+        ['NET HAKEDIS', `${stats.netPayable.toFixed(2)} TL`],
+        ['', ''],
+        ['Resmi Maas', `${stats.officialPay.toFixed(2)} TL`],
+        ['Ek Odeme', `${(stats.netPayable - stats.officialPay).toFixed(2)} TL`],
+        ['', ''],
+        ['TOPLAM ODENECEK', `${stats.netPayable.toFixed(2)} TL`]
+      );
+      
       // Bordro Tablosu
       (doc as any).autoTable({
         startY: startY + 35,
         head: [['ACIKLAMA', 'TUTAR']],
-        body: [
-          ['Anlasilan Net Maas', `${stats.dailyRate.toFixed(2)} TL x ${stats.totalWorkDays} gun = ${(stats.dailyRate * stats.totalWorkDays).toFixed(2)} TL`],
-          ['Mesai Ucreti', `${stats.hourlyRate.toFixed(2)} TL x ${stats.totalOvertimeHours} saat = ${stats.overtimePay.toFixed(2)} TL`],
-          ['Pazar/Tatil Farki', `${stats.totalSundayPay.toFixed(2)} TL`],
-          ['Ekstra Odemeler (Prim/Gider)', `${stats.totalExtras.toFixed(2)} TL`],
-          ['', ''],
-          ['BRUT HAKEDIS', `${stats.grossTotal.toFixed(2)} TL`],
-          ['Kesinti (Avanslar)', `- ${stats.totalAdvances.toFixed(2)} TL`],
-          ['', ''],
-          ['NET HAKEDIS', `${stats.netPayable.toFixed(2)} TL`],
-          ['', ''],
-          ['Resmi Maas', `${stats.officialPay.toFixed(2)} TL`],
-          ['Ek Odeme', `${(stats.netPayable - stats.officialPay).toFixed(2)} TL`],
-          ['', ''],
-          ['TOPLAM ODENECEK', `${stats.netPayable.toFixed(2)} TL`]
-        ],
+        body: bordroBody,
         theme: 'grid',
         headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
         styles: { fontSize: 9, cellPadding: 3, font: 'helvetica' },
@@ -1068,7 +1091,17 @@ export default function BordroTakip() {
           1: { halign: 'right', cellWidth: 70 }
         },
         didParseCell: function(data: any) {
-          if (data.row.index === 5 || data.row.index === 8 || data.row.index === 13) {
+          // Avans detay satırlarını daha küçük fontla göster
+          if (data.cell.text[0] && data.cell.text[0].startsWith('  - Avans')) {
+            data.cell.styles.fontSize = 8;
+            data.cell.styles.textColor = [220, 38, 38];
+          }
+          // Ana başlıkları vurgula (BRUT HAKEDIS, NET HAKEDIS, TOPLAM ODENECEK)
+          if (data.cell.text[0] && (
+            data.cell.text[0].includes('BRUT HAKEDIS') || 
+            data.cell.text[0].includes('NET HAKEDIS') || 
+            data.cell.text[0].includes('TOPLAM ODENECEK')
+          )) {
             data.cell.styles.fillColor = [239, 246, 255];
             data.cell.styles.fontStyle = 'bold';
             data.cell.styles.fontSize = 10;
@@ -1650,9 +1683,9 @@ export default function BordroTakip() {
                               />
                             </div>
                           </div>
-                          <div className="text-xs text-gray-600 mt-2">
-                            💡 Her ay {formatCurrency(parseFloat(advanceForm.amount) || 0)} kesilecek
-                            {parseInt(advanceForm.installmentTotal) > 1 && ` (${advanceForm.installmentCurrent}/${advanceForm.installmentTotal})`}
+                          <div className="text-xs text-gray-600 mt-2 bg-white p-2 rounded border border-yellow-200">
+                            💡 <strong>Toplam avans tutarını</strong> girin. Her ay <strong>{formatCurrency((parseFloat(advanceForm.amount) || 0) / (parseInt(advanceForm.installmentTotal) || 1))}</strong> kesilecek
+                            {parseInt(advanceForm.installmentTotal) > 1 && ` (${advanceForm.installmentTotal} eşit taksit)`}
                           </div>
                         </div>
                       )}
@@ -2071,10 +2104,25 @@ export default function BordroTakip() {
                                   <span>{formatCurrency(currentStats.grossTotal)}</span>
                                 </div>
                                 {currentStats.totalAdvances > 0 && (
-                                  <div className="flex justify-between border-b pb-1 text-red-600">
-                                    <span>Avanslar:</span>
-                                    <span className="font-semibold">-{formatCurrency(currentStats.totalAdvances)}</span>
-                                  </div>
+                                  <>
+                                    <div className="flex justify-between border-b pb-1 text-red-600">
+                                      <span>Avanslar:</span>
+                                      <span className="font-semibold">-{formatCurrency(currentStats.totalAdvances)}</span>
+                                    </div>
+                                    {currentData.expenses.filter(e => e.type === 'Avans').map(avans => (
+                                      <div key={avans.id} className="flex justify-between text-xs text-red-500 pl-4">
+                                        <span>
+                                          • {new Date(avans.date).toLocaleDateString('tr-TR')}
+                                          {(avans.installment_total || 1) > 1 && (
+                                            <span className="ml-1 bg-yellow-100 text-yellow-700 px-1 rounded text-[10px]">
+                                              {avans.installment_current}/{avans.installment_total} taksit
+                                            </span>
+                                          )}
+                                        </span>
+                                        <span>-{formatCurrency(avans.amount)}</span>
+                                      </div>
+                                    ))}
+                                  </>
                                 )}
                                 <div className="flex justify-between font-black text-lg pt-2 bg-blue-50 p-2 rounded"><span>NET HAKEDİŞ:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
                                 <div className="bg-green-50 p-2 rounded border border-green-200 mt-2 space-y-1">

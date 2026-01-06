@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Trash2, Mail, User, Building, RefreshCw, UserPlus, Lock, AlertCircle, Edit } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Trash2, Mail, User, Building, RefreshCw, UserPlus, Lock, AlertCircle, Edit, Banknote } from 'lucide-react';
 import emailjs from 'emailjs-com';
 import { supabase } from './supabaseClient';
+import BordroTakip from './BordroTakip.tsx';
 
 const SimpleAdminPanel = ({ isEmbedded = false }) => {
   const [users, setUsers] = useState([]);
@@ -9,6 +10,7 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(isEmbedded); // Embedded ise otomatik authenticated
+  const [activeTab, setActiveTab] = useState('users'); // 'users' veya 'bordro'
   
   // Yeni kullanıcı oluşturma state'leri
   const [showCreateUser, setShowCreateUser] = useState(false);
@@ -429,24 +431,54 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Paneli</h1>
-              <p className="text-gray-600">Kullanıcı onay ve yönetim sistemi</p>
+              <p className="text-gray-600">Kullanıcı onay ve yönetim sistemi & Bordro Takip</p>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={() => setShowCreateUser(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition"
-              >
-                <UserPlus className="w-4 h-4" />
-                Yeni Kullanıcı
-              </button>
-              <button
-                onClick={loadUsers}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Yenile
-              </button>
+              {activeTab === 'users' && (
+                <>
+                  <button
+                    onClick={() => setShowCreateUser(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Yeni Kullanıcı
+                  </button>
+                  <button
+                    onClick={loadUsers}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Yenile
+                  </button>
+                </>
+              )}
             </div>
+          </div>
+          
+          {/* Tab Menüsü */}
+          <div className="flex gap-2 mt-4 border-t pt-4">
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg transition ${
+                activeTab === 'users' 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <User className="w-5 h-5" />
+              Kullanıcı Yönetimi
+            </button>
+            <button
+              onClick={() => setActiveTab('bordro')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg transition ${
+                activeTab === 'bordro' 
+                  ? 'bg-teal-600 text-white shadow-lg' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Banknote className="w-5 h-5" />
+              Bordro Takip Sistemi
+            </button>
           </div>
         </div>
 
@@ -737,20 +769,21 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
           </div>
         )}
 
-        {/* Filtreler */}
-        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setFilter('pending')}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
-                filter === 'pending'
-                  ? 'bg-yellow-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <Clock className="inline w-4 h-4 mr-2" />
-              Bekleyen
-            </button>
+        {/* Filtreler - Sadece Users tab'ında göster */}
+        {activeTab === 'users' && (
+          <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFilter('pending')}
+                className={`px-4 py-2 rounded-lg font-medium transition ${
+                  filter === 'pending'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Clock className="inline w-4 h-4 mr-2" />
+                Bekleyen
+              </button>
             <button
               onClick={() => setFilter('approved')}
               className={`px-4 py-2 rounded-lg font-medium transition ${
@@ -774,14 +807,23 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
             </button>
           </div>
         </div>
+        )}
 
-        {/* Kullanıcı Listesi */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {users.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-gray-500 text-lg">Kullanıcı bulunamadı</p>
-            </div>
-          ) : (
+        {/* Bordro Tab İçeriği */}
+        {activeTab === 'bordro' && (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <BordroTakip />
+          </div>
+        )}
+
+        {/* Kullanıcı Yönetimi Tab İçeriği */}
+        {activeTab === 'users' && (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            {users.length === 0 ? (
+              <div className="p-12 text-center">
+                <p className="text-gray-500 text-lg">Kullanıcı bulunamadı</p>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
@@ -941,7 +983,13 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
               </table>
             </div>
           )}
-        </div>
+          </div>
+        )}
+      </div>
+      
+      {/* Footer */}
+      <div className="mt-8 text-center text-sm text-gray-500 pb-4">
+        Created by emrullahg
       </div>
     </div>
   );
