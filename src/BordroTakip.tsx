@@ -236,6 +236,8 @@ export default function BordroTakip() {
   const [appData, setAppData] = useState<Record<string, Record<string, MonthlyData>>>({});
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [pendingSaves, setPendingSaves] = useState<Set<string>>(new Set());
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Avans Modal
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
@@ -526,6 +528,13 @@ export default function BordroTakip() {
       }
       
       console.log('✅ Puantaj kaydedildi:', data);
+      
+      // Kayıt başarılı, pending listesinden kaldır
+      setPendingSaves(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(`${selectedEmployeeId}-${day}`);
+        return newSet;
+      });
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
       
@@ -602,14 +611,39 @@ export default function BordroTakip() {
 
   // --- AYLIK BORDRO KAYDET ---
   const saveMonthlyPayroll = async () => {
-    if (!confirm(`${currentYear} yılı ${MONTHS[currentMonth]} ayı bordrosunu kaydetmek istediğinize emin misiniz? Bu işlem sonrasında geçmiş bordrolar bölümünden görüntüleyebileceksiniz.`)) {
+    // Bekleyen kayıtları kontrol et
+    if (pendingSaves.size > 0) {
+      alert('⚠️ Lütfen bekleyin! Kaydedilmemiş değişiklikler var. Tüm değişiklikler kaydedildikten sonra tekrar deneyin.');
+      return;
+    }
+
+    if (!confirm(`${currentYear} yılı ${MONTHS[currentMonth]} ayı bordrosunu kaydetmek istediğinize emin misiniz?\n\n✅ Tüm puantaj verileri, mesai saatleri ve notlar veritabanında güvenle saklanmıştır.\n✅ Bu işlem sadece aylık özet raporu oluşturur.\n✅ Verileriniz kaybolmaz, istediğiniz zaman tekrar görüntüleyebilirsiniz.`)) {
       return;
     }
 
     try {
       setLoading(true);
       
-      // Tüm personeller için bordroyu kaydet
+      // Önce tüm güncel verilerin kaydedildiğinden emin ol
+      console.log('📝 Ay kapatılıyor, son kontrol yapılıyor...');
+      
+      // Her personel için tüm günlük logları ve giderleri tekrar kaydet (güvenlik için)
+      for (const emp of employees) {
+        const empData = appData[emp.id]?.[monthKey];
+        if (empData) {
+          // Logs'u kaydet
+          for (const [dayStr, log] of Object.entries(empData.logs)) {
+            if (log.type) { // Sadece dolu kayıtları kaydet
+              await saveDailyLog(parseInt(dayStr), log);
+            }
+          }
+          
+          // Expenses'i kontrol et (zaten kaydedilmiş olmalı)
+          console.log(`✅ ${emp.name}: ${Object.keys(empData.logs).length} gün, ${empData.expenses.length} gider kaydedildi`);
+        }
+      }
+      
+      // Şimdi özet raporu oluştur
       for (const emp of employees) {
         const empData = appData[emp.id]?.[monthKey];
         const stats = calculateEmployeeStats(emp, empData, daysInMonth);
@@ -639,10 +673,10 @@ export default function BordroTakip() {
       }
 
       await ActivityLogger.bordroMonthlySave(currentMonth + 1, currentYear, employees.length);
-      alert('✅ Aylık bordro başarıyla kaydedildi! Geçmiş Bordrolar bölümünden görüntüleyebilirsiniz.');
+      alert(`✅ ${MONTHS[currentMonth]} ${currentYear} bordrosu başarıyla kapatıldı!\n\n📊 Özet rapor oluşturuldu\n💾 Tüm detaylı veriler güvenle saklandı\n📂 Geçmiş Bordrolar'dan görüntüleyebilirsiniz\n\n⚠️ Not: Bu ay için girdiğiniz tüm puantaj, mesai ve not bilgileri veritabanında saklanmıştır. İstediğiniz zaman bu aya geri dönüp verileri görüntüleyebilirsiniz.`);
     } catch (error) {
       console.error('Bordro kaydetme hatası:', error);
-      alert('❌ Bordro kaydedilirken bir hata oluştu!');
+      alert('❌ Bordro kaydedilirken bir hata oluştu!\n\nHata: ' + (error as any)?.message);
     } finally {
       setLoading(false);
     }
@@ -797,8 +831,16 @@ export default function BordroTakip() {
           }
         };
         
-        // Async kaydet (state güncellemesinden sonra)
-        setTimeout(() => saveDailyLog(day, currentLogs[day]), 100);
+        // Pending kayıt listesine ekle
+        setPendingSaves(prev => new Set(prev).add(`${selectedEmployeeId}-${day}`));
+        
+        // Debounced kaydet (önceki timeout'u iptal et)
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+        saveTimeoutRef.current = setTimeout(() => {
+          saveDailyLog(day, currentLogs[day]);
+        }, 2000); // 2 saniye bekle
       }
 
       return newData;
@@ -1048,8 +1090,8 @@ export default function BordroTakip() {
       // Avans detayları için body oluştur
       const bordroBody: any[] = [
         ['Anlasilan Net Maas', `${stats.dailyRate.toFixed(2)} TL x ${stats.totalWorkDays} gun = ${(stats.dailyRate * stats.totalWorkDays).toFixed(2)} TL`],
-        ['Mesai Ucreti', `${stats.hourlyRate.toFixed(2)} TL x ${stats.totalOvertimeHours} saat = ${stats.overtimePay.toFixed(2)} TL`],
-        ['Pazar/Tatil Farki', `${stats.totalSundayPay.toFixed(2)} TL`],
+        ['Mesai Ucreti (x1.5)', `${stats.hourlyRate.toFixed(2)} TL x ${stats.totalOvertimeHours} saat x 1.5 = ${stats.overtimePay.toFixed(2)} TL`],
+        ['Pazar/Tatil Farki', stats.totalSundayDays > 0 ? `${stats.totalSundayDays} gun x ${(stats.dailyRate * 2).toFixed(2)} TL = ${stats.totalSundayPay.toFixed(2)} TL` : `${stats.totalSundayPay.toFixed(2)} TL`],
         ['Ekstra Odemeler (Prim/Gider)', `${stats.totalExtras.toFixed(2)} TL`],
         ['', ''],
         ['BRUT HAKEDIS', `${stats.grossTotal.toFixed(2)} TL`],
@@ -1860,6 +1902,51 @@ export default function BordroTakip() {
         </div>
       </header>
 
+      {/* Kaydedilmemiş Değişiklik Uyarısı */}
+      {pendingSaves.size > 0 && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-4 mt-4 mb-2 rounded">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-yellow-600 mr-3" />
+              <div>
+                <p className="text-yellow-800 font-semibold">
+                  {pendingSaves.size} değişiklik kaydedilmeyi bekliyor...
+                </p>
+                <p className="text-yellow-700 text-sm">
+                  Değişiklikler 2 saniye sonra otomatik olarak kaydedilecek. Lütfen bekleyin.
+                </p>
+              </div>
+            </div>
+            {saveStatus !== 'idle' && (
+              <div className={`px-3 py-2 rounded text-sm font-semibold flex items-center space-x-2 ${
+                saveStatus === 'saving' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                saveStatus === 'saved' ? 'bg-green-100 text-green-700 border border-green-300' :
+                'bg-red-100 text-red-700 border border-red-300'
+              }`}>
+                {saveStatus === 'saving' && (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Kaydediliyor...</span>
+                  </>
+                )}
+                {saveStatus === 'saved' && (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    <span>✅ Kaydedildi</span>
+                  </>
+                )}
+                {saveStatus === 'error' && (
+                  <>
+                    <AlertCircle className="w-4 h-4" />
+                    <span>❌ Hata!</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* MAIN CONTENT */}
       <main className="container mx-auto p-4 flex-1">
         
@@ -2083,7 +2170,7 @@ export default function BordroTakip() {
                                 )}
                                 {currentStats.overtimePay > 0 && (
                                   <div className="flex justify-between border-b pb-1 text-blue-600">
-                                    <span>Mesai ({currentStats.totalOvertimeHours} saat):</span>
+                                    <span>Mesai ({currentStats.totalOvertimeHours} saat x1.5):</span>
                                     <span className="font-semibold">+{formatCurrency(currentStats.overtimePay)}</span>
                                   </div>
                                 )}

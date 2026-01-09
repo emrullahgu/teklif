@@ -1,6 +1,6 @@
 ﻿import React, { useState, useMemo, useRef } from 'react';
 import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote } from 'lucide-react';
-import BordroTakip from './BordroTakip.tsx';
+import { BordroWithPassword } from './bordro-main.jsx';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import jsPDF from 'jspdf';
@@ -4165,7 +4165,7 @@ KURALLAR:
         {/* Bordro Takip Tab */}
         {activeTab === 'bordro' && (
           <div className="max-w-full mx-auto">
-            <BordroTakip />
+            <BordroWithPassword />
           </div>
         )}
 
