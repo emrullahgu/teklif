@@ -23,7 +23,8 @@ import {
   Upload,
   UploadCloud,
   FileDown,
-  FileText
+  FileText,
+  CheckCircle
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import ActivityLogger from './activityLogger';
