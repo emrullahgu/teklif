@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -673,7 +673,17 @@ export default function BordroTakip() {
       }
 
       await ActivityLogger.bordroMonthlySave(currentMonth + 1, currentYear, employees.length);
-      alert(`✅ ${MONTHS[currentMonth]} ${currentYear} bordrosu başarıyla kapatıldı!\n\n📊 Özet rapor oluşturuldu\n💾 Tüm detaylı veriler güvenle saklandı\n📂 Geçmiş Bordrolar'dan görüntüleyebilirsiniz\n\n⚠️ Not: Bu ay için girdiğiniz tüm puantaj, mesai ve not bilgileri veritabanında saklanmıştır. İstediğiniz zaman bu aya geri dönüp verileri görüntüleyebilirsiniz.`);
+      
+      // Bordro başarıyla kaydedildi, bir sonraki aya geç
+      const nextMonth = currentMonth + 1;
+      const nextYear = nextMonth > 11 ? currentYear + 1 : currentYear;
+      const adjustedNextMonth = nextMonth > 11 ? 0 : nextMonth;
+      
+      alert(`✅ ${MONTHS[currentMonth]} ${currentYear} bordrosu başarıyla kapatıldı!\n\n📊 Özet rapor oluşturuldu\n💾 Tüm detaylı veriler güvenle saklandı\n📂 Geçmiş Bordrolar'dan görüntüleyebilirsiniz\n\n⚠️ Not: Bu ay için girdiğiniz tüm puantaj, mesai ve not bilgileri veritabanında saklanmıştır. İstediğiniz zaman bu aya geri dönüp verileri görüntüleyebilirsiniz.\n\n🔜 Şimdi ${MONTHS[adjustedNextMonth]} ${nextYear} ayına geçilecek...`);
+      
+      // Bir sonraki aya geç
+      setCurrentDate(new Date(nextYear, adjustedNextMonth, 1));
+      
     } catch (error) {
       console.error('Bordro kaydetme hatası:', error);
       alert('❌ Bordro kaydedilirken bir hata oluştu!\n\nHata: ' + (error as any)?.message);
