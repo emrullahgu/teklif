@@ -261,34 +261,6 @@ export default function BordroTakip() {
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const monthKey = `${currentYear}-${currentMonth}`;
 
-  // --- SUPABASE BAĞLANTI TESTİ ---
-  const testSupabaseConnection = async () => {
-    try {
-      console.log('🔍 Supabase bağlantısı test ediliyor...');
-      console.log('🔗 Supabase URL:', supabase.supabaseUrl);
-      
-      const { data, error } = await supabase
-        .from('bordro_employees')
-        .select('count')
-        .limit(1);
-      
-      if (error) {
-        console.error('❌ Supabase BAĞLANTI HATASI:', error);
-        console.error('❌ Hata kodu:', error.code);
-        console.error('❌ Hata mesajı:', error.message);
-        alert(`🔴 SUPABASE BAĞLANTI HATASI!\n\n${error.message}\n\nKod: ${error.code}\n\nLütfen:\n1. İnternet bağlantınızı kontrol edin\n2. Supabase Dashboard'a gidin\n3. Projenin aktif olduğunu kontrol edin\n4. RLS politikalarını kontrol edin`);
-        return false;
-      }
-      
-      console.log('✅ Supabase bağlantısı başarılı!');
-      return true;
-    } catch (error: any) {
-      console.error('❌ FATAL - Supabase bağlantı testi başarısız:', error);
-      alert(`🔴 KRİTİK HATA!\n\nSupabase'e bağlanılamıyor!\n\n${error.message}\n\nVERİLERİNİZ KAYDEDİLEMİYOR!`);
-      return false;
-    }
-  };
-
   // --- SUPABASE CRUD FONKSİYONLARI ---
 
   // Personelleri Yükle
@@ -402,16 +374,6 @@ export default function BordroTakip() {
           [monthKey]: { month: currentMonth, year: currentYear, logs, expenses }
         }
       }));
-
-      // Otomatik doldurma: Eğer ay boşsa otomatik doldur
-      const logCount = Object.keys(logs).length;
-      if (logCount === 0) {
-        console.log('📝 Ay boş, otomatik doldurma başlatılıyor...');
-        // 500ms sonra otomatik doldur (state güncellenmesi için kısa bir süre)
-        setTimeout(() => {
-          autoFillMonth(employeeId, monthKey);
-        }, 500);
-      }
 
     } catch (error) {
       console.error('❌ Aylık veri yükleme hatası:', error);
@@ -530,18 +492,12 @@ export default function BordroTakip() {
   };
 
   // Puantaj Kaydı Kaydet
-  const saveDailyLog = async (day: number, log: DailyLog, retryCount = 0): Promise<boolean> => {
+  const saveDailyLog = async (day: number, log: DailyLog) => {
     try {
       // Geçersiz/boş kayıtları kaydetme
       if (!log.type) {
         console.log('⏭️ Boş kayıt atlandı:', day);
-        return true;
-      }
-
-      // Personel seçili değilse kaydetme
-      if (!selectedEmployeeId) {
-        console.error('❌ Personel seçilmemiş!');
-        return false;
+        return;
       }
 
       setSaveStatus('saving');
@@ -552,14 +508,13 @@ export default function BordroTakip() {
         month: currentMonth,
         year: currentYear,
         type: log.type,
-        start_time: log.startTime || DEFAULT_START_TIME,
-        end_time: log.endTime || DEFAULT_END_TIME_WEEKDAY,
-        overtime_hours: log.overtimeHours || 0,
-        description: log.description || ''
+        start_time: log.startTime,
+        end_time: log.endTime,
+        overtime_hours: log.overtimeHours,
+        description: log.description
       };
 
-      console.log(`📝 [Deneme ${retryCount + 1}/3] Puantaj kaydediliyor:`, logData);
-      console.log('🔗 Supabase URL:', supabase.supabaseUrl);
+      console.log('📝 Puantaj kaydediliyor:', logData);
 
       const { data, error } = await supabase
         .from('bordro_daily_logs')
@@ -570,22 +525,10 @@ export default function BordroTakip() {
 
       if (error) {
         console.error('❌ Supabase hatası:', error);
-        console.error('❌ Hata mesajı:', error.message);
-        console.error('❌ Hata kodu:', error.code);
-        console.error('❌ Hata detayı:', error.details);
-        console.error('❌ Hata hint:', error.hint);
-        
-        // Retry mekanizması (max 3 deneme)
-        if (retryCount < 2) {
-          console.log(`🔄 Tekrar deneniyor... (${retryCount + 2}/3)`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-          return saveDailyLog(day, log, retryCount + 1);
-        }
-        
         throw error;
       }
       
-      console.log('✅ Puantaj başarıyla kaydedildi:', data);
+      console.log('✅ Puantaj kaydedildi:', data);
       
       // Kayıt başarılı, pending listesinden kaldır
       setPendingSaves(prev => {
@@ -596,35 +539,11 @@ export default function BordroTakip() {
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
       
-      return true;
-      
-    } catch (error: any) {
-      console.error('❌ FATAL - Puantaj kayıt hatası:', error);
-      console.error('❌ Error stack:', error.stack);
-      
-      const errorMessage = error?.message || 'Bilinmeyen hata';
-      const errorCode = error?.code || 'NO_CODE';
-      const errorDetails = error?.details || 'Detay yok';
-      const errorHint = error?.hint || 'Hint yok';
-      
-      console.error('📋 HATA RAPORU:');
-      console.error('  - Mesaj:', errorMessage);
-      console.error('  - Kod:', errorCode);
-      console.error('  - Detay:', errorDetails);
-      console.error('  - Hint:', errorHint);
-      console.error('  - Personel ID:', selectedEmployeeId);
-      console.error('  - Gün:', day);
-      console.error('  - Ay/Yıl:', `${currentMonth + 1}/${currentYear}`);
-      
-      // Sadece ilk denemede alert göster
-      if (retryCount === 0) {
-        alert(`❌ VERİ KAYDEDİLEMEDİ!\n\n🔴 Hata: ${errorMessage}\n📌 Kod: ${errorCode}\n\n💡 Çözüm:\n1. F12 tuşuna basın\n2. Console sekmesini açın\n3. Hata detaylarını kontrol edin\n4. Supabase Dashboard'a gidin\n5. RLS politikalarını kontrol edin\n\n⚠️ Verileriniz KAYBOLABİLİR!`);
-      }
-      
+    } catch (error) {
+      console.error('❌ Puantaj kayıt hatası:', error);
+      alert('⚠️ Puantaj kaydedilemedi! Veritabanı bağlantısını kontrol edin.\n\nHata: ' + (error as any)?.message);
       setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
-      
-      return false;
+      setTimeout(() => setSaveStatus('idle'), 2000);
     }
   };
 
@@ -695,23 +614,8 @@ export default function BordroTakip() {
   const saveMonthlyPayroll = async () => {
     // Bekleyen kayıtları kontrol et
     if (pendingSaves.size > 0) {
-      const shouldContinue = confirm(`⚠️ ${pendingSaves.size} kaydedilmemiş değişiklik var!\n\nŞimdi tüm değişiklikleri kaydetmek ister misiniz?\n\n✅ EVET - Önce kaydet, sonra ayı kapat\n❌ HAYIR - İptal et`);
-      
-      if (!shouldContinue) {
-        return;
-      }
-      
-      // Tüm bekleyen kayıtları kaydet
-      alert('📝 Bekleyen kayıtlar kaydediliyor, lütfen bekleyin...');
-      await saveAllPending();
-      
-      // 2 saniye bekle
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      if (pendingSaves.size > 0) {
-        alert('❌ Bazı kayıtlar kaydedilemedi! Lütfen tekrar deneyin veya sayfayı yenileyin.');
-        return;
-      }
+      alert('⚠️ Lütfen bekleyin! Kaydedilmemiş değişiklikler var. Tüm değişiklikler kaydedildikten sonra tekrar deneyin.');
+      return;
     }
 
     if (!confirm(`${currentYear} yılı ${MONTHS[currentMonth]} ayı bordrosunu kaydetmek istediğinize emin misiniz?\n\n✅ Tüm puantaj verileri, mesai saatleri ve notlar veritabanında güvenle saklanmıştır.\n✅ Bu işlem sadece aylık özet raporu oluşturur.\n✅ Verileriniz kaybolmaz, istediğiniz zaman tekrar görüntüleyebilirsiniz.`)) {
@@ -770,17 +674,7 @@ export default function BordroTakip() {
       }
 
       await ActivityLogger.bordroMonthlySave(currentMonth + 1, currentYear, employees.length);
-      
-      // Bordro başarıyla kaydedildi, bir sonraki aya geç
-      const nextMonth = currentMonth + 1;
-      const nextYear = nextMonth > 11 ? currentYear + 1 : currentYear;
-      const adjustedNextMonth = nextMonth > 11 ? 0 : nextMonth;
-      
-      alert(`✅ ${MONTHS[currentMonth]} ${currentYear} bordrosu başarıyla kapatıldı!\n\n📊 Özet rapor oluşturuldu\n💾 Tüm detaylı veriler güvenle saklandı\n📂 Geçmiş Bordrolar'dan görüntüleyebilirsiniz\n\n⚠️ Not: Bu ay için girdiğiniz tüm puantaj, mesai ve not bilgileri veritabanında saklanmıştır. İstediğiniz zaman bu aya geri dönüp verileri görüntüleyebilirsiniz.\n\n🔜 Şimdi ${MONTHS[adjustedNextMonth]} ${nextYear} ayına geçilecek...`);
-      
-      // Bir sonraki aya geç
-      setCurrentDate(new Date(nextYear, adjustedNextMonth, 1));
-      
+      alert(`✅ ${MONTHS[currentMonth]} ${currentYear} bordrosu başarıyla kapatıldı!\n\n📊 Özet rapor oluşturuldu\n💾 Tüm detaylı veriler güvenle saklandı\n📂 Geçmiş Bordrolar'dan görüntüleyebilirsiniz\n\n⚠️ Not: Bu ay için girdiğiniz tüm puantaj, mesai ve not bilgileri veritabanında saklanmıştır. İstediğiniz zaman bu aya geri dönüp verileri görüntüleyebilirsiniz.`);
     } catch (error) {
       console.error('Bordro kaydetme hatası:', error);
       alert('❌ Bordro kaydedilirken bir hata oluştu!\n\nHata: ' + (error as any)?.message);
@@ -814,13 +708,7 @@ export default function BordroTakip() {
 
   // --- İLK YÜKLEME ---
   useEffect(() => {
-    const initialize = async () => {
-      const connected = await testSupabaseConnection();
-      if (connected) {
-        await loadEmployees();
-      }
-    };
-    initialize();
+    loadEmployees();
   }, []);
 
   // Personel listesi yüklendiğinde, tüm personeller için aylık verileri yükle
@@ -836,13 +724,6 @@ export default function BordroTakip() {
   // Personel veya Ay Değiştiğinde Verileri Yükle
   useEffect(() => {
     if (selectedEmployeeId) {
-      // Personel veya ay değiştiğinde pending saves'i temizle
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      setPendingSaves(new Set());
-      setSaveStatus('idle');
-      
       loadMonthlyData(selectedEmployeeId);
     }
   }, [selectedEmployeeId, monthKey]);
@@ -868,32 +749,6 @@ export default function BordroTakip() {
       }, 300);
     }
   }, [selectedEmployeeId, monthKey, employees]);
-
-  // Yeni ay açıldığında tüm personeller için otomatik doldur (TOPLU)
-  useEffect(() => {
-    if (employees.length > 0) {
-      // En az bir personelin bu ay için verisi yoksa toplu doldur
-      const needsAutoFill = employees.some(emp => {
-        const empData = appData[emp.id]?.[monthKey];
-        return !empData || Object.keys(empData.logs).length === 0;
-      });
-      
-      if (needsAutoFill) {
-        console.log(`🚀 ${monthKey} ayı için toplu otomatik doldurma başlatılıyor...`);
-        
-        // Async fonksiyonu düzgün bir şekilde çağır
-        const fillData = async () => {
-          try {
-            await autoFillAllEmployeesForMonth(monthKey);
-          } catch (error) {
-            console.error('❌ Otomatik doldurma hatası:', error);
-          }
-        };
-        
-        fillData();
-      }
-    }
-  }, [employees.length, monthKey]);
 
   const currentData = appData[selectedEmployeeId]?.[monthKey] || { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId) || { id: '0', name: '', agreedSalary: 0, officialSalary: 0 };
@@ -986,101 +841,11 @@ export default function BordroTakip() {
         }
         saveTimeoutRef.current = setTimeout(() => {
           saveDailyLog(day, currentLogs[day]);
-        }, 2000); // 2 saniye bekle - daha az kayıt isteği
+        }, 2000); // 2 saniye bekle
       }
 
       return newData;
     });
-  };
-
-  // Bekleyen tüm kayıtları toplu kaydet (BATCH - TEK SEFERDE)
-  const saveAllPending = async () => {
-    if (pendingSaves.size === 0) {
-      console.log('✅ Bekleyen kayıt yok');
-      return;
-    }
-    
-    console.log(`💾 ${pendingSaves.size} bekleyen kayıt BATCH olarak kaydediliyor...`);
-    setSaveStatus('saving');
-    
-    const currentData = appData[selectedEmployeeId]?.[monthKey];
-    if (!currentData) {
-      console.log('❌ Veri bulunamadı, pending saves temizleniyor');
-      setPendingSaves(new Set());
-      setSaveStatus('idle');
-      return;
-    }
-    
-    // Tüm kayıtları topla
-    const batchData: any[] = [];
-    const pendingArray = Array.from(pendingSaves);
-    
-    for (const key of pendingArray) {
-      const day = parseInt(key.split('-')[1]);
-      const log = currentData.logs[day];
-      
-      if (log && log.type) {
-        batchData.push({
-          employee_id: selectedEmployeeId,
-          day,
-          month: currentMonth,
-          year: currentYear,
-          type: log.type,
-          start_time: log.startTime || DEFAULT_START_TIME,
-          end_time: log.endTime || DEFAULT_END_TIME_WEEKDAY,
-          overtime_hours: log.overtimeHours || 0,
-          description: log.description || ''
-        });
-      }
-    }
-    
-    if (batchData.length === 0) {
-      console.log('⏭️ Kaydedilecek geçerli veri yok');
-      setPendingSaves(new Set());
-      setSaveStatus('idle');
-      return;
-    }
-    
-    console.log(`📦 ${batchData.length} kayıt tek seferde gönderiliyor...`);
-    console.log('📋 Gönderilecek veri:', batchData);
-    
-    try {
-      // TEK BİR ÇAĞRI İLE TÜM KAYITLARI GÖNDER
-      const { data, error } = await supabase
-        .from('bordro_daily_logs')
-        .upsert(batchData, { 
-          onConflict: 'employee_id,day,month,year'
-        })
-        .select();
-      
-      if (error) {
-        console.error('❌ BATCH kayıt hatası:', error);
-        console.error('❌ Hata mesajı:', error.message);
-        console.error('❌ Hata kodu:', error.code);
-        console.error('❌ Hata detayı:', error.details);
-        console.error('❌ Hata hint:', error.hint);
-        console.error('❌ Gönderilen veri:', JSON.stringify(batchData, null, 2));
-        
-        alert(`❌ VERİ KAYDEDİLEMEDİ!\n\nHata: ${error.message}\n\n💡 Muhtemel sebepler:\n- Veritabanı bağlantı sorunu\n- RLS (Row Level Security) politikası\n- Geçersiz veri formatı\n\nF12 → Console'da detayları görebilirsiniz.`);
-        
-        throw error;
-      }
-      
-      console.log(`🎉 ${batchData.length} kayıt başarıyla kaydedildi!`, data);
-      
-      // Tüm pending saves'i temizle
-      setPendingSaves(new Set());
-      
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
-      
-    } catch (error: any) {
-      console.error('❌ FATAL - Batch kayıt hatası:', error);
-      console.error('❌ Error stack:', error.stack);
-      
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
-    }
   };
 
   const addExpense = (type: 'Avans' | 'Gider' | 'Prim') => {
@@ -1184,194 +949,18 @@ export default function BordroTakip() {
     }
   };
 
-  const fillMonthDefaults = async () => {
-    console.log('🔄 Otomatik doldur başlatıldı...');
-    
-    // Timeout'u iptal et
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    // Önce state'i toplu olarak güncelle
-    const newLogs: {[key: number]: DailyLog} = {};
-    const newPendingSaves = new Set<string>();
-    
+  const fillMonthDefaults = () => {
+    // Otomatik olarak TÜM günleri Normal/08:00-18:00 ile doldur
     for (let i = 1; i <= daysInMonth; i++) {
       if (!currentData.logs[i] || !currentData.logs[i].type) {
-        const { isSaturday } = isWeekend(i, currentMonth, currentYear);
-        const endTime = isSaturday ? '13:00' : '18:00';
-        
-        newLogs[i] = {
-          type: 'Normal',
-          startTime: '08:00',
-          endTime: endTime,
-          overtimeHours: 0,
-          description: ''
-        };
-        
-        // Pending saves'e ekle
-        newPendingSaves.add(`${selectedEmployeeId}-${i}`);
+        handleLogChange(i, 'type', 'Normal');
+        handleLogChange(i, 'startTime', '08:00');
+        handleLogChange(i, 'endTime', '18:00');
       }
-    }
-    
-    if (Object.keys(newLogs).length === 0) {
-      console.log('✅ Tüm günler zaten dolu');
-      return;
-    }
-    
-    // State'i toplu güncelle
-    setAppData(prev => {
-      const newData = {...prev};
-      if (!newData[selectedEmployeeId]) {
-        newData[selectedEmployeeId] = {};
-      }
-      if (!newData[selectedEmployeeId][monthKey]) {
-        newData[selectedEmployeeId][monthKey] = { logs: {}, expenses: [] };
-      }
-      
-      newData[selectedEmployeeId][monthKey] = {
-        ...newData[selectedEmployeeId][monthKey],
-        logs: {
-          ...newData[selectedEmployeeId][monthKey].logs,
-          ...newLogs
-        }
-      };
-      
-      return newData;
-    });
-    
-    // Pending saves'i güncelle
-    setPendingSaves(prev => {
-      const updated = new Set(prev);
-      newPendingSaves.forEach(key => updated.add(key));
-      return updated;
-    });
-    
-    console.log(`✅ ${Object.keys(newLogs).length} gün dolduruldu`);
-    
-    // 1 saniye sonra kaydet
-    setTimeout(() => {
-      console.log('💾 Otomatik kayıt başlatılıyor...');
-      saveAllPending();
-    }, 1000);
-  };
-
-  // Otomatik doldurma fonksiyonu (yeni ay açıldığında) - TÜM PERSONELLER İÇİN TOPLU
-  const autoFillAllEmployeesForMonth = async (targetMonthKey: string) => {
-    console.log(`🚀 ${targetMonthKey} ayı için TÜM personeller otomatik dolduruluyor...`);
-    
-    // Ay ve yıl bilgisini parse et
-    const [year, month] = targetMonthKey.split('-').map(Number);
-    const daysInTargetMonth = new Date(year, month + 1, 0).getDate();
-    
-    const allBatchData: any[] = [];
-    const newAppData: Record<string, Record<string, MonthlyData>> = {};
-    
-    // Tüm personeller için verileri hazırla
-    employees.forEach(emp => {
-      const empData = appData[emp.id]?.[targetMonthKey];
-      
-      // Eğer zaten veri varsa atla
-      if (empData && Object.keys(empData.logs).length > 0) {
-        console.log(`⏭️ ${emp.name} için zaten veri var, atlanıyor`);
-        return;
-      }
-      
-      const newLogs: {[key: number]: DailyLog} = {};
-      
-      // Her gün için veri oluştur
-      for (let i = 1; i <= daysInTargetMonth; i++) {
-        const date = new Date(year, month, i);
-        const dayOfWeek = date.getDay();
-        const isSaturday = dayOfWeek === 6;
-        const endTime = isSaturday ? '13:00' : '18:00';
-        
-        newLogs[i] = {
-          day: i,
-          type: 'Normal',
-          startTime: '08:00',
-          endTime: endTime,
-          overtimeHours: 0,
-          description: ''
-        };
-        
-        // Toplu kayıt için batch data'ya ekle
-        allBatchData.push({
-          employee_id: emp.id,
-          day: i,
-          month: month,
-          year: year,
-          type: 'Normal',
-          start_time: '08:00',
-          end_time: endTime,
-          overtime_hours: 0,
-          description: ''
-        });
-      }
-      
-      // State güncellemesi için hazırla
-      if (!newAppData[emp.id]) {
-        newAppData[emp.id] = {};
-      }
-      newAppData[emp.id][targetMonthKey] = {
-        month,
-        year,
-        logs: newLogs,
-        expenses: appData[emp.id]?.[targetMonthKey]?.expenses || []
-      };
-      
-      console.log(`✅ ${emp.name} için ${daysInTargetMonth} gün hazırlandı`);
-    });
-    
-    // Eğer hiç yeni veri yoksa çık
-    if (allBatchData.length === 0) {
-      console.log('⏭️ Hiç yeni veri yok, kayıt atlanıyor');
-      return;
-    }
-    
-    // State'i güncelle (TEK SEFERDE)
-    setAppData(prev => {
-      const updated = {...prev};
-      Object.keys(newAppData).forEach(empId => {
-        if (!updated[empId]) {
-          updated[empId] = {};
-        }
-        updated[empId] = {
-          ...updated[empId],
-          ...newAppData[empId]
-        };
-      });
-      return updated;
-    });
-    
-    console.log(`🎉 ${employees.length} personel için toplam ${allBatchData.length} kayıt hazırlandı!`);
-    
-    // Veritabanına toplu kaydet (TEK BİR İSTEK)
-    try {
-      console.log(`💾 ${allBatchData.length} kayıt tek seferde veritabanına kaydediliyor...`);
-      
-      const { data, error } = await supabase
-        .from('bordro_daily_logs')
-        .upsert(allBatchData, { 
-          onConflict: 'employee_id,day,month,year'
-        })
-        .select();
-      
-      if (error) {
-        console.error('❌ Toplu otomatik doldurma kayıt hatası:', error);
-        alert(`❌ Otomatik doldurma hatası: ${error.message}`);
-        return;
-      }
-      
-      console.log(`✅ ${allBatchData.length} kayıt başarıyla otomatik kaydedildi!`);
-      
-    } catch (error) {
-      console.error('❌ Otomatik doldurma FATAL hatası:', error);
-      alert(`❌ Kritik hata: ${(error as any)?.message}`);
     }
   };
 
-  const openAddModal = () => {  const openAddModal = () => {
+  const openAddModal = () => {
     setEmployeeForm({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
     setEditingEmployeeId(null);
     setShowEmployeeModal(true);
@@ -2229,16 +1818,6 @@ export default function BordroTakip() {
               </label>
             </div>
 
-            {/* Supabase Bağlantı Testi */}
-            <button
-              onClick={testSupabaseConnection}
-              className="bg-orange-600 hover:bg-orange-700 px-3 py-2 rounded text-sm font-semibold flex items-center space-x-1"
-              title="Supabase Bağlantısını Test Et"
-            >
-              <RefreshCw className="w-4 h-4"/>
-              <span>🔍 Bağlantıyı Test Et</span>
-            </button>
-
             {/* Geçmiş Bordrolar */}
             <button
               onClick={() => setShowHistoryModal(true)}
@@ -2332,49 +1911,39 @@ export default function BordroTakip() {
               <AlertCircle className="w-5 h-5 text-yellow-600 mr-3" />
               <div>
                 <p className="text-yellow-800 font-semibold">
-                  {pendingSaves.size} değişiklik bekliyor
+                  {pendingSaves.size} değişiklik kaydedilmeyi bekliyor...
                 </p>
                 <p className="text-yellow-700 text-sm">
-                  2 saniye bekledikten sonra otomatik kaydedilecek
+                  Değişiklikler 2 saniye sonra otomatik olarak kaydedilecek. Lütfen bekleyin.
                 </p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={saveAllPending}
-                disabled={saveStatus === 'saving'}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center space-x-2 transition-all"
-              >
-                <Save className="w-4 h-4" />
-                <span>Şimdi Kaydet</span>
-              </button>
-              {saveStatus !== 'idle' && (
-                <div className={`px-3 py-2 rounded text-sm font-semibold flex items-center space-x-2 ${
-                  saveStatus === 'saving' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
-                  saveStatus === 'saved' ? 'bg-green-100 text-green-700 border border-green-300' :
-                  'bg-red-100 text-red-700 border border-red-300'
-                }`}>
-                  {saveStatus === 'saving' && (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Kaydediliyor...</span>
-                    </>
-                  )}
-                  {saveStatus === 'saved' && (
-                    <>
-                      <CheckCircle className="w-4 h-4" />
-                      <span>✅ Tamamlandı</span>
-                    </>
-                  )}
-                  {saveStatus === 'error' && (
-                    <>
-                      <AlertCircle className="w-4 h-4" />
-                      <span>❌ Hata!</span>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+            {saveStatus !== 'idle' && (
+              <div className={`px-3 py-2 rounded text-sm font-semibold flex items-center space-x-2 ${
+                saveStatus === 'saving' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                saveStatus === 'saved' ? 'bg-green-100 text-green-700 border border-green-300' :
+                'bg-red-100 text-red-700 border border-red-300'
+              }`}>
+                {saveStatus === 'saving' && (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Kaydediliyor...</span>
+                  </>
+                )}
+                {saveStatus === 'saved' && (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    <span>✅ Kaydedildi</span>
+                  </>
+                )}
+                {saveStatus === 'error' && (
+                  <>
+                    <AlertCircle className="w-4 h-4" />
+                    <span>❌ Hata!</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
