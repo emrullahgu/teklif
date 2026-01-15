@@ -3029,6 +3029,13 @@ KURALLAR:
             Bordro Takip
           </button>
           <button 
+            onClick={() => window.open('/osos.html', '_blank')}
+            className="px-6 py-2 rounded-lg text-sm font-medium transition flex items-center text-gray-600 hover:text-gray-900 hover:bg-white hover:shadow"
+          >
+            <FileText className="w-4 h-4 mr-2"/>
+            OSOS
+          </button>
+          <button 
             onClick={() => setActiveTab('saved')}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'saved' ? 'bg-white shadow text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
