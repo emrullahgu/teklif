@@ -1006,6 +1006,7 @@ export default function BordroTakip() {
     }
     
     console.log(`📦 ${batchData.length} kayıt tek seferde gönderiliyor...`);
+    console.log('📋 Gönderilecek veri:', batchData);
     
     try {
       // TEK BİR ÇAĞRI İLE TÜM KAYITLARI GÖNDER
@@ -1018,7 +1019,14 @@ export default function BordroTakip() {
       
       if (error) {
         console.error('❌ BATCH kayıt hatası:', error);
-        console.error('❌ Hata detayı:', JSON.stringify(error, null, 2));
+        console.error('❌ Hata mesajı:', error.message);
+        console.error('❌ Hata kodu:', error.code);
+        console.error('❌ Hata detayı:', error.details);
+        console.error('❌ Hata hint:', error.hint);
+        console.error('❌ Gönderilen veri:', JSON.stringify(batchData, null, 2));
+        
+        alert(`❌ VERİ KAYDEDİLEMEDİ!\n\nHata: ${error.message}\n\n💡 Muhtemel sebepler:\n- Veritabanı bağlantı sorunu\n- RLS (Row Level Security) politikası\n- Geçersiz veri formatı\n\nF12 → Console'da detayları görebilirsiniz.`);
+        
         throw error;
       }
       
@@ -1027,15 +1035,12 @@ export default function BordroTakip() {
       // Tüm pending saves'i temizle
       setPendingSaves(new Set());
       
-      alert(`✅ Tüm kayıtlar başarıyla kaydedildi!\n\n${batchData.length} kayıt veritabanına yazıldı.`);
-      
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
       
     } catch (error: any) {
       console.error('❌ FATAL - Batch kayıt hatası:', error);
-      
-      alert(`❌ Kayıt hatası!\n\n${error.message}\n\nF12 console'u kontrol edin.`);
+      console.error('❌ Error stack:', error.stack);
       
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
@@ -1144,34 +1149,75 @@ export default function BordroTakip() {
   };
 
   const fillMonthDefaults = async () => {
-    // Otomatik olarak TÜM günleri Normal/08:00-18:00 (Cumartesi 13:00) ile doldur, mesailer 0
     console.log('🔄 Otomatik doldur başlatıldı...');
     
-    // Timeout'u iptal et - toplu işlem yapacağız
+    // Timeout'u iptal et
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
     
-    const updates: any[] = [];
+    // Önce state'i toplu olarak güncelle
+    const newLogs: {[key: number]: DailyLog} = {};
+    const newPendingSaves = new Set<string>();
     
     for (let i = 1; i <= daysInMonth; i++) {
       if (!currentData.logs[i] || !currentData.logs[i].type) {
         const { isSaturday } = isWeekend(i, currentMonth, currentYear);
         const endTime = isSaturday ? '13:00' : '18:00';
         
-        // State'i güncelle (kayıtsız)
-        handleLogChange(i, 'type', 'Normal');
-        handleLogChange(i, 'startTime', '08:00');
-        handleLogChange(i, 'endTime', endTime);
-        handleLogChange(i, 'overtimeHours', 0);
+        newLogs[i] = {
+          type: 'Normal',
+          startTime: '08:00',
+          endTime: endTime,
+          overtimeHours: 0,
+          description: ''
+        };
+        
+        // Pending saves'e ekle
+        newPendingSaves.add(`${selectedEmployeeId}-${i}`);
       }
     }
     
-    // 3 saniye sonra toplu kaydet
+    if (Object.keys(newLogs).length === 0) {
+      console.log('✅ Tüm günler zaten dolu');
+      return;
+    }
+    
+    // State'i toplu güncelle
+    setAppData(prev => {
+      const newData = {...prev};
+      if (!newData[selectedEmployeeId]) {
+        newData[selectedEmployeeId] = {};
+      }
+      if (!newData[selectedEmployeeId][monthKey]) {
+        newData[selectedEmployeeId][monthKey] = { logs: {}, expenses: [] };
+      }
+      
+      newData[selectedEmployeeId][monthKey] = {
+        ...newData[selectedEmployeeId][monthKey],
+        logs: {
+          ...newData[selectedEmployeeId][monthKey].logs,
+          ...newLogs
+        }
+      };
+      
+      return newData;
+    });
+    
+    // Pending saves'i güncelle
+    setPendingSaves(prev => {
+      const updated = new Set(prev);
+      newPendingSaves.forEach(key => updated.add(key));
+      return updated;
+    });
+    
+    console.log(`✅ ${Object.keys(newLogs).length} gün dolduruldu`);
+    
+    // 1 saniye sonra kaydet
     setTimeout(() => {
-      console.log('💾 Toplu kayıt başlatılıyor...');
+      console.log('💾 Otomatik kayıt başlatılıyor...');
       saveAllPending();
-    }, 3000);
+    }, 1000);
   };
 
   const openAddModal = () => {
