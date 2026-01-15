@@ -20,6 +20,11 @@ export default function Osos() {
   const [isLoadingKosbi, setIsLoadingKosbi] = useState(false);
   const [kosbiData, setKosbiData] = useState([]);
   
+  // Excel Import State
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
+  const [excelData, setExcelData] = useState([]);
+  const [excelFileName, setExcelFileName] = useState('');
+  
   // WorkTracker Entegrasyonu
   const [showWorkTrackerModal, setShowWorkTrackerModal] = useState(false);
   const [workTrackerConfig, setWorkTrackerConfig] = useState({
@@ -280,6 +285,65 @@ export default function Osos() {
     alert(`✅ ${newMeasurements.length} sayaç verisi ölçüm tablosuna eklendi!`);
   };
 
+  // Excel/JSON Import
+  const handleExcelImport = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setExcelFileName(file.name);
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const jsonData = JSON.parse(e.target.result);
+        setExcelData(jsonData);
+        setShowExcelImportModal(true);
+      } catch (error) {
+        alert('❌ JSON dosyası okunamadı:\n' + error.message);
+      }
+    };
+    
+    reader.readAsText(file);
+  };
+
+  const importExcelData = () => {
+    if (excelData.length === 0) {
+      alert('⚠️ Önce JSON dosyası yükleyin!');
+      return;
+    }
+
+    // JSON verisini measurements formatına dönüştür
+    const newMeasurements = excelData.map((row, idx) => {
+      const tarih = row["Tarih"] || row["Tarih2"] || '';
+      const tuketim = row["Tüketim ()"] || 0;
+      const endeks = row["Okunan Endeks Değeri"] || 0;
+      const carpan = row["Çarpan"] || 1;
+      
+      return {
+        id: measurements.length + idx + 1,
+        olcumNoktasi: `Sayaç Okuma ${tarih}`,
+        parametre: "Tüketim",
+        deger: tuketim.toString(),
+        birim: "kWh",
+        limit: "-",
+        sonuc: tuketim > 500 ? "Yüksek" : tuketim > 300 ? "Dikkat" : "Normal",
+        // Ek bilgiler (raporda kullanılabilir)
+        ekBilgi: {
+          tarih: tarih,
+          endeks: endeks,
+          carpan: carpan,
+          okumaSuresi: row["Okuma Süresi (Saat)"] || 0
+        }
+      };
+    });
+
+    setMeasurements([...measurements, ...newMeasurements]);
+    setShowExcelImportModal(false);
+    setExcelData([]);
+    setExcelFileName('');
+    alert(`✅ ${newMeasurements.length} Excel kaydı ölçüm tablosuna eklendi!`);
+  };
+
   // WorkTracker Login
   const loginToWorkTracker = async () => {
     if (!workTrackerConfig.email || !workTrackerConfig.password) {
@@ -454,6 +518,15 @@ export default function Osos() {
           >
             <Zap size={18} /> KOSBI Veri Çek
           </button>
+          <label className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors cursor-pointer">
+            <Upload size={18} /> Excel Import
+            <input 
+              type="file" 
+              accept=".json"
+              onChange={handleExcelImport}
+              className="hidden"
+            />
+          </label>
           <button 
             onClick={createTaskFromReport}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
@@ -752,6 +825,97 @@ export default function Osos() {
                   Şu an demo veriler gösterilmektedir.
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Excel Import Modal */}
+      {showExcelImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-green-600 to-green-500 text-white p-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Upload size={28} />
+                    Excel Import - {excelFileName}
+                  </h2>
+                  <p className="text-sm text-green-100">JSON formatında Excel verisi</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setShowExcelImportModal(false);
+                    setExcelData([]);
+                    setExcelFileName('');
+                  }}
+                  className="text-white hover:bg-green-700 p-2 rounded-full transition"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
+              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-800">
+                  ✅ <strong>{excelData.length}</strong> satır veri yüklendi
+                </p>
+                <p className="text-xs text-green-600 mt-1">
+                  Veriler OSOS ölçüm tablosuna eklenecek
+                </p>
+              </div>
+
+              {/* Veri Önizleme */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse border">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border p-2 text-left">Tarih</th>
+                      <th className="border p-2 text-left">Okuma Süresi</th>
+                      <th className="border p-2 text-left">Endeks</th>
+                      <th className="border p-2 text-left">Çarpan</th>
+                      <th className="border p-2 text-left">Tüketim (kWh)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {excelData.slice(0, 10).map((row, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="border p-2">{row["Tarih"] || row["Tarih2"]}</td>
+                        <td className="border p-2">{row["Okuma Süresi (Saat)"]} saat</td>
+                        <td className="border p-2">{row["Okunan Endeks Değeri"]}</td>
+                        <td className="border p-2">{row["Çarpan"]}</td>
+                        <td className="border p-2 font-semibold">{row["Tüketim ()"]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {excelData.length > 10 && (
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                    ... ve {excelData.length - 10} satır daha
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-gray-50 p-4 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowExcelImportModal(false);
+                  setExcelData([]);
+                  setExcelFileName('');
+                }}
+                className="px-6 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition text-gray-700"
+              >
+                İptal
+              </button>
+              <button
+                onClick={importExcelData}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition flex items-center gap-2"
+              >
+                <CheckCircle size={18} />
+                {excelData.length} Kaydı İçe Aktar
+              </button>
             </div>
           </div>
         </div>
