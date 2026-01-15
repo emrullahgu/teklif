@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 
-export default function Gunay() {
+export default function Osos() {
   const [printMode, setPrintMode] = useState(false);
   const [editMode, setEditMode] = useState(true);
   const [logo, setLogo] = useState(null);
@@ -142,7 +142,7 @@ export default function Gunay() {
         const imgY = 0;
         
         pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-        pdf.save(`GUNAY_Rapor_${formData.raporNo || 'YeniRapor'}.pdf`);
+        pdf.save(`OSOS_Rapor_${formData.raporNo || 'YeniRapor'}.pdf`);
         
         setPrintMode(false);
         setEditMode(true);
@@ -167,7 +167,7 @@ export default function Gunay() {
         email: "",
         vergiNo: "",
         kontrolEdenAd: "",
-        kontrolEdenUnvan: "Enerji Uzmanı",
+        kontrolEdenUnvan: "OSOS Uzmanı",
         kontrolEdenOdaNo: "",
         kontrolTarihi: new Date().toISOString().split('T')[0],
         sonrakiKontrolTarihi: "",
@@ -253,26 +253,8 @@ export default function Gunay() {
     } catch (error) {
       console.error('❌ KOSBI veri çekme hatası:', error);
       
-      // Backend çalışmıyorsa demo veri yükle
-      if (error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
-        console.log('⚠️ Backend sunucu bulunamadı, demo mod aktif');
-        
-        // Demo veri
-        const demoData = [
-          { sayacNo: "12345678", ad: "Ana Sayaç", cekilen: "1250", verilen: "50", reaktifCekilen: "120", reaktifVerilen: "5", tarih: new Date().toISOString().split('T')[0] },
-          { sayacNo: "87654321", ad: "Yedek Sayaç", cekilen: "850", verilen: "30", reaktifCekilen: "80", reaktifVerilen: "3", tarih: new Date().toISOString().split('T')[0] },
-          { sayacNo: "55566677", ad: "Tali Sayaç", cekilen: "450", verilen: "15", reaktifCekilen: "45", reaktifVerilen: "2", tarih: new Date().toISOString().split('T')[0] }
-        ];
-        
-        setTimeout(() => {
-          setKosbiData(demoData);
-          setIsLoadingKosbi(false);
-          alert(`⚠️ Backend sunucu çalışmıyor!\n\n${user.name} için ${demoData.length} DEMO sayaç verisi yüklendi.\n\nGerçek veri çekmek için:\n1. Terminal'de: cd server\n2. npm install\n3. npm start\n\nDetaylar için KOSBI-ENTEGRASYON.md dosyasına bakın.`);
-        }, 500);
-      } else {
-        setIsLoadingKosbi(false);
-        alert('❌ Veri çekme hatası:\n' + error.message);
-      }
+      setIsLoadingKosbi(false);
+      alert(`❌ KOSBI Bağlantı Hatası:\n\n${error.message}\n\nBackend sunucusunun çalıştığından emin olun:\n1. cd server\n2. npm start\n\nSonra tekrar deneyin.`);
     }
   };
 
@@ -409,7 +391,7 @@ export default function Gunay() {
     }
   };
 
-  // GUNAY raporundan otomatik görev oluştur
+  // OSOS raporundan otomatik görev oluştur
   const createTaskFromReport = () => {
     if (!formData.firmaAdi || !formData.raporNo) {
       alert('⚠️ Önce rapor bilgilerini doldurun!');
@@ -419,8 +401,8 @@ export default function Gunay() {
     // Uygun olmayan ölçümleri bul
     const problematicMeasurements = measurements.filter(m => m.sonuc !== 'Uygun');
     
-    const taskTitle = `GUNAY Enerji Raporu - ${formData.firmaAdi} (${formData.raporNo})`;
-    let taskDescription = `📋 GUNAY ENERJİ RAPOR DETAYLARI\n\n`;
+    const taskTitle = `OSOS Raporu - ${formData.firmaAdi} (${formData.raporNo})`;
+    let taskDescription = `📋 OSOS RAPOR DETAYLARI\n\n`;
     taskDescription += `🏢 Firma: ${formData.firmaAdi}\n`;
     taskDescription += `📄 Rapor No: ${formData.raporNo}\n`;
     taskDescription += `📅 Rapor Tarihi: ${formData.raporTarihi}\n`;
@@ -462,7 +444,7 @@ export default function Gunay() {
       {/* Header */}
       <div className={`bg-white shadow-md rounded-lg p-4 mb-4 flex justify-between items-center no-print ${printMode ? 'hidden' : ''}`}>
         <div>
-          <h1 className="text-xl font-bold text-gray-800">GUNAY Enerji İzleme Sistemi</h1>
+          <h1 className="text-xl font-bold text-gray-800">OSOS Rapor Sistemi</h1>
           <p className="text-xs text-gray-500">Organize Sanayi Ölçüm Sistemi</p>
         </div>
         <div className="flex gap-2">
@@ -505,7 +487,7 @@ export default function Gunay() {
             <div className="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-bold">WorkTracker Görev Oluştur</h2>
-                <p className="text-sm text-indigo-100">GUNAY - WorkTracker Entegrasyonu</p>
+                <p className="text-sm text-indigo-100">OSOS Raporundan Görev Takip Sistemi</p>
               </div>
               <button onClick={() => setShowWorkTrackerModal(false)} className="text-white hover:bg-indigo-700 p-2 rounded">
                 <X size={24} />
@@ -652,7 +634,7 @@ export default function Gunay() {
               <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
                 <p className="font-semibold text-blue-800 mb-1">ℹ️ Kullanım</p>
                 <p className="text-blue-700 text-xs">
-                  Bu özellik, GUNAY enerji raporundan otomatik olarak WorkTracker görev takip sisteminde görev oluşturur. 
+                  Bu özellik, OSOS raporundan otomatik olarak WorkTracker görev takip sisteminde görev oluşturur. 
                   WorkTracker sunucusunun çalışıyor olması gerekmektedir.
                 </p>
               </div>
@@ -1097,7 +1079,7 @@ export default function Gunay() {
             </div>
           )}
           <div className="flex-1 text-center">
-            <h1 className="text-3xl font-bold text-gray-800">GUNAY ENERJİ İZLEME RAPORU</h1>
+            <h1 className="text-3xl font-bold text-gray-800">OSOS RAPORU</h1>
             <p className="text-base text-gray-600 mt-1">Organize Sanayi Ölçüm Sistemi</p>
             <p className="text-sm text-gray-500 mt-2">Rapor No: {formData.raporNo || '-'}</p>
           </div>
@@ -1224,7 +1206,7 @@ export default function Gunay() {
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-gray-500 border-t pt-4">
           <p>Bu rapor {formData.raporTarihi} tarihinde {formData.kontrolEdenAd || 'yetkili kişi'} tarafından hazırlanmıştır.</p>
-          <p className="mt-1">GUNAY Enerji İzleme ve Raporlama Sistemi - Elektrik Sayaç Takip</p>
+          <p className="mt-1">Organize Sanayi Ölçüm Sistemi (OSOS) - Elektronik Rapor Sistemi</p>
         </div>
       </div>
     </div>
