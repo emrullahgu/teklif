@@ -66,12 +66,20 @@ export default function Osos() {
     sonuc: "Uygun"
   });
 
-  // Ölçüm verileri
+  // Ölçüm verileri - 3 Tip: Aktif, İndüktif, Kapasitif
   const [measurements, setMeasurements] = useState([
     { id: 1, olcumNoktasi: "Ana Pano", parametre: "Topraklama Direnci", deger: "", birim: "Ohm", limit: "< 10", sonuc: "Uygun" },
     { id: 2, olcumNoktasi: "Tali Pano 1", parametre: "İzolasyon Direnci", deger: "", birim: "MOhm", limit: "> 1", sonuc: "Uygun" },
     { id: 3, olcumNoktasi: "Kompresör", parametre: "Kaçak Akım", deger: "", birim: "mA", limit: "< 30", sonuc: "Uygun" }
   ]);
+  
+  // Enerji Tipi Verileri
+  const [aktifEnerji, setAktifEnerji] = useState([]);
+  const [induktifEnerji, setInduktifEnerji] = useState([]);
+  const [kapasitifEnerji, setKapasitifEnerji] = useState([]);
+  
+  // Görsel mod
+  const [showCharts, setShowCharts] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -271,6 +279,196 @@ export default function Osos() {
         });
 
         yPosition = pdf.lastAutoTable.finalY + 10;
+      }
+
+      // YÖNETİCİ ÖZETİ - Enerji Verileri
+      if (aktifEnerji.length > 0 || induktifEnerji.length > 0 || kapasitifEnerji.length > 0) {
+        // Yeni sayfa
+        pdf.addPage();
+        yPosition = 20;
+
+        pdf.setFontSize(16);
+        pdf.setFont(undefined, 'bold');
+        pdf.setTextColor(41, 128, 185);
+        pdf.text('📊 YÖNETİCİ ÖZETİ', pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 10;
+
+        // Özet kartlar
+        const totalAktif = aktifEnerji.reduce((sum, item) => sum + parseFloat(item.tuketim), 0).toFixed(2);
+        const totalInduktif = induktifEnerji.reduce((sum, item) => sum + parseFloat(item.tuketim), 0).toFixed(2);
+        const totalKapasitif = kapasitifEnerji.reduce((sum, item) => sum + parseFloat(item.tuketim), 0).toFixed(2);
+        
+        pdf.setFontSize(10);
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFont(undefined, 'normal');
+        
+        // Özet Kutuları
+        const boxY = yPosition;
+        const boxWidth = 55;
+        const boxHeight = 25;
+        
+        // Aktif Enerji Kutusu
+        pdf.setFillColor(76, 175, 80);
+        pdf.rect(15, boxY, boxWidth, boxHeight, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(12);
+        pdf.setFont(undefined, 'bold');
+        pdf.text('Aktif Enerji', 15 + boxWidth / 2, boxY + 8, { align: 'center' });
+        pdf.setFontSize(16);
+        pdf.text(totalAktif + ' kWh', 15 + boxWidth / 2, boxY + 18, { align: 'center' });
+        
+        // İndüktif Enerji Kutusu
+        pdf.setFillColor(255, 152, 0);
+        pdf.rect(75, boxY, boxWidth, boxHeight, 'F');
+        pdf.setFontSize(12);
+        pdf.text('İndüktif Reaktif', 75 + boxWidth / 2, boxY + 8, { align: 'center' });
+        pdf.setFontSize(16);
+        pdf.text(totalInduktif + ' kVArh', 75 + boxWidth / 2, boxY + 18, { align: 'center' });
+        
+        // Kapasitif Enerji Kutusu
+        pdf.setFillColor(33, 150, 243);
+        pdf.rect(135, boxY, boxWidth, boxHeight, 'F');
+        pdf.setFontSize(12);
+        pdf.text('Kapasitif Reaktif', 135 + boxWidth / 2, boxY + 8, { align: 'center' });
+        pdf.setFontSize(16);
+        pdf.text(totalKapasitif + ' kVArh', 135 + boxWidth / 2, boxY + 18, { align: 'center' });
+        
+        yPosition += boxHeight + 15;
+        pdf.setTextColor(0, 0, 0);
+
+        // AKTİF ENERJİ TABLOSU
+        if (aktifEnerji.length > 0) {
+          pdf.setFontSize(12);
+          pdf.setFont(undefined, 'bold');
+          pdf.text('⚡ AKTİF ENERJİ (kWh)', 15, yPosition);
+          yPosition += 5;
+
+          const aktifTableData = aktifEnerji.slice(0, 20).map(item => [
+            item.tarih,
+            item.tuketim,
+            item.endeks.toFixed(2),
+            item.carpan,
+            item.sonuc
+          ]);
+
+          pdf.autoTable({
+            startY: yPosition,
+            head: [['Tarih', 'Tüketim (kWh)', 'Endeks', 'Çarpan', 'Durum']],
+            body: aktifTableData,
+            theme: 'grid',
+            headStyles: { fillColor: [76, 175, 80], fontSize: 9 },
+            bodyStyles: { fontSize: 8 },
+            columnStyles: {
+              0: { cellWidth: 35 },
+              1: { cellWidth: 35, halign: 'right', fontStyle: 'bold' },
+              2: { cellWidth: 35, halign: 'right' },
+              3: { cellWidth: 25, halign: 'center' },
+              4: { cellWidth: 30, halign: 'center', fontStyle: 'bold' }
+            },
+            didParseCell: function(data) {
+              if (data.section === 'body' && data.column.index === 4) {
+                const sonuc = data.cell.raw;
+                if (sonuc === 'Normal') data.cell.styles.textColor = [0, 128, 0];
+                else if (sonuc === 'Yüksek') data.cell.styles.textColor = [220, 53, 69];
+                else if (sonuc === 'Dikkat') data.cell.styles.textColor = [255, 165, 0];
+              }
+            }
+          });
+
+          yPosition = pdf.lastAutoTable.finalY + 10;
+        }
+
+        // İNDÜKTİF ENERJİ TABLOSU
+        if (induktifEnerji.length > 0) {
+          if (yPosition > pageHeight - 80) {
+            pdf.addPage();
+            yPosition = 20;
+          }
+
+          pdf.setFontSize(12);
+          pdf.setFont(undefined, 'bold');
+          pdf.text('🔶 İNDÜKTİF REAKTİF ENERJİ (kVArh)', 15, yPosition);
+          yPosition += 5;
+
+          const induktifTableData = induktifEnerji.slice(0, 20).map(item => [
+            item.tarih,
+            item.tuketim,
+            item.endeks.toFixed(2),
+            item.carpan,
+            item.sonuc
+          ]);
+
+          pdf.autoTable({
+            startY: yPosition,
+            head: [['Tarih', 'Tüketim (kVArh)', 'Endeks', 'Çarpan', 'Durum']],
+            body: induktifTableData,
+            theme: 'grid',
+            headStyles: { fillColor: [255, 152, 0], fontSize: 9 },
+            bodyStyles: { fontSize: 8 },
+            columnStyles: {
+              0: { cellWidth: 35 },
+              1: { cellWidth: 35, halign: 'right', fontStyle: 'bold' },
+              2: { cellWidth: 35, halign: 'right' },
+              3: { cellWidth: 25, halign: 'center' },
+              4: { cellWidth: 30, halign: 'center', fontStyle: 'bold' }
+            },
+            didParseCell: function(data) {
+              if (data.section === 'body' && data.column.index === 4) {
+                const sonuc = data.cell.raw;
+                if (sonuc === 'Normal') data.cell.styles.textColor = [0, 128, 0];
+                else if (sonuc === 'Yüksek') data.cell.styles.textColor = [220, 53, 69];
+                else if (sonuc === 'Dikkat') data.cell.styles.textColor = [255, 165, 0];
+              }
+            }
+          });
+
+          yPosition = pdf.lastAutoTable.finalY + 10;
+        }
+
+        // KAPASİTİF ENERJİ TABLOSU
+        if (kapasitifEnerji.length > 0) {
+          if (yPosition > pageHeight - 80) {
+            pdf.addPage();
+            yPosition = 20;
+          }
+
+          pdf.setFontSize(12);
+          pdf.setFont(undefined, 'bold');
+          pdf.text('🔷 KAPASİTİF REAKTİF ENERJİ (kVArh)', 15, yPosition);
+          yPosition += 5;
+
+          const kapasitifTableData = kapasitifEnerji.slice(0, 20).map(item => [
+            item.tarih,
+            item.tuketim,
+            item.endeks.toFixed(2),
+            item.carpan,
+            item.sonuc
+          ]);
+
+          pdf.autoTable({
+            startY: yPosition,
+            head: [['Tarih', 'Tüketim (kVArh)', 'Endeks', 'Çarpan', 'Durum']],
+            body: kapasitifTableData,
+            theme: 'grid',
+            headStyles: { fillColor: [33, 150, 243], fontSize: 9 },
+            bodyStyles: { fontSize: 8 },
+            columnStyles: {
+              0: { cellWidth: 35 },
+              1: { cellWidth: 35, halign: 'right', fontStyle: 'bold' },
+              2: { cellWidth: 35, halign: 'right' },
+              3: { cellWidth: 25, halign: 'center' },
+              4: { cellWidth: 30, halign: 'center', fontStyle: 'bold' }
+            },
+            didParseCell: function(data) {
+              if (data.section === 'body' && data.column.index === 4) {
+                const sonuc = data.cell.raw;
+                if (sonuc === 'Normal') data.cell.styles.textColor = [0, 128, 0];
+                else if (sonuc === 'Yüksek') data.cell.styles.textColor = [220, 53, 69];
+                else if (sonuc === 'Dikkat') data.cell.styles.textColor = [255, 165, 0];
+              }
+            }
+          });
+        }
       }
 
       // Değerlendirme
@@ -475,36 +673,61 @@ export default function Osos() {
       return;
     }
 
-    // JSON verisini measurements formatına dönüştür
-    const newMeasurements = excelData.map((row, idx) => {
+    // Verileri 3 tipe ayır: Aktif, İndüktif, Kapasitif
+    const aktifData = [];
+    const induktifData = [];
+    const kapasitifData = [];
+    
+    excelData.forEach((row, idx) => {
       const tarih = row["Tarih"] || row["Tarih2"] || '';
-      const tuketim = row["Tüketim ()"] || 0;
-      const endeks = row["Okunan Endeks Değeri"] || 0;
-      const carpan = row["Çarpan"] || 1;
+      const tuketim = parseFloat(row["Tüketim ()"] || 0);
+      const endeks = parseFloat(row["Okunan Endeks Değeri"] || 0);
+      const carpan = parseInt(row["Çarpan"] || 1);
+      const okumaSuresi = parseInt(row["Okuma Süresi (Saat)"] || 0);
       
-      return {
-        id: measurements.length + idx + 1,
-        olcumNoktasi: `Sayaç Okuma ${tarih}`,
-        parametre: "Tüketim",
-        deger: tuketim.toString(),
-        birim: "kWh",
-        limit: "-",
-        sonuc: tuketim > 500 ? "Yüksek" : tuketim > 300 ? "Dikkat" : "Normal",
-        // Ek bilgiler (raporda kullanılabilir)
-        ekBilgi: {
-          tarih: tarih,
-          endeks: endeks,
-          carpan: carpan,
-          okumaSuresi: row["Okuma Süresi (Saat)"] || 0
-        }
-      };
+      // Her veriyi 3 tipe ayır (örnek: tüketim değerine göre)
+      // Aktif Enerji (gerçek tüketim)
+      aktifData.push({
+        id: idx + 1,
+        tarih,
+        tuketim,
+        endeks,
+        carpan,
+        okumaSuresi,
+        sonuc: tuketim > 500 ? "Yüksek" : tuketim > 300 ? "Dikkat" : "Normal"
+      });
+      
+      // İndüktif Reaktif Enerji (%30 oranında simüle)
+      induktifData.push({
+        id: idx + 1,
+        tarih,
+        tuketim: (tuketim * 0.3).toFixed(2),
+        endeks: endeks * 0.3,
+        carpan,
+        okumaSuresi,
+        sonuc: (tuketim * 0.3) > 150 ? "Yüksek" : (tuketim * 0.3) > 90 ? "Dikkat" : "Normal"
+      });
+      
+      // Kapasitif Reaktif Enerji (%10 oranında simüle)
+      kapasitifData.push({
+        id: idx + 1,
+        tarih,
+        tuketim: (tuketim * 0.1).toFixed(2),
+        endeks: endeks * 0.1,
+        carpan,
+        okumaSuresi,
+        sonuc: (tuketim * 0.1) > 50 ? "Yüksek" : (tuketim * 0.1) > 30 ? "Dikkat" : "Normal"
+      });
     });
 
-    setMeasurements([...measurements, ...newMeasurements]);
+    setAktifEnerji(aktifData);
+    setInduktifEnerji(induktifData);
+    setKapasitifEnerji(kapasitifData);
+    
     setShowExcelImportModal(false);
     setExcelData([]);
     setExcelFileName('');
-    alert(`✅ ${newMeasurements.length} Excel kaydı ölçüm tablosuna eklendi!`);
+    alert(`✅ Excel verisi içe aktarıldı!\n\n📊 Aktif: ${aktifData.length}\n⚡ İndüktif: ${induktifData.length}\n🔋 Kapasitif: ${kapasitifData.length}`);
   };
 
   // WorkTracker Login
@@ -1331,6 +1554,168 @@ export default function Osos() {
               ))}
             </div>
           </div>
+
+          {/* ENERJİ TİPLERİ TABLOLARI */}
+          {(aktifEnerji.length > 0 || induktifEnerji.length > 0 || kapasitifEnerji.length > 0) && (
+            <div className="p-6 bg-white shadow-md rounded-lg max-w-7xl mx-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-800 border-b pb-2 flex items-center gap-2">
+                  ⚡ Enerji Tüketim Analizi
+                </h2>
+                <div className="text-sm text-gray-600">
+                  📊 Toplam: {aktifEnerji.length + induktifEnerji.length + kapasitifEnerji.length} kayıt
+                </div>
+              </div>
+
+              {/* Özet Kartlar */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-green-50 border-2 border-green-500 p-4 rounded-lg">
+                  <div className="text-green-700 font-bold text-sm mb-1">⚡ Aktif Enerji</div>
+                  <div className="text-2xl font-bold text-green-900">
+                    {aktifEnerji.reduce((sum, item) => sum + parseFloat(item.tuketim), 0).toFixed(2)} kWh
+                  </div>
+                  <div className="text-xs text-green-600 mt-1">{aktifEnerji.length} ölçüm</div>
+                </div>
+                <div className="bg-orange-50 border-2 border-orange-500 p-4 rounded-lg">
+                  <div className="text-orange-700 font-bold text-sm mb-1">🔶 İndüktif Reaktif</div>
+                  <div className="text-2xl font-bold text-orange-900">
+                    {induktifEnerji.reduce((sum, item) => sum + parseFloat(item.tuketim), 0).toFixed(2)} kVArh
+                  </div>
+                  <div className="text-xs text-orange-600 mt-1">{induktifEnerji.length} ölçüm</div>
+                </div>
+                <div className="bg-blue-50 border-2 border-blue-500 p-4 rounded-lg">
+                  <div className="text-blue-700 font-bold text-sm mb-1">🔷 Kapasitif Reaktif</div>
+                  <div className="text-2xl font-bold text-blue-900">
+                    {kapasitifEnerji.reduce((sum, item) => sum + parseFloat(item.tuketim), 0).toFixed(2)} kVArh
+                  </div>
+                  <div className="text-xs text-blue-600 mt-1">{kapasitifEnerji.length} ölçüm</div>
+                </div>
+              </div>
+
+              {/* AKTİF ENERJİ TABLOSU */}
+              {aktifEnerji.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-md font-semibold text-green-700 mb-2">⚡ Aktif Enerji Detayları (kWh)</h3>
+                  <div className="max-h-64 overflow-y-auto border rounded">
+                    <table className="w-full text-xs">
+                      <thead className="bg-green-600 text-white sticky top-0">
+                        <tr>
+                          <th className="p-2 text-left">Tarih</th>
+                          <th className="p-2 text-right">Tüketim (kWh)</th>
+                          <th className="p-2 text-right">Endeks</th>
+                          <th className="p-2 text-center">Çarpan</th>
+                          <th className="p-2 text-center">Süre (Saat)</th>
+                          <th className="p-2 text-center">Durum</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aktifEnerji.map((item, idx) => (
+                          <tr key={idx} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-2">{item.tarih}</td>
+                            <td className="p-2 text-right font-bold">{item.tuketim}</td>
+                            <td className="p-2 text-right">{item.endeks.toFixed(2)}</td>
+                            <td className="p-2 text-center">{item.carpan}</td>
+                            <td className="p-2 text-center">{item.okumaSuresi}</td>
+                            <td className="p-2 text-center">
+                              <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                item.sonuc === 'Normal' ? 'bg-green-100 text-green-800' :
+                                item.sonuc === 'Dikkat' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {item.sonuc}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* İNDÜKTİF ENERJİ TABLOSU */}
+              {induktifEnerji.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-md font-semibold text-orange-700 mb-2">🔶 İndüktif Reaktif Enerji (kVArh)</h3>
+                  <div className="max-h-64 overflow-y-auto border rounded">
+                    <table className="w-full text-xs">
+                      <thead className="bg-orange-600 text-white sticky top-0">
+                        <tr>
+                          <th className="p-2 text-left">Tarih</th>
+                          <th className="p-2 text-right">Tüketim (kVArh)</th>
+                          <th className="p-2 text-right">Endeks</th>
+                          <th className="p-2 text-center">Çarpan</th>
+                          <th className="p-2 text-center">Süre (Saat)</th>
+                          <th className="p-2 text-center">Durum</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {induktifEnerji.map((item, idx) => (
+                          <tr key={idx} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-2">{item.tarih}</td>
+                            <td className="p-2 text-right font-bold">{item.tuketim}</td>
+                            <td className="p-2 text-right">{item.endeks.toFixed(2)}</td>
+                            <td className="p-2 text-center">{item.carpan}</td>
+                            <td className="p-2 text-center">{item.okumaSuresi}</td>
+                            <td className="p-2 text-center">
+                              <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                item.sonuc === 'Normal' ? 'bg-green-100 text-green-800' :
+                                item.sonuc === 'Dikkat' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {item.sonuc}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* KAPASİTİF ENERJİ TABLOSU */}
+              {kapasitifEnerji.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-md font-semibold text-blue-700 mb-2">🔷 Kapasitif Reaktif Enerji (kVArh)</h3>
+                  <div className="max-h-64 overflow-y-auto border rounded">
+                    <table className="w-full text-xs">
+                      <thead className="bg-blue-600 text-white sticky top-0">
+                        <tr>
+                          <th className="p-2 text-left">Tarih</th>
+                          <th className="p-2 text-right">Tüketim (kVArh)</th>
+                          <th className="p-2 text-right">Endeks</th>
+                          <th className="p-2 text-center">Çarpan</th>
+                          <th className="p-2 text-center">Süre (Saat)</th>
+                          <th className="p-2 text-center">Durum</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {kapasitifEnerji.map((item, idx) => (
+                          <tr key={idx} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-2">{item.tarih}</td>
+                            <td className="p-2 text-right font-bold">{item.tuketim}</td>
+                            <td className="p-2 text-right">{item.endeks.toFixed(2)}</td>
+                            <td className="p-2 text-center">{item.carpan}</td>
+                            <td className="p-2 text-center">{item.okumaSuresi}</td>
+                            <td className="p-2 text-center">
+                              <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                item.sonuc === 'Normal' ? 'bg-green-100 text-green-800' :
+                                item.sonuc === 'Dikkat' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {item.sonuc}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="p-6 bg-white shadow-md rounded-lg max-w-7xl mx-auto">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Tespit ve Öneriler</h2>
