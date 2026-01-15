@@ -3033,7 +3033,7 @@ KURALLAR:
             className="px-6 py-2 rounded-lg text-sm font-medium transition flex items-center text-gray-600 hover:text-gray-900 hover:bg-white hover:shadow"
           >
             <FileText className="w-4 h-4 mr-2"/>
-            OSOS
+            GUNAY
           </button>
           <button 
             onClick={() => setActiveTab('saved')}

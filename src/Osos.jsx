@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 
-export default function Osos() {
+export default function Gunay() {
   const [printMode, setPrintMode] = useState(false);
   const [editMode, setEditMode] = useState(true);
   const [logo, setLogo] = useState(null);
@@ -19,6 +19,24 @@ export default function Osos() {
   const [selectedKosbiUser, setSelectedKosbiUser] = useState(null);
   const [isLoadingKosbi, setIsLoadingKosbi] = useState(false);
   const [kosbiData, setKosbiData] = useState([]);
+  
+  // WorkTracker Entegrasyonu
+  const [showWorkTrackerModal, setShowWorkTrackerModal] = useState(false);
+  const [workTrackerConfig, setWorkTrackerConfig] = useState({
+    url: 'http://localhost:3000',
+    email: '',
+    password: ''
+  });
+  const [workTrackerToken, setWorkTrackerToken] = useState(null);
+  const [workTrackerUsers, setWorkTrackerUsers] = useState([]);
+  const [taskForm, setTaskForm] = useState({
+    title: '',
+    description: '',
+    priority: 'MEDIUM',
+    assignedToId: '',
+    dueDate: ''
+  });
+  const [isLoadingWorkTracker, setIsLoadingWorkTracker] = useState(false);
   
   // Form verileri
   const [formData, setFormData] = useState({
@@ -124,7 +142,7 @@ export default function Osos() {
         const imgY = 0;
         
         pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-        pdf.save(`OSOS_Rapor_${formData.raporNo || 'YeniRapor'}.pdf`);
+        pdf.save(`GUNAY_Rapor_${formData.raporNo || 'YeniRapor'}.pdf`);
         
         setPrintMode(false);
         setEditMode(true);
@@ -149,7 +167,7 @@ export default function Osos() {
         email: "",
         vergiNo: "",
         kontrolEdenAd: "",
-        kontrolEdenUnvan: "OSOS Uzmanı",
+        kontrolEdenUnvan: "Enerji Uzmanı",
         kontrolEdenOdaNo: "",
         kontrolTarihi: new Date().toISOString().split('T')[0],
         sonrakiKontrolTarihi: "",
@@ -280,12 +298,171 @@ export default function Osos() {
     alert(`✅ ${newMeasurements.length} sayaç verisi ölçüm tablosuna eklendi!`);
   };
 
+  // WorkTracker Login
+  const loginToWorkTracker = async () => {
+    if (!workTrackerConfig.email || !workTrackerConfig.password) {
+      alert('⚠️ E-posta ve şifre giriniz!');
+      return;
+    }
+
+    setIsLoadingWorkTracker(true);
+    try {
+      const response = await fetch(`${workTrackerConfig.url}/api/auth/signin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: workTrackerConfig.email,
+          password: workTrackerConfig.password
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Login başarısız');
+      }
+
+      const data = await response.json();
+      setWorkTrackerToken(data.token);
+      
+      // Kullanıcı listesini çek
+      await fetchWorkTrackerUsers(data.token);
+      
+      alert('✅ WorkTracker\'a başarıyla bağlanıldı!');
+    } catch (error) {
+      console.error('WorkTracker login hatası:', error);
+      alert('❌ WorkTracker bağlantı hatası. Sunucunun çalıştığından emin olun.');
+    } finally {
+      setIsLoadingWorkTracker(false);
+    }
+  };
+
+  // WorkTracker kullanıcılarını çek
+  const fetchWorkTrackerUsers = async (token) => {
+    try {
+      const response = await fetch(`${workTrackerConfig.url}/api/users`, {
+        headers: {
+          'Authorization': `Bearer ${token || workTrackerToken}`
+        }
+      });
+
+      if (response.ok) {
+        const users = await response.json();
+        setWorkTrackerUsers(users);
+      }
+    } catch (error) {
+      console.error('Kullanıcı listesi çekme hatası:', error);
+    }
+  };
+
+  // WorkTracker'a görev oluştur
+  const createWorkTrackerTask = async () => {
+    if (!workTrackerToken) {
+      alert('⚠️ Önce WorkTracker\'a giriş yapın!');
+      return;
+    }
+
+    if (!taskForm.title) {
+      alert('⚠️ Görev başlığı giriniz!');
+      return;
+    }
+
+    setIsLoadingWorkTracker(true);
+    try {
+      const taskData = {
+        title: taskForm.title,
+        description: taskForm.description,
+        priority: taskForm.priority,
+        status: 'PENDING',
+        assignedToId: taskForm.assignedToId || undefined,
+        dueDate: taskForm.dueDate || undefined
+      };
+
+      const response = await fetch(`${workTrackerConfig.url}/api/tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${workTrackerToken}`
+        },
+        body: JSON.stringify(taskData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Görev oluşturulamadı');
+      }
+
+      const newTask = await response.json();
+      
+      setShowWorkTrackerModal(false);
+      setTaskForm({
+        title: '',
+        description: '',
+        priority: 'MEDIUM',
+        assignedToId: '',
+        dueDate: ''
+      });
+      
+      alert(`✅ Görev başarıyla oluşturuldu!\n\nGörev: ${newTask.title}\nDurum: ${newTask.status}\nÖncelik: ${newTask.priority}`);
+    } catch (error) {
+      console.error('Görev oluşturma hatası:', error);
+      alert('❌ Görev oluşturma hatası: ' + error.message);
+    } finally {
+      setIsLoadingWorkTracker(false);
+    }
+  };
+
+  // GUNAY raporundan otomatik görev oluştur
+  const createTaskFromReport = () => {
+    if (!formData.firmaAdi || !formData.raporNo) {
+      alert('⚠️ Önce rapor bilgilerini doldurun!');
+      return;
+    }
+
+    // Uygun olmayan ölçümleri bul
+    const problematicMeasurements = measurements.filter(m => m.sonuc !== 'Uygun');
+    
+    const taskTitle = `GUNAY Enerji Raporu - ${formData.firmaAdi} (${formData.raporNo})`;
+    let taskDescription = `📋 GUNAY ENERJİ RAPOR DETAYLARI\n\n`;
+    taskDescription += `🏢 Firma: ${formData.firmaAdi}\n`;
+    taskDescription += `📄 Rapor No: ${formData.raporNo}\n`;
+    taskDescription += `📅 Rapor Tarihi: ${formData.raporTarihi}\n`;
+    taskDescription += `📍 Adres: ${formData.adres || '-'}\n\n`;
+    
+    if (problematicMeasurements.length > 0) {
+      taskDescription += `⚠️ SORUNLU ÖLÇÜMLER (${problematicMeasurements.length} adet):\n`;
+      problematicMeasurements.forEach((m, idx) => {
+        taskDescription += `${idx + 1}. ${m.olcumNoktasi} - ${m.parametre}: ${m.deger} ${m.birim} (Limit: ${m.limit})\n`;
+      });
+      taskDescription += `\n`;
+    }
+    
+    if (formData.tespit) {
+      taskDescription += `🔍 TESPİTLER:\n${formData.tespit}\n\n`;
+    }
+    
+    if (formData.oneri) {
+      taskDescription += `💡 ÖNERİLER:\n${formData.oneri}\n\n`;
+    }
+    
+    taskDescription += `📞 İletişim: ${formData.yetkili || '-'}\n`;
+    taskDescription += `📱 Telefon: ${formData.telefon || '-'}\n`;
+    taskDescription += `✅ Sonraki Kontrol: ${formData.sonrakiKontrolTarihi || '-'}`;
+
+    setTaskForm({
+      title: taskTitle,
+      description: taskDescription,
+      priority: problematicMeasurements.length > 0 ? 'HIGH' : 'MEDIUM',
+      assignedToId: '',
+      dueDate: formData.sonrakiKontrolTarihi || ''
+    });
+
+    setShowWorkTrackerModal(true);
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       {/* Header */}
       <div className={`bg-white shadow-md rounded-lg p-4 mb-4 flex justify-between items-center no-print ${printMode ? 'hidden' : ''}`}>
         <div>
-          <h1 className="text-xl font-bold text-gray-800">OSOS Rapor Sistemi</h1>
+          <h1 className="text-xl font-bold text-gray-800">GUNAY Enerji İzleme Sistemi</h1>
           <p className="text-xs text-gray-500">Organize Sanayi Ölçüm Sistemi</p>
         </div>
         <div className="flex gap-2">
@@ -294,6 +471,13 @@ export default function Osos() {
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
           >
             <Zap size={18} /> KOSBI Veri Çek
+          </button>
+          <button 
+            onClick={createTaskFromReport}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+            title="Bu rapordan WorkTracker'da görev oluştur"
+          >
+            <CheckCircle size={18} /> Görev Oluştur
           </button>
           <button 
             onClick={() => setEditMode(!editMode)}
@@ -313,6 +497,169 @@ export default function Osos() {
           </button>
         </div>
       </div>
+
+      {/* WorkTracker Modal */}
+      {showWorkTrackerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold">WorkTracker Görev Oluştur</h2>
+                <p className="text-sm text-indigo-100">GUNAY - WorkTracker Entegrasyonu</p>
+              </div>
+              <button onClick={() => setShowWorkTrackerModal(false)} className="text-white hover:bg-indigo-700 p-2 rounded">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Bağlantı Ayarları */}
+              {!workTrackerToken && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-gray-800">WorkTracker Bağlantısı</h3>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">WorkTracker URL</label>
+                    <input
+                      type="text"
+                      value={workTrackerConfig.url}
+                      onChange={(e) => setWorkTrackerConfig({...workTrackerConfig, url: e.target.value})}
+                      className="w-full p-2 border rounded text-sm"
+                      placeholder="http://localhost:3000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">E-posta</label>
+                    <input
+                      type="email"
+                      value={workTrackerConfig.email}
+                      onChange={(e) => setWorkTrackerConfig({...workTrackerConfig, email: e.target.value})}
+                      className="w-full p-2 border rounded text-sm"
+                      placeholder="email@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Şifre</label>
+                    <input
+                      type="password"
+                      value={workTrackerConfig.password}
+                      onChange={(e) => setWorkTrackerConfig({...workTrackerConfig, password: e.target.value})}
+                      className="w-full p-2 border rounded text-sm"
+                      placeholder="********"
+                    />
+                  </div>
+                  <button
+                    onClick={loginToWorkTracker}
+                    disabled={isLoadingWorkTracker}
+                    className="w-full px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400"
+                  >
+                    {isLoadingWorkTracker ? 'Bağlanıyor...' : '🔐 Bağlan'}
+                  </button>
+                </div>
+              )}
+
+              {/* Görev Formu */}
+              {workTrackerToken && (
+                <div className="space-y-3">
+                  <div className="bg-green-50 border border-green-200 rounded p-2 text-sm text-green-700">
+                    ✅ WorkTracker'a bağlandı!
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Görev Başlığı *</label>
+                    <input
+                      type="text"
+                      value={taskForm.title}
+                      onChange={(e) => setTaskForm({...taskForm, title: e.target.value})}
+                      className="w-full p-2 border rounded text-sm"
+                      placeholder="Görev başlığı"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Açıklama</label>
+                    <textarea
+                      value={taskForm.description}
+                      onChange={(e) => setTaskForm({...taskForm, description: e.target.value})}
+                      className="w-full p-2 border rounded text-sm"
+                      rows="8"
+                      placeholder="Görev detayları..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Öncelik</label>
+                      <select
+                        value={taskForm.priority}
+                        onChange={(e) => setTaskForm({...taskForm, priority: e.target.value})}
+                        className="w-full p-2 border rounded text-sm"
+                      >
+                        <option value="LOW">Düşük</option>
+                        <option value="MEDIUM">Orta</option>
+                        <option value="HIGH">Yüksek</option>
+                        <option value="URGENT">Acil</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Bitiş Tarihi</label>
+                      <input
+                        type="date"
+                        value={taskForm.dueDate}
+                        onChange={(e) => setTaskForm({...taskForm, dueDate: e.target.value})}
+                        className="w-full p-2 border rounded text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {workTrackerUsers.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Atanan Kişi</label>
+                      <select
+                        value={taskForm.assignedToId}
+                        onChange={(e) => setTaskForm({...taskForm, assignedToId: e.target.value})}
+                        className="w-full p-2 border rounded text-sm"
+                      >
+                        <option value="">Atama yapılmadı</option>
+                        {workTrackerUsers.map(user => (
+                          <option key={user.id} value={user.id}>
+                            {user.name} ({user.email})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setWorkTrackerToken(null)}
+                      className="flex-1 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                    >
+                      Bağlantıyı Kes
+                    </button>
+                    <button
+                      onClick={createWorkTrackerTask}
+                      disabled={isLoadingWorkTracker}
+                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
+                    >
+                      {isLoadingWorkTracker ? 'Oluşturuluyor...' : '✅ Görevi Oluştur'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Bilgilendirme */}
+              <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
+                <p className="font-semibold text-blue-800 mb-1">ℹ️ Kullanım</p>
+                <p className="text-blue-700 text-xs">
+                  Bu özellik, GUNAY enerji raporundan otomatik olarak WorkTracker görev takip sisteminde görev oluşturur. 
+                  WorkTracker sunucusunun çalışıyor olması gerekmektedir.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KOSBI Modal */}
       {showKosbiModal && (
@@ -750,7 +1097,7 @@ export default function Osos() {
             </div>
           )}
           <div className="flex-1 text-center">
-            <h1 className="text-3xl font-bold text-gray-800">OSOS RAPORU</h1>
+            <h1 className="text-3xl font-bold text-gray-800">GUNAY ENERJİ İZLEME RAPORU</h1>
             <p className="text-base text-gray-600 mt-1">Organize Sanayi Ölçüm Sistemi</p>
             <p className="text-sm text-gray-500 mt-2">Rapor No: {formData.raporNo || '-'}</p>
           </div>
@@ -877,7 +1224,7 @@ export default function Osos() {
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-gray-500 border-t pt-4">
           <p>Bu rapor {formData.raporTarihi} tarihinde {formData.kontrolEdenAd || 'yetkili kişi'} tarafından hazırlanmıştır.</p>
-          <p className="mt-1">Organize Sanayi Ölçüm Sistemi (OSOS) - Elektronik Rapor Sistemi</p>
+          <p className="mt-1">GUNAY Enerji İzleme ve Raporlama Sistemi - Elektrik Sayaç Takip</p>
         </div>
       </div>
     </div>
