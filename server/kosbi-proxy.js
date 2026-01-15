@@ -9,7 +9,7 @@ const PORT = 3001;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'],
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'https://kobinerji.netlify.app'],
   credentials: true
 }));
 app.use(express.json());
@@ -205,7 +205,7 @@ setInterval(() => {
 
 app.listen(PORT, () => {
   console.log(`🚀 KOSBI Proxy Server çalışıyor: http://localhost:${PORT}`);
-  console.log(`📡 CORS enabled for: http://localhost:3000, http://localhost:5173`);
+  console.log(`📡 CORS enabled for: http://localhost:3000, http://localhost:5173, https://kobinerji.netlify.app`);
   console.log(`🔐 Endpoints:`);
   console.log(`   POST   /api/kosbi/login`);
   console.log(`   GET    /api/kosbi/meters/:sessionId`);
