@@ -192,47 +192,69 @@ export default function Osos() {
     setSelectedKosbiUser(user);
     
     try {
-      // Not: CORS nedeniyle direkt browser'dan çalışmayabilir
-      // Backend proxy veya browser extension gerekebilir
+      console.log(`🔐 KOSBI login yapılıyor: ${user.name}`);
       
-      alert(`⚠️ KOSBI Entegrasyonu\n\nCORS politikaları nedeniyle direkt browser'dan veri çekmek mümkün olmayabilir.\n\nAlternatifler:\n1. Backend proxy servisi kullanın\n2. Browser extension kullanın\n3. Manuel veri girişi yapın\n\nŞu an için demo veri yüklenecek.`);
-      
-      // Demo veri
-      const demoData = [
-        { sayacNo: "12345678", ad: "Ana Sayaç", cekilen: "1250", verilen: "50", reaktifCekilen: "120", reaktifVerilen: "5", tarih: new Date().toISOString().split('T')[0] },
-        { sayacNo: "87654321", ad: "Yedek Sayaç", cekilen: "850", verilen: "30", reaktifCekilen: "80", reaktifVerilen: "3", tarih: new Date().toISOString().split('T')[0] }
-      ];
-      
-      setTimeout(() => {
-        setKosbiData(demoData);
-        setIsLoadingKosbi(false);
-        alert(`✅ ${user.name} için ${demoData.length} sayaç verisi yüklendi (Demo)`);
-      }, 1500);
-      
-      /* GERÇEK ENTEGRASYON İÇİN (Backend proxy gerekir):
-      const response = await fetch('https://elektrik.kosbi.org.tr/Login.aspx', {
+      // 1. Backend'e login yap
+      const loginResponse = await fetch('http://localhost:3001/api/kosbi/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          'username': user.username,
-          'password': user.password
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username: user.username,
+          password: user.password
         })
       });
       
-      if (response.ok) {
-        // Session cookie ile sayaç verilerini çek
-        const dataResponse = await fetch('https://elektrik.kosbi.org.tr/SayacOkumalari.aspx');
-        const html = await dataResponse.text();
-        // HTML'den veriyi parse et
-        const parsedData = parseKosbiData(html);
-        setKosbiData(parsedData);
-      }
-      */
+      const loginData = await loginResponse.json();
       
-    } catch (error) {
-      console.error('KOSBI veri çekme hatası:', error);
-      alert('❌ Veri çekme hatası: ' + error.message);
+      if (!loginData.success) {
+        throw new Error(loginData.error || 'Login başarısız');
+      }
+      
+      console.log(`✅ Login başarılı, session: ${loginData.sessionId}`);
+      
+      // 2. Sayaç verilerini çek
+      const metersResponse = await fetch(
+        `http://localhost:3001/api/kosbi/meters/${loginData.sessionId}`
+      );
+      
+      const metersData = await metersResponse.json();
+      
+      if (!metersData.success) {
+        throw new Error(metersData.error || 'Veri çekme başarısız');
+      }
+      
+      console.log(`📊 ${metersData.count} sayaç verisi alındı`);
+      
+      setKosbiData(metersData.data);
       setIsLoadingKosbi(false);
+      alert(`✅ ${user.name} için ${metersData.count} sayaç verisi yüklendi!`);
+      
+      // ÖNEMLİ NOT: Eğer backend sunucu çalışmıyorsa demo moda geç
+    } catch (error) {
+      console.error('❌ KOSBI veri çekme hatası:', error);
+      
+      // Backend çalışmıyorsa demo veri yükle
+      if (error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
+        console.log('⚠️ Backend sunucu bulunamadı, demo mod aktif');
+        
+        // Demo veri
+        const demoData = [
+          { sayacNo: "12345678", ad: "Ana Sayaç", cekilen: "1250", verilen: "50", reaktifCekilen: "120", reaktifVerilen: "5", tarih: new Date().toISOString().split('T')[0] },
+          { sayacNo: "87654321", ad: "Yedek Sayaç", cekilen: "850", verilen: "30", reaktifCekilen: "80", reaktifVerilen: "3", tarih: new Date().toISOString().split('T')[0] },
+          { sayacNo: "55566677", ad: "Tali Sayaç", cekilen: "450", verilen: "15", reaktifCekilen: "45", reaktifVerilen: "2", tarih: new Date().toISOString().split('T')[0] }
+        ];
+        
+        setTimeout(() => {
+          setKosbiData(demoData);
+          setIsLoadingKosbi(false);
+          alert(`⚠️ Backend sunucu çalışmıyor!\n\n${user.name} için ${demoData.length} DEMO sayaç verisi yüklendi.\n\nGerçek veri çekmek için:\n1. Terminal'de: cd server\n2. npm install\n3. npm start\n\nDetaylar için KOSBI-ENTEGRASYON.md dosyasına bakın.`);
+        }, 500);
+      } else {
+        setIsLoadingKosbi(false);
+        alert('❌ Veri çekme hatası:\n' + error.message);
+      }
     }
   };
 
