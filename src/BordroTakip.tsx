@@ -403,6 +403,16 @@ export default function BordroTakip() {
         }
       }));
 
+      // Otomatik doldurma: Eğer ay boşsa otomatik doldur
+      const logCount = Object.keys(logs).length;
+      if (logCount === 0) {
+        console.log('📝 Ay boş, otomatik doldurma başlatılıyor...');
+        // 500ms sonra otomatik doldur (state güncellenmesi için kısa bir süre)
+        setTimeout(() => {
+          autoFillMonth(employeeId, monthKey);
+        }, 500);
+      }
+
     } catch (error) {
       console.error('❌ Aylık veri yükleme hatası:', error);
     }
@@ -1214,6 +1224,77 @@ export default function BordroTakip() {
     console.log(`✅ ${Object.keys(newLogs).length} gün dolduruldu`);
     
     // 1 saniye sonra kaydet
+    setTimeout(() => {
+      console.log('💾 Otomatik kayıt başlatılıyor...');
+      saveAllPending();
+    }, 1000);
+  };
+
+  // Otomatik doldurma fonksiyonu (yeni ay açıldığında)
+  const autoFillMonth = async (employeeId: string, targetMonthKey: string) => {
+    console.log('🤖 Otomatik doldurma çalışıyor...');
+    
+    const empData = appData[employeeId]?.[targetMonthKey];
+    if (!empData || Object.keys(empData.logs).length > 0) {
+      console.log('⏭️ Zaten veri var, otomatik doldurma atlanıyor');
+      return;
+    }
+    
+    // Ay ve yıl bilgisini parse et
+    const [year, month] = targetMonthKey.split('-').map(Number);
+    const daysInTargetMonth = new Date(year, month + 1, 0).getDate();
+    
+    const newLogs: {[key: number]: DailyLog} = {};
+    const newPendingSaves = new Set<string>();
+    
+    for (let i = 1; i <= daysInTargetMonth; i++) {
+      const date = new Date(year, month, i);
+      const dayOfWeek = date.getDay();
+      const isSaturday = dayOfWeek === 6;
+      const endTime = isSaturday ? '13:00' : '18:00';
+      
+      newLogs[i] = {
+        type: 'Normal',
+        startTime: '08:00',
+        endTime: endTime,
+        overtimeHours: 0,
+        description: ''
+      };
+      
+      newPendingSaves.add(`${employeeId}-${i}`);
+    }
+    
+    // State'i güncelle
+    setAppData(prev => {
+      const newData = {...prev};
+      if (!newData[employeeId]) {
+        newData[employeeId] = {};
+      }
+      if (!newData[employeeId][targetMonthKey]) {
+        newData[employeeId][targetMonthKey] = { logs: {}, expenses: [] };
+      }
+      
+      newData[employeeId][targetMonthKey] = {
+        ...newData[employeeId][targetMonthKey],
+        logs: {
+          ...newData[employeeId][targetMonthKey].logs,
+          ...newLogs
+        }
+      };
+      
+      return newData;
+    });
+    
+    // Pending saves'i güncelle
+    setPendingSaves(prev => {
+      const updated = new Set(prev);
+      newPendingSaves.forEach(key => updated.add(key));
+      return updated;
+    });
+    
+    console.log(`🎉 ${daysInTargetMonth} gün otomatik dolduruldu!`);
+    
+    // 1 saniye sonra otomatik kaydet
     setTimeout(() => {
       console.log('💾 Otomatik kayıt başlatılıyor...');
       saveAllPending();
