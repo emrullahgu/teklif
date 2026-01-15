@@ -851,7 +851,7 @@ export default function BordroTakip() {
         }
         saveTimeoutRef.current = setTimeout(() => {
           saveDailyLog(day, currentLogs[day]);
-        }, 2000); // 2 saniye bekle
+        }, 500); // 500ms bekle - hızlı kayıt
       }
 
       return newData;
@@ -960,12 +960,17 @@ export default function BordroTakip() {
   };
 
   const fillMonthDefaults = () => {
-    // Otomatik olarak TÜM günleri Normal/08:00-18:00 ile doldur
+    // Otomatik olarak TÜM günleri Normal/08:00-18:00 (Cumartesi 13:00) ile doldur, mesailer 0
     for (let i = 1; i <= daysInMonth; i++) {
       if (!currentData.logs[i] || !currentData.logs[i].type) {
-        handleLogChange(i, 'type', 'Normal');
+        const { isSaturday, isSunday } = isWeekend(i, currentMonth, currentYear);
+        const endTime = isSaturday ? '13:00' : '18:00';
+        const dayType = isSunday ? 'Pazar' : 'Normal';
+        
+        handleLogChange(i, 'type', dayType);
         handleLogChange(i, 'startTime', '08:00');
-        handleLogChange(i, 'endTime', '18:00');
+        handleLogChange(i, 'endTime', endTime);
+        handleLogChange(i, 'overtimeHours', 0);
       }
     }
   };
@@ -1924,7 +1929,7 @@ export default function BordroTakip() {
                   {pendingSaves.size} değişiklik kaydedilmeyi bekliyor...
                 </p>
                 <p className="text-yellow-700 text-sm">
-                  Değişiklikler 2 saniye sonra otomatik olarak kaydedilecek. Lütfen bekleyin.
+                  Değişiklikler otomatik olarak kaydediliyor. Lütfen bekleyin.
                 </p>
               </div>
             </div>

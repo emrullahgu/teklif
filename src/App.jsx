@@ -3985,7 +3985,7 @@ KURALLAR:
                     <div className="space-y-2 mb-4 text-sm text-gray-600">
                       <div className="flex items-center justify-between">
                         <span>Tarih:</span>
-                        <span className="font-semibold">{proposal.date}</span>
+                        <span className="font-semibold">{new Date(proposal.created_at).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       {proposal.data.customer && (
                         <>
@@ -4033,7 +4033,7 @@ KURALLAR:
                     <div className="space-y-2 mb-4 text-sm text-gray-600">
                       <div className="flex items-center justify-between">
                         <span>Tarih:</span>
-                        <span className="font-semibold">{proposal.date}</span>
+                        <span className="font-semibold">{new Date(proposal.created_at).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       {proposal.data.customer && (
                         <div className="flex items-center justify-between">
@@ -4087,7 +4087,7 @@ KURALLAR:
                     <div className="space-y-2 mb-4 text-sm text-gray-600">
                       <div className="flex items-center justify-between">
                         <span>Tarih:</span>
-                        <span className="font-semibold">{proposal.date}</span>
+                        <span className="font-semibold">{new Date(proposal.created_at).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       {proposal.data.form && (
                         <>
