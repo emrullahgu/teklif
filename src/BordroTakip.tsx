@@ -959,32 +959,61 @@ export default function BordroTakip() {
 
   // Bekleyen tüm kayıtları toplu kaydet
   const saveAllPending = async () => {
-    if (pendingSaves.size === 0) return;
+    if (pendingSaves.size === 0) {
+      console.log('✅ Bekleyen kayıt yok');
+      return;
+    }
     
     console.log(`💾 ${pendingSaves.size} bekleyen kayıt toplu olarak kaydediliyor...`);
     setSaveStatus('saving');
     
     const currentData = appData[selectedEmployeeId]?.[monthKey];
     if (!currentData) {
+      console.log('❌ Veri bulunamadı, pending saves temizleniyor');
       setPendingSaves(new Set());
+      setSaveStatus('idle');
       return;
     }
     
     let successCount = 0;
     let errorCount = 0;
+    const pendingArray = Array.from(pendingSaves);
     
-    for (const key of pendingSaves) {
+    // Her kayıt arasında 200ms bekle (rate limit için)
+    for (let i = 0; i < pendingArray.length; i++) {
+      const key = pendingArray[i];
       const day = parseInt(key.split('-')[1]);
       const log = currentData.logs[day];
       
+      console.log(`📝 [${i + 1}/${pendingArray.length}] Gün ${day} kaydediliyor...`);
+      
       if (log && log.type) {
         const success = await saveDailyLog(day, log);
-        if (success) successCount++;
-        else errorCount++;
+        if (success) {
+          successCount++;
+          console.log(`✅ [${i + 1}/${pendingArray.length}] Gün ${day} kaydedildi`);
+        } else {
+          errorCount++;
+          console.log(`❌ [${i + 1}/${pendingArray.length}] Gün ${day} kaydetme hatası`);
+        }
+        
+        // Rate limit için bekle (son kayıt hariç)
+        if (i < pendingArray.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      } else {
+        console.log(`⏭️ [${i + 1}/${pendingArray.length}] Gün ${day} atlandı (boş)`);
       }
     }
     
-    console.log(`✅ ${successCount} kayıt başarılı, ${errorCount} hata`);
+    console.log(`🎉 TOPLAM: ${successCount} başarılı, ${errorCount} hata`);
+    
+    if (errorCount === 0) {
+      alert(`✅ Tüm kayıtlar başarıyla kaydedildi!\n\n${successCount} kayıt veritabanına yazıldı.`);
+    } else {
+      alert(`⚠️ Kayıt tamamlandı!\n\n✅ ${successCount} başarılı\n❌ ${errorCount} hata\n\nHatalı kayıtlar için F12 console'u kontrol edin.`);
+    }
+    
     setSaveStatus(errorCount > 0 ? 'error' : 'saved');
     setTimeout(() => setSaveStatus('idle'), 2000);
   };
