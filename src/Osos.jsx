@@ -125,33 +125,196 @@ export default function Osos() {
 
   const exportPDF = async () => {
     try {
-      setEditMode(false);
-      setPrintMode(true);
-      
-      setTimeout(async () => {
-        const element = reportRef.current;
-        const canvas = await html2canvas(element, {
-          scale: 2,
-          useCORS: true,
-          logging: false
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let yPosition = 20;
+
+      // Logo ekle (varsa)
+      if (logo) {
+        try {
+          pdf.addImage(logo, 'PNG', 15, yPosition, 30, 30);
+          yPosition += 35;
+        } catch (error) {
+          console.error('Logo eklenemedi:', error);
+          yPosition += 5;
+        }
+      }
+
+      // Başlık
+      pdf.setFontSize(18);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('OSOS RAPORU', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont(undefined, 'normal');
+      pdf.text('Organize Sanayi Ölçüm Sistemi (OSOS) - Elektronik Rapor Sistemi', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 15;
+
+      // Firma Bilgileri
+      pdf.setFontSize(12);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('FİRMA BİLGİLERİ', 15, yPosition);
+      yPosition += 7;
+
+      pdf.setFontSize(9);
+      pdf.setFont(undefined, 'normal');
+      const firmaBilgileri = [
+        ['Firma Adı:', formData.firmaAdi],
+        ['Rapor No:', formData.raporNo],
+        ['Rapor Tarihi:', formData.raporTarihi],
+        ['Adres:', formData.adres],
+        ['Yetkili:', formData.yetkili],
+        ['Telefon:', formData.telefon],
+        ['E-posta:', formData.email],
+        ['Vergi No:', formData.vergiNo]
+      ];
+
+      firmaBilgileri.forEach(([label, value]) => {
+        if (value) {
+          pdf.setFont(undefined, 'bold');
+          pdf.text(label, 15, yPosition);
+          pdf.setFont(undefined, 'normal');
+          pdf.text(value, 50, yPosition);
+          yPosition += 5;
+        }
+      });
+
+      yPosition += 10;
+
+      // Kontrol Bilgileri
+      pdf.setFontSize(12);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('KONTROL BİLGİLERİ', 15, yPosition);
+      yPosition += 7;
+
+      pdf.setFontSize(9);
+      pdf.setFont(undefined, 'normal');
+      const kontrolBilgileri = [
+        ['Kontrolü Yapan:', formData.kontrolEdenAd],
+        ['Unvan:', formData.kontrolEdenUnvan],
+        ['Oda Sicil No:', formData.kontrolEdenOdaNo],
+        ['Kontrol Tarihi:', formData.kontrolTarihi],
+        ['Sonraki Kontrol:', formData.sonrakiKontrolTarihi],
+        ['Tesis Gücü:', formData.tesisGucuKW ? formData.tesisGucuKW + ' kW' : ''],
+        ['Çalışan Sayısı:', formData.calisanSayisi]
+      ];
+
+      kontrolBilgileri.forEach(([label, value]) => {
+        if (value) {
+          pdf.setFont(undefined, 'bold');
+          pdf.text(label, 15, yPosition);
+          pdf.setFont(undefined, 'normal');
+          pdf.text(value, 50, yPosition);
+          yPosition += 5;
+        }
+      });
+
+      yPosition += 10;
+
+      // Ölçüm Sonuçları Tablosu
+      if (measurements.length > 0) {
+        pdf.setFontSize(12);
+        pdf.setFont(undefined, 'bold');
+        pdf.text('ÖLÇÜM SONUÇLARI', 15, yPosition);
+        yPosition += 5;
+
+        const tableData = measurements.map(m => [
+          m.olcumNoktasi,
+          m.parametre,
+          m.deger,
+          m.birim,
+          m.limit,
+          m.sonuc
+        ]);
+
+        pdf.autoTable({
+          startY: yPosition,
+          head: [['Ölçüm Noktası', 'Parametre', 'Değer', 'Birim', 'Limit', 'Sonuç']],
+          body: tableData,
+          theme: 'grid',
+          headStyles: {
+            fillColor: [41, 128, 185],
+            textColor: 255,
+            fontStyle: 'bold',
+            fontSize: 9
+          },
+          bodyStyles: {
+            fontSize: 8,
+            cellPadding: 3
+          },
+          alternateRowStyles: {
+            fillColor: [245, 245, 245]
+          },
+          columnStyles: {
+            0: { cellWidth: 35 },
+            1: { cellWidth: 40 },
+            2: { cellWidth: 25 },
+            3: { cellWidth: 20 },
+            4: { cellWidth: 20 },
+            5: { cellWidth: 25, fontStyle: 'bold' }
+          },
+          didParseCell: function(data) {
+            if (data.section === 'body' && data.column.index === 5) {
+              const sonuc = data.cell.raw;
+              if (sonuc === 'Uygun' || sonuc === 'Normal') {
+                data.cell.styles.textColor = [0, 128, 0];
+              } else if (sonuc === 'Uygun Değil' || sonuc === 'Yüksek') {
+                data.cell.styles.textColor = [220, 53, 69];
+              } else if (sonuc === 'Dikkat') {
+                data.cell.styles.textColor = [255, 165, 0];
+              }
+            }
+          },
+          margin: { left: 15, right: 15 }
         });
-        
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
-        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-        const imgX = (pdfWidth - imgWidth * ratio) / 2;
-        const imgY = 0;
-        
-        pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-        pdf.save(`OSOS_Rapor_${formData.raporNo || 'YeniRapor'}.pdf`);
-        
-        setPrintMode(false);
-        setEditMode(true);
-      }, 500);
+
+        yPosition = pdf.lastAutoTable.finalY + 10;
+      }
+
+      // Değerlendirme
+      if (formData.degerlendirme) {
+        // Yeni sayfa gerekirse ekle
+        if (yPosition > pageHeight - 40) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+
+        pdf.setFontSize(12);
+        pdf.setFont(undefined, 'bold');
+        pdf.text('DEĞERLENDİRME', 15, yPosition);
+        yPosition += 7;
+
+        pdf.setFontSize(9);
+        pdf.setFont(undefined, 'normal');
+        const splitDegerlendirme = pdf.splitTextToSize(formData.degerlendirme, pageWidth - 30);
+        pdf.text(splitDegerlendirme, 15, yPosition);
+        yPosition += splitDegerlendirme.length * 5 + 5;
+      }
+
+      // Öneri
+      if (formData.oneri) {
+        // Yeni sayfa gerekirse ekle
+        if (yPosition > pageHeight - 40) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+
+        pdf.setFontSize(12);
+        pdf.setFont(undefined, 'bold');
+        pdf.text('ÖNERİLER', 15, yPosition);
+        yPosition += 7;
+
+        pdf.setFontSize(9);
+        pdf.setFont(undefined, 'normal');
+        const splitOneri = pdf.splitTextToSize(formData.oneri, pageWidth - 30);
+        pdf.text(splitOneri, 15, yPosition);
+      }
+
+      // PDF'i kaydet
+      pdf.save(`OSOS_Rapor_${formData.raporNo || 'YeniRapor'}.pdf`);
+      alert('✅ PDF başarıyla oluşturuldu!');
     } catch (error) {
       console.error('PDF oluşturma hatası:', error);
       alert('PDF oluşturulurken bir hata oluştu.');
