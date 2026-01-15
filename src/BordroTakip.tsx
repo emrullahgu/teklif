@@ -37,7 +37,7 @@ const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz'
 
 // --- TİP TANIMLAMALARI ---
 
-type DayType = 'Normal' | 'Pazar' | 'Resmi Tatil' | 'Raporlu' | 'İzinli';
+type DayType = 'Normal' | 'Pazar' | 'Resmi Tatil' | 'Raporlu' | 'İzinli' | 'Gelmedi' | '';
 type TabType = 'detail' | 'summary';
 
 interface DailyLog {
@@ -152,7 +152,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     // PUANTAJ VERİLERİNİ TOPLA
     for (let i = 1; i <= daysInMonth; i++) {
         const log = data.logs[i];
-        if (log) {
+        if (log && log.type && log.type !== '' && log.type !== 'Gelmedi') {
+            // Kayıt var ve geçerli bir tip seçilmiş
             if (log.type === 'Normal') {
                 totalWorkDays += 1;
             } else if (log.type === 'Pazar' || log.type === 'Resmi Tatil') {
@@ -161,15 +162,15 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
                 totalSundayDays += 1;
                 totalSundayPay += dailyRateFixed; // Ek fark: 90,000/30 = 3,000 TL
             } else if (log.type === 'İzinli' || log.type === 'Raporlu') {
-                // İzinli ve Raporlu günler çalışılan güne sayılmaz, kesinti de yapılmaz
+                // İzinli ve Raporlu günler çalışılan güne sayılır AMA kesinti yapılmaz
+                totalWorkDays += 1;
             }
-            // Boş günler (gelmedi) için kesinti yapılacak
 
             if (log.overtimeHours > 0) {
                 totalOvertimeHours += log.overtimeHours;
             }
         } else {
-            // Eğer log yoksa, o gün boş demektir (Gelmedi)
+            // Kayıt yok veya "Gelmedi" seçilmiş - kesinti yapılacak
             totalAbsentDays += 1;
         }
     }
@@ -500,6 +501,12 @@ export default function BordroTakip() {
         return;
       }
 
+      // Personel seçili değilse kaydetme
+      if (!selectedEmployeeId) {
+        console.error('❌ Personel seçilmemiş!');
+        return;
+      }
+
       setSaveStatus('saving');
       
       const logData = {
@@ -508,10 +515,10 @@ export default function BordroTakip() {
         month: currentMonth,
         year: currentYear,
         type: log.type,
-        start_time: log.startTime,
-        end_time: log.endTime,
-        overtime_hours: log.overtimeHours,
-        description: log.description
+        start_time: log.startTime || DEFAULT_START_TIME,
+        end_time: log.endTime || DEFAULT_END_TIME_WEEKDAY,
+        overtime_hours: log.overtimeHours || 0,
+        description: log.description || ''
       };
 
       console.log('📝 Puantaj kaydediliyor:', logData);
@@ -525,6 +532,7 @@ export default function BordroTakip() {
 
       if (error) {
         console.error('❌ Supabase hatası:', error);
+        console.error('❌ Hata detayı:', JSON.stringify(error, null, 2));
         throw error;
       }
       
@@ -539,11 +547,22 @@ export default function BordroTakip() {
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
       
+      return true; // Başarılı kayıt
+      
     } catch (error) {
       console.error('❌ Puantaj kayıt hatası:', error);
-      alert('⚠️ Puantaj kaydedilemedi! Veritabanı bağlantısını kontrol edin.\n\nHata: ' + (error as any)?.message);
+      console.error('❌ Detaylı hata:', JSON.stringify(error, null, 2));
+      
+      // Kullanıcıya daha detaylı hata mesajı göster
+      const errorMessage = (error as any)?.message || 'Bilinmeyen hata';
+      const errorCode = (error as any)?.code || '';
+      
+      alert(`⚠️ Puantaj kaydedilemedi!\n\nHata: ${errorMessage}\nKod: ${errorCode}\n\n🔍 Kontrol edilecekler:\n• Supabase bağlantısı\n• bordro_daily_logs tablosu var mı?\n• RLS politikaları doğru mu?\n• İnternet bağlantısı aktif mi?`);
+      
       setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      setTimeout(() => setSaveStatus('idle'), 3000);
+      
+      return false; // Başarısız kayıt
     }
   };
 
@@ -817,8 +836,8 @@ export default function BordroTakip() {
 
       console.log('📊 Güncellenmiş log:', currentLogs[day]);
       
-      // Eğer type boş/null yapıldıysa, günü tamamen sil
-      if (field === 'type' && (!value || value === '')) {
+      // Eğer type boş/null veya 'Gelmedi' yapıldıysa, günü tamamen sil
+      if (field === 'type' && (!value || value === '' || value === 'Gelmedi')) {
         delete currentLogs[day];
         
         // IMMUTABILITY: Yeni nested object oluştur (silme ile)
@@ -832,6 +851,13 @@ export default function BordroTakip() {
         
         // Database'den de sil
         setTimeout(() => deleteDailyLog(day), 100);
+        
+        // Pending listesinden kaldır
+        setPendingSaves(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(`${selectedEmployeeId}-${day}`);
+          return newSet;
+        });
       } else {
         // IMMUTABILITY: Yeni nested object oluştur
         newData[selectedEmployeeId] = {
@@ -851,7 +877,7 @@ export default function BordroTakip() {
         }
         saveTimeoutRef.current = setTimeout(() => {
           saveDailyLog(day, currentLogs[day]);
-        }, 500); // 500ms bekle - hızlı kayıt
+        }, 1500); // 1500ms bekle - yavaş kayıt, toplu değişiklikleri topla
       }
 
       return newData;
@@ -960,18 +986,40 @@ export default function BordroTakip() {
   };
 
   const fillMonthDefaults = () => {
-    // Otomatik olarak TÜM günleri Normal/08:00-18:00 (Cumartesi 13:00) ile doldur, mesailer 0
+    if (!confirm(`Boş günleri otomatik doldurmak istediğinize emin misiniz?\n\n• Pazar günleri boş bırakılacak\n• Sadece boş olan günler doldurulacak\n• Dolu günler değiştirilmeyecek`)) {
+      return;
+    }
+
+    let filledCount = 0;
+    
+    // Otomatik olarak BOŞ günleri Normal/08:00-18:00 (Cumartesi 13:00) ile doldur
     for (let i = 1; i <= daysInMonth; i++) {
-      if (!currentData.logs[i] || !currentData.logs[i].type) {
-        const { isSaturday } = isWeekend(i, currentMonth, currentYear);
-        const endTime = isSaturday ? '13:00' : '18:00';
-        
-        // Tüm günler (Pazar dahil) Normal olarak işaretlenecek
-        handleLogChange(i, 'type', 'Normal');
-        handleLogChange(i, 'startTime', '08:00');
-        handleLogChange(i, 'endTime', endTime);
-        handleLogChange(i, 'overtimeHours', 0);
+      // Eğer gün zaten doluysa, atla
+      if (currentData.logs[i] && currentData.logs[i].type) {
+        continue;
       }
+      
+      const { isSunday, isSaturday } = isWeekend(i, currentMonth, currentYear);
+      
+      // Pazar günlerini boş bırak
+      if (isSunday) {
+        continue;
+      }
+      
+      const endTime = isSaturday ? '13:00' : '18:00';
+      
+      // Sadece boş günleri doldur
+      handleLogChange(i, 'type', 'Normal');
+      handleLogChange(i, 'startTime', '08:00');
+      handleLogChange(i, 'endTime', endTime);
+      handleLogChange(i, 'overtimeHours', 0);
+      filledCount++;
+    }
+    
+    if (filledCount > 0) {
+      alert(`✅ ${filledCount} gün otomatik dolduruldu!\n\n⏳ Kayıt işlemi başladı, lütfen bekleyin...`);
+    } else {
+      alert('ℹ️ Doldurulacak boş gün bulunamadı.');
     }
   };
 
@@ -2344,17 +2392,17 @@ export default function BordroTakip() {
                                                     <div className="font-normal text-[9px]">{getDayName(day, currentMonth, currentYear).slice(0,3)}</div>
                                                 </td>
                                                 <td className="p-1 border">
-                                                    <select className={`w-full p-1 border rounded text-xs ${log.type === 'Pazar' ? 'text-red-600 font-bold' : ''} ${!log.type ? 'text-gray-400' : ''}`} value={log.type || ''} onChange={(e) => handleLogChange(day, 'type', e.target.value)}>
+                                                    <select className={`w-full p-1 border rounded text-xs ${log.type === 'Pazar' ? 'text-red-600 font-bold' : ''} ${!log.type || log.type === '' ? 'text-gray-400' : ''}`} value={log.type || ''} onChange={(e) => handleLogChange(day, 'type', e.target.value)}>
                                                         <option value="">Gelmedi/Boş</option>
                                                         <option value="Normal">Normal</option>
-                                                        <option value="Pazar">Pazar (x2)</option>
-                                                        <option value="Resmi Tatil">Tatil (x2)</option>
+                                                        <option value="Pazar">Pazar</option>
+                                                        <option value="Resmi Tatil">Resmi Tatil</option>
                                                         <option value="İzinli">İzinli</option>
                                                         <option value="Raporlu">Raporlu</option>
                                                     </select>
                                                 </td>
-                                                <td className="p-1 border"><input type="time" className="w-full text-xs text-center" value={log.startTime || ''} onChange={(e) => handleLogChange(day, 'startTime', e.target.value)} disabled={!isActive}/></td>
-                                                <td className="p-1 border"><input type="time" className="w-full text-xs text-center" value={log.endTime || ''} onChange={(e) => handleLogChange(day, 'endTime', e.target.value)} disabled={!isActive}/></td>
+                                                <td className="p-1 border"><input type="time" className="w-full text-xs text-center" value={log.startTime || ''} onChange={(e) => handleLogChange(day, 'startTime', e.target.value)} disabled={!isActive || !log.type}/></td>
+                                                <td className="p-1 border"><input type="time" className="w-full text-xs text-center" value={log.endTime || ''} onChange={(e) => handleLogChange(day, 'endTime', e.target.value)} disabled={!isActive || !log.type}/></td>
                                                 <td className="p-1 border text-center bg-blue-50"><input type="number" className="w-full text-center font-bold text-blue-700 bg-transparent text-xs" value={log.overtimeHours || 0} onChange={(e) => handleLogChange(day, 'overtimeHours', parseFloat(e.target.value))} disabled={!isActive} min="0" step="0.5"/></td>
                                                 <td className="p-1 border"><input type="text" className="w-full text-xs p-1" placeholder="..." value={log.description || ''} onChange={(e) => handleLogChange(day, 'description', e.target.value)}/></td>
                                             </tr>
