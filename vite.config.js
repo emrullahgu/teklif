@@ -15,7 +15,8 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         admin: resolve(__dirname, 'admin.html'),
         bordro: resolve(__dirname, 'bordro.html'),
-        kontrol: resolve(__dirname, 'kontrol.html')
+        kontrol: resolve(__dirname, 'kontrol.html'),
+        osos: resolve(__dirname, 'osos.html')
       }
     }
   }
