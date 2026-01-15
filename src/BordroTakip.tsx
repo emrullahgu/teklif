@@ -957,14 +957,14 @@ export default function BordroTakip() {
     });
   };
 
-  // Bekleyen tüm kayıtları toplu kaydet
+  // Bekleyen tüm kayıtları toplu kaydet (BATCH - TEK SEFERDE)
   const saveAllPending = async () => {
     if (pendingSaves.size === 0) {
       console.log('✅ Bekleyen kayıt yok');
       return;
     }
     
-    console.log(`💾 ${pendingSaves.size} bekleyen kayıt toplu olarak kaydediliyor...`);
+    console.log(`💾 ${pendingSaves.size} bekleyen kayıt BATCH olarak kaydediliyor...`);
     setSaveStatus('saving');
     
     const currentData = appData[selectedEmployeeId]?.[monthKey];
@@ -975,47 +975,71 @@ export default function BordroTakip() {
       return;
     }
     
-    let successCount = 0;
-    let errorCount = 0;
+    // Tüm kayıtları topla
+    const batchData: any[] = [];
     const pendingArray = Array.from(pendingSaves);
     
-    // Her kayıt arasında 200ms bekle (rate limit için)
-    for (let i = 0; i < pendingArray.length; i++) {
-      const key = pendingArray[i];
+    for (const key of pendingArray) {
       const day = parseInt(key.split('-')[1]);
       const log = currentData.logs[day];
       
-      console.log(`📝 [${i + 1}/${pendingArray.length}] Gün ${day} kaydediliyor...`);
-      
       if (log && log.type) {
-        const success = await saveDailyLog(day, log);
-        if (success) {
-          successCount++;
-          console.log(`✅ [${i + 1}/${pendingArray.length}] Gün ${day} kaydedildi`);
-        } else {
-          errorCount++;
-          console.log(`❌ [${i + 1}/${pendingArray.length}] Gün ${day} kaydetme hatası`);
-        }
-        
-        // Rate limit için bekle (son kayıt hariç)
-        if (i < pendingArray.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-      } else {
-        console.log(`⏭️ [${i + 1}/${pendingArray.length}] Gün ${day} atlandı (boş)`);
+        batchData.push({
+          employee_id: selectedEmployeeId,
+          day,
+          month: currentMonth,
+          year: currentYear,
+          type: log.type,
+          start_time: log.startTime || DEFAULT_START_TIME,
+          end_time: log.endTime || DEFAULT_END_TIME_WEEKDAY,
+          overtime_hours: log.overtimeHours || 0,
+          description: log.description || ''
+        });
       }
     }
     
-    console.log(`🎉 TOPLAM: ${successCount} başarılı, ${errorCount} hata`);
-    
-    if (errorCount === 0) {
-      alert(`✅ Tüm kayıtlar başarıyla kaydedildi!\n\n${successCount} kayıt veritabanına yazıldı.`);
-    } else {
-      alert(`⚠️ Kayıt tamamlandı!\n\n✅ ${successCount} başarılı\n❌ ${errorCount} hata\n\nHatalı kayıtlar için F12 console'u kontrol edin.`);
+    if (batchData.length === 0) {
+      console.log('⏭️ Kaydedilecek geçerli veri yok');
+      setPendingSaves(new Set());
+      setSaveStatus('idle');
+      return;
     }
     
-    setSaveStatus(errorCount > 0 ? 'error' : 'saved');
-    setTimeout(() => setSaveStatus('idle'), 2000);
+    console.log(`📦 ${batchData.length} kayıt tek seferde gönderiliyor...`);
+    
+    try {
+      // TEK BİR ÇAĞRI İLE TÜM KAYITLARI GÖNDER
+      const { data, error } = await supabase
+        .from('bordro_daily_logs')
+        .upsert(batchData, { 
+          onConflict: 'employee_id,day,month,year'
+        })
+        .select();
+      
+      if (error) {
+        console.error('❌ BATCH kayıt hatası:', error);
+        console.error('❌ Hata detayı:', JSON.stringify(error, null, 2));
+        throw error;
+      }
+      
+      console.log(`🎉 ${batchData.length} kayıt başarıyla kaydedildi!`, data);
+      
+      // Tüm pending saves'i temizle
+      setPendingSaves(new Set());
+      
+      alert(`✅ Tüm kayıtlar başarıyla kaydedildi!\n\n${batchData.length} kayıt veritabanına yazıldı.`);
+      
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+      
+    } catch (error: any) {
+      console.error('❌ FATAL - Batch kayıt hatası:', error);
+      
+      alert(`❌ Kayıt hatası!\n\n${error.message}\n\nF12 console'u kontrol edin.`);
+      
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
   };
 
   const addExpense = (type: 'Avans' | 'Gider' | 'Prim') => {
