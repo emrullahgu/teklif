@@ -261,6 +261,34 @@ export default function BordroTakip() {
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const monthKey = `${currentYear}-${currentMonth}`;
 
+  // --- SUPABASE BAĞLANTI TESTİ ---
+  const testSupabaseConnection = async () => {
+    try {
+      console.log('🔍 Supabase bağlantısı test ediliyor...');
+      console.log('🔗 Supabase URL:', supabase.supabaseUrl);
+      
+      const { data, error } = await supabase
+        .from('bordro_employees')
+        .select('count')
+        .limit(1);
+      
+      if (error) {
+        console.error('❌ Supabase BAĞLANTI HATASI:', error);
+        console.error('❌ Hata kodu:', error.code);
+        console.error('❌ Hata mesajı:', error.message);
+        alert(`🔴 SUPABASE BAĞLANTI HATASI!\n\n${error.message}\n\nKod: ${error.code}\n\nLütfen:\n1. İnternet bağlantınızı kontrol edin\n2. Supabase Dashboard'a gidin\n3. Projenin aktif olduğunu kontrol edin\n4. RLS politikalarını kontrol edin`);
+        return false;
+      }
+      
+      console.log('✅ Supabase bağlantısı başarılı!');
+      return true;
+    } catch (error: any) {
+      console.error('❌ FATAL - Supabase bağlantı testi başarısız:', error);
+      alert(`🔴 KRİTİK HATA!\n\nSupabase'e bağlanılamıyor!\n\n${error.message}\n\nVERİLERİNİZ KAYDEDİLEMİYOR!`);
+      return false;
+    }
+  };
+
   // --- SUPABASE CRUD FONKSİYONLARI ---
 
   // Personelleri Yükle
@@ -492,18 +520,18 @@ export default function BordroTakip() {
   };
 
   // Puantaj Kaydı Kaydet
-  const saveDailyLog = async (day: number, log: DailyLog) => {
+  const saveDailyLog = async (day: number, log: DailyLog, retryCount = 0): Promise<boolean> => {
     try {
       // Geçersiz/boş kayıtları kaydetme
       if (!log.type) {
         console.log('⏭️ Boş kayıt atlandı:', day);
-        return;
+        return true;
       }
 
       // Personel seçili değilse kaydetme
       if (!selectedEmployeeId) {
         console.error('❌ Personel seçilmemiş!');
-        return;
+        return false;
       }
 
       setSaveStatus('saving');
@@ -520,7 +548,8 @@ export default function BordroTakip() {
         description: log.description || ''
       };
 
-      console.log('📝 Puantaj kaydediliyor:', logData);
+      console.log(`📝 [Deneme ${retryCount + 1}/3] Puantaj kaydediliyor:`, logData);
+      console.log('🔗 Supabase URL:', supabase.supabaseUrl);
 
       const { data, error } = await supabase
         .from('bordro_daily_logs')
@@ -531,11 +560,22 @@ export default function BordroTakip() {
 
       if (error) {
         console.error('❌ Supabase hatası:', error);
-        console.error('❌ Hata detayı:', JSON.stringify(error, null, 2));
+        console.error('❌ Hata mesajı:', error.message);
+        console.error('❌ Hata kodu:', error.code);
+        console.error('❌ Hata detayı:', error.details);
+        console.error('❌ Hata hint:', error.hint);
+        
+        // Retry mekanizması (max 3 deneme)
+        if (retryCount < 2) {
+          console.log(`🔄 Tekrar deneniyor... (${retryCount + 2}/3)`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return saveDailyLog(day, log, retryCount + 1);
+        }
+        
         throw error;
       }
       
-      console.log('✅ Puantaj kaydedildi:', data);
+      console.log('✅ Puantaj başarıyla kaydedildi:', data);
       
       // Kayıt başarılı, pending listesinden kaldır
       setPendingSaves(prev => {
@@ -546,22 +586,35 @@ export default function BordroTakip() {
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
       
-      return true; // Başarılı kayıt
+      return true;
       
-    } catch (error) {
-      console.error('❌ Puantaj kayıt hatası:', error);
-      console.error('❌ Detaylı hata:', JSON.stringify(error, null, 2));
+    } catch (error: any) {
+      console.error('❌ FATAL - Puantaj kayıt hatası:', error);
+      console.error('❌ Error stack:', error.stack);
       
-      // Kullanıcıya daha detaylı hata mesajı göster
-      const errorMessage = (error as any)?.message || 'Bilinmeyen hata';
-      const errorCode = (error as any)?.code || '';
+      const errorMessage = error?.message || 'Bilinmeyen hata';
+      const errorCode = error?.code || 'NO_CODE';
+      const errorDetails = error?.details || 'Detay yok';
+      const errorHint = error?.hint || 'Hint yok';
       
-      alert(`⚠️ Puantaj kaydedilemedi!\n\nHata: ${errorMessage}\nKod: ${errorCode}\n\n🔍 Kontrol edilecekler:\n• Supabase bağlantısı\n• bordro_daily_logs tablosu var mı?\n• RLS politikaları doğru mu?\n• İnternet bağlantısı aktif mi?`);
+      console.error('📋 HATA RAPORU:');
+      console.error('  - Mesaj:', errorMessage);
+      console.error('  - Kod:', errorCode);
+      console.error('  - Detay:', errorDetails);
+      console.error('  - Hint:', errorHint);
+      console.error('  - Personel ID:', selectedEmployeeId);
+      console.error('  - Gün:', day);
+      console.error('  - Ay/Yıl:', `${currentMonth + 1}/${currentYear}`);
+      
+      // Sadece ilk denemede alert göster
+      if (retryCount === 0) {
+        alert(`❌ VERİ KAYDEDİLEMEDİ!\n\n🔴 Hata: ${errorMessage}\n📌 Kod: ${errorCode}\n\n💡 Çözüm:\n1. F12 tuşuna basın\n2. Console sekmesini açın\n3. Hata detaylarını kontrol edin\n4. Supabase Dashboard'a gidin\n5. RLS politikalarını kontrol edin\n\n⚠️ Verileriniz KAYBOLABİLİR!`);
+      }
       
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
       
-      return false; // Başarısız kayıt
+      return false;
     }
   };
 
@@ -751,7 +804,13 @@ export default function BordroTakip() {
 
   // --- İLK YÜKLEME ---
   useEffect(() => {
-    loadEmployees();
+    const initialize = async () => {
+      const connected = await testSupabaseConnection();
+      if (connected) {
+        await loadEmployees();
+      }
+    };
+    initialize();
   }, []);
 
   // Personel listesi yüklendiğinde, tüm personeller için aylık verileri yükle
@@ -1919,6 +1978,16 @@ export default function BordroTakip() {
                 <span>Excel İçe Aktar</span>
               </label>
             </div>
+
+            {/* Supabase Bağlantı Testi */}
+            <button
+              onClick={testSupabaseConnection}
+              className="bg-orange-600 hover:bg-orange-700 px-3 py-2 rounded text-sm font-semibold flex items-center space-x-1"
+              title="Supabase Bağlantısını Test Et"
+            >
+              <RefreshCw className="w-4 h-4"/>
+              <span>🔍 Bağlantıyı Test Et</span>
+            </button>
 
             {/* Geçmiş Bordrolar */}
             <button
