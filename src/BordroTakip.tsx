@@ -963,11 +963,11 @@ export default function BordroTakip() {
     // Otomatik olarak TÜM günleri Normal/08:00-18:00 (Cumartesi 13:00) ile doldur, mesailer 0
     for (let i = 1; i <= daysInMonth; i++) {
       if (!currentData.logs[i] || !currentData.logs[i].type) {
-        const { isSaturday, isSunday } = isWeekend(i, currentMonth, currentYear);
+        const { isSaturday } = isWeekend(i, currentMonth, currentYear);
         const endTime = isSaturday ? '13:00' : '18:00';
-        const dayType = isSunday ? 'Pazar' : 'Normal';
         
-        handleLogChange(i, 'type', dayType);
+        // Tüm günler (Pazar dahil) Normal olarak işaretlenecek
+        handleLogChange(i, 'type', 'Normal');
         handleLogChange(i, 'startTime', '08:00');
         handleLogChange(i, 'endTime', endTime);
         handleLogChange(i, 'overtimeHours', 0);
