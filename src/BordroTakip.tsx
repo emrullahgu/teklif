@@ -841,7 +841,7 @@ export default function BordroTakip() {
         }
         saveTimeoutRef.current = setTimeout(() => {
           saveDailyLog(day, currentLogs[day]);
-        }, 500); // 500ms bekle
+        }, 5); // 500ms bekle
       }
 
       return newData;
