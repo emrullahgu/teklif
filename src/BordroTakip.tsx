@@ -869,6 +869,32 @@ export default function BordroTakip() {
     }
   }, [selectedEmployeeId, monthKey, employees]);
 
+  // Yeni ay açıldığında tüm personeller için otomatik doldur (TOPLU)
+  useEffect(() => {
+    if (employees.length > 0) {
+      // En az bir personelin bu ay için verisi yoksa toplu doldur
+      const needsAutoFill = employees.some(emp => {
+        const empData = appData[emp.id]?.[monthKey];
+        return !empData || Object.keys(empData.logs).length === 0;
+      });
+      
+      if (needsAutoFill) {
+        console.log(`🚀 ${monthKey} ayı için toplu otomatik doldurma başlatılıyor...`);
+        
+        // Async fonksiyonu düzgün bir şekilde çağır
+        const fillData = async () => {
+          try {
+            await autoFillAllEmployeesForMonth(monthKey);
+          } catch (error) {
+            console.error('❌ Otomatik doldurma hatası:', error);
+          }
+        };
+        
+        fillData();
+      }
+    }
+  }, [employees.length, monthKey]);
+
   const currentData = appData[selectedEmployeeId]?.[monthKey] || { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId) || { id: '0', name: '', agreedSalary: 0, officialSalary: 0 };
 
@@ -1230,78 +1256,122 @@ export default function BordroTakip() {
     }, 1000);
   };
 
-  // Otomatik doldurma fonksiyonu (yeni ay açıldığında)
-  const autoFillMonth = async (employeeId: string, targetMonthKey: string) => {
-    console.log('🤖 Otomatik doldurma çalışıyor...');
-    
-    const empData = appData[employeeId]?.[targetMonthKey];
-    if (!empData || Object.keys(empData.logs).length > 0) {
-      console.log('⏭️ Zaten veri var, otomatik doldurma atlanıyor');
-      return;
-    }
+  // Otomatik doldurma fonksiyonu (yeni ay açıldığında) - TÜM PERSONELLER İÇİN TOPLU
+  const autoFillAllEmployeesForMonth = async (targetMonthKey: string) => {
+    console.log(`🚀 ${targetMonthKey} ayı için TÜM personeller otomatik dolduruluyor...`);
     
     // Ay ve yıl bilgisini parse et
     const [year, month] = targetMonthKey.split('-').map(Number);
     const daysInTargetMonth = new Date(year, month + 1, 0).getDate();
     
-    const newLogs: {[key: number]: DailyLog} = {};
-    const newPendingSaves = new Set<string>();
+    const allBatchData: any[] = [];
+    const newAppData: Record<string, Record<string, MonthlyData>> = {};
     
-    for (let i = 1; i <= daysInTargetMonth; i++) {
-      const date = new Date(year, month, i);
-      const dayOfWeek = date.getDay();
-      const isSaturday = dayOfWeek === 6;
-      const endTime = isSaturday ? '13:00' : '18:00';
+    // Tüm personeller için verileri hazırla
+    employees.forEach(emp => {
+      const empData = appData[emp.id]?.[targetMonthKey];
       
-      newLogs[i] = {
-        type: 'Normal',
-        startTime: '08:00',
-        endTime: endTime,
-        overtimeHours: 0,
-        description: ''
-      };
-      
-      newPendingSaves.add(`${employeeId}-${i}`);
-    }
-    
-    // State'i güncelle
-    setAppData(prev => {
-      const newData = {...prev};
-      if (!newData[employeeId]) {
-        newData[employeeId] = {};
-      }
-      if (!newData[employeeId][targetMonthKey]) {
-        newData[employeeId][targetMonthKey] = { logs: {}, expenses: [] };
+      // Eğer zaten veri varsa atla
+      if (empData && Object.keys(empData.logs).length > 0) {
+        console.log(`⏭️ ${emp.name} için zaten veri var, atlanıyor`);
+        return;
       }
       
-      newData[employeeId][targetMonthKey] = {
-        ...newData[employeeId][targetMonthKey],
-        logs: {
-          ...newData[employeeId][targetMonthKey].logs,
-          ...newLogs
-        }
+      const newLogs: {[key: number]: DailyLog} = {};
+      
+      // Her gün için veri oluştur
+      for (let i = 1; i <= daysInTargetMonth; i++) {
+        const date = new Date(year, month, i);
+        const dayOfWeek = date.getDay();
+        const isSaturday = dayOfWeek === 6;
+        const endTime = isSaturday ? '13:00' : '18:00';
+        
+        newLogs[i] = {
+          day: i,
+          type: 'Normal',
+          startTime: '08:00',
+          endTime: endTime,
+          overtimeHours: 0,
+          description: ''
+        };
+        
+        // Toplu kayıt için batch data'ya ekle
+        allBatchData.push({
+          employee_id: emp.id,
+          day: i,
+          month: month,
+          year: year,
+          type: 'Normal',
+          start_time: '08:00',
+          end_time: endTime,
+          overtime_hours: 0,
+          description: ''
+        });
+      }
+      
+      // State güncellemesi için hazırla
+      if (!newAppData[emp.id]) {
+        newAppData[emp.id] = {};
+      }
+      newAppData[emp.id][targetMonthKey] = {
+        month,
+        year,
+        logs: newLogs,
+        expenses: appData[emp.id]?.[targetMonthKey]?.expenses || []
       };
       
-      return newData;
+      console.log(`✅ ${emp.name} için ${daysInTargetMonth} gün hazırlandı`);
     });
     
-    // Pending saves'i güncelle
-    setPendingSaves(prev => {
-      const updated = new Set(prev);
-      newPendingSaves.forEach(key => updated.add(key));
+    // Eğer hiç yeni veri yoksa çık
+    if (allBatchData.length === 0) {
+      console.log('⏭️ Hiç yeni veri yok, kayıt atlanıyor');
+      return;
+    }
+    
+    // State'i güncelle (TEK SEFERDE)
+    setAppData(prev => {
+      const updated = {...prev};
+      Object.keys(newAppData).forEach(empId => {
+        if (!updated[empId]) {
+          updated[empId] = {};
+        }
+        updated[empId] = {
+          ...updated[empId],
+          ...newAppData[empId]
+        };
+      });
       return updated;
     });
     
-    console.log(`🎉 ${daysInTargetMonth} gün otomatik dolduruldu!`);
+    console.log(`🎉 ${employees.length} personel için toplam ${allBatchData.length} kayıt hazırlandı!`);
     
-    // 1 saniye sonra otomatik kaydet
-    setTimeout(() => {
-      console.log('💾 Otomatik kayıt başlatılıyor...');
-      saveAllPending();
-    }, 1000);
+    // Veritabanına toplu kaydet (TEK BİR İSTEK)
+    try {
+      console.log(`💾 ${allBatchData.length} kayıt tek seferde veritabanına kaydediliyor...`);
+      
+      const { data, error } = await supabase
+        .from('bordro_daily_logs')
+        .upsert(allBatchData, { 
+          onConflict: 'employee_id,day,month,year'
+        })
+        .select();
+      
+      if (error) {
+        console.error('❌ Toplu otomatik doldurma kayıt hatası:', error);
+        alert(`❌ Otomatik doldurma hatası: ${error.message}`);
+        return;
+      }
+      
+      console.log(`✅ ${allBatchData.length} kayıt başarıyla otomatik kaydedildi!`);
+      
+    } catch (error) {
+      console.error('❌ Otomatik doldurma FATAL hatası:', error);
+      alert(`❌ Kritik hata: ${(error as any)?.message}`);
+    }
   };
 
-  const openAddModal = () => {
+  const openAddModal = () => {  const openAddModal = () => {
     setEmployeeForm({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
     setEditingEmployeeId(null);
     setShowEmployeeModal(true);
