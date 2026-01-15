@@ -841,7 +841,7 @@ export default function BordroTakip() {
         }
         saveTimeoutRef.current = setTimeout(() => {
           saveDailyLog(day, currentLogs[day]);
-        }, 2000); // 2 saniye bekle
+        }, 500); // 500ms bekle
       }
 
       return newData;
@@ -950,12 +950,29 @@ export default function BordroTakip() {
   };
 
   const fillMonthDefaults = () => {
-    // Otomatik olarak TÜM günleri Normal/08:00-18:00 ile doldur
+    // Otomatik olarak TÜM günleri doldur
     for (let i = 1; i <= daysInMonth; i++) {
       if (!currentData.logs[i] || !currentData.logs[i].type) {
-        handleLogChange(i, 'type', 'Normal');
-        handleLogChange(i, 'startTime', '08:00');
-        handleLogChange(i, 'endTime', '18:00');
+        const { isSaturday, isSunday } = isWeekend(i, currentMonth, currentYear);
+        
+        // Pazar günü Normal olarak işaretle ama mesai saati 0
+        if (isSunday) {
+          handleLogChange(i, 'type', 'Normal');
+          handleLogChange(i, 'startTime', '08:00');
+          handleLogChange(i, 'endTime', '08:00'); // Mesai saati 0
+        }
+        // Cumartesi günü Normal olarak işaretle ama mesai saati 0
+        else if (isSaturday) {
+          handleLogChange(i, 'type', 'Normal');
+          handleLogChange(i, 'startTime', '08:00');
+          handleLogChange(i, 'endTime', '08:00'); // Mesai saati 0
+        }
+        // Hafta içi normal mesai
+        else {
+          handleLogChange(i, 'type', 'Normal');
+          handleLogChange(i, 'startTime', '08:00');
+          handleLogChange(i, 'endTime', '18:00');
+        }
       }
     }
   };
