@@ -835,13 +835,8 @@ export default function BordroTakip() {
         // Pending kayıt listesine ekle
         setPendingSaves(prev => new Set(prev).add(`${selectedEmployeeId}-${day}`));
         
-        // Debounced kaydet (önceki timeout'u iptal et)
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-        }
-        saveTimeoutRef.current = setTimeout(() => {
-          saveDailyLog(day, currentLogs[day]);
-        }, 5); // 500ms bekle
+        // Hızlı kaydetme - timeout olmadan anında kaydet
+        saveDailyLog(day, currentLogs[day]);
       }
 
       return newData;
