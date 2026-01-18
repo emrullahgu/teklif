@@ -1,6 +1,7 @@
 ﻿import React, { useState, useMemo, useRef } from 'react';
 import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote } from 'lucide-react';
 import { BordroWithPassword } from './bordro-main.jsx';
+import KesifMetraj from './KesifMetraj.jsx';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import jsPDF from 'jspdf';
@@ -1107,66 +1108,121 @@ const App = () => {
     addToRecentProducts(product);
   };
 
-  // Hızlı Giriş Parser - "ürün adı, miktar, fiyat" formatı
+  // Hızlı Giriş Parser - İYİLEŞTİRİLMİŞ: 3 FORMAT DESTEĞİ
   const parseQuickAddText = (text) => {
     const lines = text.split('\n').filter(l => l.trim());
     const products = [];
+    const errors = [];
     
-    lines.forEach(line => {
-      const parts = line.split(',').map(p => p.trim());
-      if (parts.length >= 2) {
-        const urunAdi = parts[0];
-        const miktar = parseFloat(parts[1]) || 1;
-        const fiyat = parts.length >= 3 ? parseFloat(parts[2]) : null;
-        
-        // Ürünü katalogda ara
-        const foundProduct = CombinedFaturaData.find(p => 
-          p.urun?.toLowerCase().includes(urunAdi.toLowerCase())
-        );
-        
+    lines.forEach((line, idx) => {
+      line = line.trim();
+      if (!line) return;
+      
+      let parts = [];
+      
+      // Format tespiti: | veya , veya TAB
+      if (line.includes('|')) {
+        parts = line.split('|').map(p => p.trim());
+      } else if (line.includes('\t')) {
+        // Excel'den kopyala-yapıştır (TAB ile ayrılmış)
+        parts = line.split('\t').map(p => p.trim());
+      } else if (line.includes(',')) {
+        parts = line.split(',').map(p => p.trim());
+      } else {
+        errors.push(`Satır ${idx + 1}: Ayırıcı bulunamadı (| veya , veya TAB)`);
+        return;
+      }
+      
+      if (parts.length < 2) {
+        errors.push(`Satır ${idx + 1}: Yetersiz veri (en az Ürün ve Miktar gerekli)`);
+        return;
+      }
+      
+      const urunAdi = parts[0];
+      const miktar = parseFloat(parts[1]) || 1;
+      const fiyat = parts.length >= 3 ? parseFloat(parts[2]) : null;
+      const birim = parts.length >= 4 ? parts[3] : 'Adet';
+      const marka = parts.length >= 5 ? parts[4] : '';
+      
+      if (!urunAdi || urunAdi === '') {
+        errors.push(`Satır ${idx + 1}: Ürün adı boş`);
+        return;
+      }
+      
+      if (miktar <= 0 || isNaN(miktar)) {
+        errors.push(`Satır ${idx + 1}: Geçersiz miktar (${parts[1]})`);
+        return;
+      }
+      
+      // Ürünü katalogda akıllı ara
+      const foundProduct = CombinedFaturaData.find(p => {
+        const urunLower = p.urun?.toLowerCase() || '';
+        const aramaLower = urunAdi.toLowerCase();
+        return urunLower.includes(aramaLower) || aramaLower.includes(urunLower);
+      });
+      
+      let usedPrice = fiyat;
+      let usedMarka = marka;
+      let usedBirim = birim;
+      
+      if (!fiyat || fiyat <= 0 || isNaN(fiyat)) {
         if (foundProduct) {
-          products.push({
-            id: Date.now() + products.length,
-            sira: kesifProducts.length + products.length + 1,
-            type: 'normal',
-            urun: foundProduct.urun,
-            marka: foundProduct.marka,
-            birimFiyat: fiyat || foundProduct.birimFiyat,
-            miktar: miktar,
-            olcu: foundProduct.olcu,
-            toplam: (fiyat || foundProduct.birimFiyat) * miktar
-          });
-        } else if (fiyat) {
-          // Katalogda yoksa manuel ekle
-          products.push({
-            id: Date.now() + products.length,
-            sira: kesifProducts.length + products.length + 1,
-            type: 'normal',
-            urun: urunAdi,
-            marka: 'Manuel Ekleme',
-            birimFiyat: fiyat,
-            miktar: miktar,
-            olcu: 'Adet',
-            toplam: fiyat * miktar
-          });
+          usedPrice = foundProduct.birimFiyat;
+          usedMarka = foundProduct.marka;
+          usedBirim = foundProduct.olcu;
+        } else {
+          errors.push(`Satır ${idx + 1}: "${urunAdi}" için fiyat bulunamadı`);
+          return;
         }
       }
+      
+      // Kar marjı uygula
+      const finalPrice = profitMargin > 0 
+        ? usedPrice * (1 + profitMargin / 100)
+        : usedPrice;
+      
+      products.push({
+        id: Date.now() + products.length * 100,
+        sira: kesifProducts.length + products.length + 1,
+        type: 'normal',
+        urun: foundProduct ? foundProduct.urun : urunAdi,
+        marka: foundProduct ? foundProduct.marka : (usedMarka || 'Manuel Giriş'),
+        maliyetFiyat: usedPrice,
+        birimFiyat: parseFloat(finalPrice.toFixed(2)),
+        miktar: miktar,
+        olcu: usedBirim,
+        toplam: parseFloat((finalPrice * miktar).toFixed(2)),
+        karMarji: profitMargin
+      });
     });
     
-    return products;
+    return { products, errors };
   };
 
   const handleQuickAdd = () => {
-    if (!quickAddText.trim()) return;
+    if (!quickAddText.trim()) {
+      alert('⚠️ Lütfen ürün bilgilerini girin!');
+      return;
+    }
     
-    const newProducts = parseQuickAddText(quickAddText);
-    if (newProducts.length > 0) {
-      setKesifProducts([...kesifProducts, ...newProducts]);
+    const { products, errors } = parseQuickAddText(quickAddText);
+    
+    if (products.length > 0) {
+      setKesifProducts([...kesifProducts, ...products]);
       setQuickAddText('');
       setQuickAddMode(false);
-      alert(`✅ ${newProducts.length} ürün eklendi!`);
+      
+      let message = `✅ HIZLI GİRİŞ BAŞARILI!\n\n`;
+      message += `📊 ${products.length} ürün eklendi`;
+      if (profitMargin > 0) {
+        message += `\n💰 %${profitMargin} kar marjı uygulandı`;
+      }
+      if (errors.length > 0) {
+        message += `\n\n⚠️ ${errors.length} satırda hata:\n${errors.slice(0, 5).join('\n')}`;
+      }
+      alert(message);
     } else {
-      alert('❌ Geçerli ürün bulunamadı. Format: "ürün adı, miktar, fiyat"');
+      alert(`❌ Hiçbir ürün eklenemedi!\n\n${errors.slice(0, 10).join('\n')}\n\nDoğru format:\nÜrün | Miktar | Fiyat\nÜrün, Miktar, Fiyat\nExcel'den kopyala-yapıştır`);
     }
   };
 
@@ -1181,7 +1237,7 @@ const App = () => {
     alert(`Maliyet: ${costPrice.toFixed(2)} TL\nKar Marjı: %${profitMargin}\nSatış Fiyatı: ${sellingPrice.toFixed(2)} TL`);
   };
 
-  // Excel İçe Aktarma
+  // Excel İçe Aktarma - İYİLEŞTİRİLMİŞ VERSİYON
   const handleExcelImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1194,48 +1250,142 @@ const App = () => {
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(firstSheet);
 
-        const importedProducts = [];
-        jsonData.forEach((row, idx) => {
-          const urunAdi = row['Ürün'] || row['urun'] || row['ÜRÜN'];
-          const miktar = parseFloat(row['Miktar'] || row['miktar'] || row['MIKTAR'] || 1);
-          const fiyat = parseFloat(row['Fiyat'] || row['fiyat'] || row['FİYAT'] || row['Birim Fiyat']);
-          const birim = row['Birim'] || row['birim'] || row['BİRİM'] || 'Adet';
+        if (jsonData.length === 0) {
+          alert('⚠️ Excel dosyası boş!');
+          return;
+        }
 
-          if (urunAdi) {
-            // Katalogda ara
-            const foundProduct = CombinedFaturaData.find(p => 
+        // AKILLI SÜTUN ALGILAMA
+        const firstRow = jsonData[0];
+        const columns = Object.keys(firstRow);
+        
+        // Sütun isimleri için olası varyasyonlar
+        const urunVariants = ['Ürün', 'urun', 'ÜRÜN', 'Urun Adi', 'Malzeme', 'Product', 'Ürün Adı'];
+        const miktarVariants = ['Miktar', 'miktar', 'MIKTAR', 'Quantity', 'Adet', 'Amount'];
+        const fiyatVariants = ['Fiyat', 'fiyat', 'FİYAT', 'Birim Fiyat', 'BirimFiyat', 'Price', 'Tutar'];
+        const birimVariants = ['Birim', 'birim', 'BİRİM', 'Unit', 'Ölçü', 'olcu'];
+        const markaVariants = ['Marka', 'marka', 'MARKA', 'Brand', 'Üretici'];
+        
+        // Otomatik sütun eşleştirme
+        const findColumn = (variants) => {
+          for (let variant of variants) {
+            if (columns.find(col => col.toLowerCase() === variant.toLowerCase())) {
+              return columns.find(col => col.toLowerCase() === variant.toLowerCase());
+            }
+          }
+          return null;
+        };
+        
+        const urunCol = findColumn(urunVariants);
+        const miktarCol = findColumn(miktarVariants);
+        const fiyatCol = findColumn(fiyatVariants);
+        const birimCol = findColumn(birimVariants);
+        const markaCol = findColumn(markaVariants);
+        
+        if (!urunCol) {
+          alert('❌ Excel\'de "Ürün" sütunu bulunamadı!\n\nGeçerli sütun isimleri: ' + urunVariants.join(', '));
+          return;
+        }
+
+        const importedProducts = [];
+        const errors = [];
+        let successCount = 0;
+        let skippedCount = 0;
+
+        jsonData.forEach((row, idx) => {
+          const urunAdi = row[urunCol];
+          const miktar = parseFloat(row[miktarCol] || 1);
+          const fiyat = parseFloat(row[fiyatCol] || 0);
+          const birim = row[birimCol] || 'Adet';
+          const marka = row[markaCol] || 'Genel';
+
+          // Validasyon
+          if (!urunAdi || urunAdi.trim() === '') {
+            skippedCount++;
+            errors.push(`Satır ${idx + 2}: Ürün adı boş`);
+            return;
+          }
+
+          if (miktar <= 0 || isNaN(miktar)) {
+            skippedCount++;
+            errors.push(`Satır ${idx + 2}: Geçersiz miktar (${miktar})`);
+            return;
+          }
+
+          // Katalogda akıllı arama
+          let foundProduct = null;
+          let usedPrice = fiyat;
+
+          if (fiyat <= 0 || isNaN(fiyat)) {
+            // Fiyat yoksa katalogdan ara
+            foundProduct = CombinedFaturaData.find(p => 
               p.urun?.toLowerCase().includes(urunAdi.toLowerCase()) ||
               urunAdi.toLowerCase().includes(p.urun?.toLowerCase())
             );
-
-            if (foundProduct || fiyat) {
-              importedProducts.push({
-                id: Date.now() + idx,
-                sira: kesifProducts.length + importedProducts.length + 1,
-                type: 'normal',
-                urun: foundProduct ? foundProduct.urun : urunAdi,
-                marka: foundProduct ? foundProduct.marka : 'Excel İmport',
-                birimFiyat: fiyat || foundProduct.birimFiyat,
-                miktar: miktar,
-                olcu: birim || (foundProduct ? foundProduct.olcu : 'Adet'),
-                toplam: (fiyat || foundProduct.birimFiyat) * miktar
-              });
+            
+            if (foundProduct) {
+              usedPrice = foundProduct.birimFiyat;
+            } else {
+              skippedCount++;
+              errors.push(`Satır ${idx + 2}: "${urunAdi}" için fiyat bulunamadı`);
+              return;
             }
           }
+
+          // Kar marjı uygula
+          const finalPrice = profitMargin > 0 
+            ? usedPrice * (1 + profitMargin / 100)
+            : usedPrice;
+
+          importedProducts.push({
+            id: Date.now() + idx * 100,
+            sira: kesifProducts.length + importedProducts.length + 1,
+            type: 'normal',
+            urun: foundProduct ? foundProduct.urun : urunAdi,
+            marka: foundProduct ? foundProduct.marka : marka,
+            maliyetFiyat: usedPrice,
+            birimFiyat: parseFloat(finalPrice.toFixed(2)),
+            miktar: miktar,
+            olcu: birim || (foundProduct ? foundProduct.olcu : 'Adet'),
+            toplam: parseFloat((finalPrice * miktar).toFixed(2)),
+            karMarji: profitMargin,
+            kaynakDosya: file.name
+          });
+          successCount++;
         });
 
+        // Sonuç raporu
         if (importedProducts.length > 0) {
           setKesifProducts([...kesifProducts, ...importedProducts]);
-          alert(`✅ ${importedProducts.length} ürün Excel'den içe aktarıldı!`);
+          
+          let message = `✅ EXCEL İMPORT BAŞARILI!\n\n`;
+          message += `📊 Toplam Satır: ${jsonData.length}\n`;
+          message += `✅ Başarılı: ${successCount} ürün\n`;
+          if (skippedCount > 0) {
+            message += `⚠️ Atlanan: ${skippedCount} satır\n`;
+          }
+          if (profitMargin > 0) {
+            message += `💰 Kar Marjı: %${profitMargin} uygulandı\n`;
+          }
+          message += `\n📁 Dosya: ${file.name}`;
+          
+          if (errors.length > 0 && errors.length <= 5) {
+            message += `\n\n⚠️ Hatalar:\n${errors.slice(0, 5).join('\n')}`;
+          }
+          
+          alert(message);
         } else {
-          alert('❌ Excel dosyasında geçerli ürün bulunamadı.');
+          alert(`❌ Hiçbir ürün eklenemedi!\n\n${errors.slice(0, 5).join('\n')}`);
         }
       } catch (error) {
         console.error('Excel import hatası:', error);
-        alert('❌ Excel dosyası okunamadı. Lütfen formatı kontrol edin.');
+        alert(`❌ Excel dosyası okunamadı!\n\nHata: ${error.message}\n\nLütfen dosya formatını kontrol edin:\n- İlk satırda başlıklar olmalı\n- "Ürün", "Miktar", "Fiyat" sütunları gerekli`);
       }
     };
     reader.readAsArrayBuffer(file);
+    
+    // Input'u temizle (aynı dosya tekrar seçilebilsin)
+    e.target.value = '';
   };
 
   // Teklifi Kaydet
@@ -1261,30 +1411,73 @@ const App = () => {
     localStorage.setItem('savedQuotations', JSON.stringify(updated));
   };
 
-  // Tüm Fiyatlara Kar Marjı Uygula
+  // Tüm Fiyatlara Kar Marjı Uygula - İYİLEŞTİRİLMİŞ
   const applyProfitMarginToAll = () => {
-    const margin = prompt('Tüm ürünlere uygulanacak kar marjı % girin:');
-    if (!margin) return;
-    
-    const marginValue = parseFloat(margin);
-    if (isNaN(marginValue) || marginValue <= 0) {
-      alert('Geçersiz kar marjı!');
+    if (kesifProducts.length === 0) {
+      alert('⚠️ Listede ürün yok!');
       return;
     }
-
+    
+    const margin = prompt(
+      `💰 KAR MARJI UYGULA\n\nŞu anda ${kesifProducts.length} ürün listenizde.\n\nUygulamak istediğiniz kar marjını % olarak girin:`,
+      profitMargin.toString()
+    );
+    
+    if (margin === null) return; // İptal
+    
+    const marginValue = parseFloat(margin);
+    if (isNaN(marginValue)) {
+      alert('❌ Geçersiz kar marjı değeri!');
+      return;
+    }
+    
+    if (marginValue < 0) {
+      if (!confirm(`⚠️ Negatif kar marjı (%${marginValue}) uygulamak istediğinizden emin misiniz? Bu fiyatları düşürecektir.`)) {
+        return;
+      }
+    }
+    
     const updated = kesifProducts.map(p => {
-      const newPrice = p.birimFiyat * (1 + marginValue / 100);
-      return { ...p, birimFiyat: newPrice, toplam: newPrice * p.miktar };
+      // Eğer maliyet fiyatı varsa ondan hesapla, yoksa mevcut fiyattan
+      const basePrice = p.maliyetFiyat || p.birimFiyat;
+      const newPrice = basePrice * (1 + marginValue / 100);
+      return { 
+        ...p, 
+        birimFiyat: parseFloat(newPrice.toFixed(2)), 
+        toplam: parseFloat((newPrice * p.miktar).toFixed(2)),
+        karMarji: marginValue,
+        maliyetFiyat: p.maliyetFiyat || basePrice
+      };
     });
+    
     setKesifProducts(updated);
-    alert(`✅ %${marginValue} kar marjı tüm ürünlere uygulandı!`);
+    setProfitMargin(marginValue); // Varsayılan kar marjını güncelle
+    
+    const totalIncrease = updated.reduce((sum, p) => sum + p.toplam, 0) - 
+                          kesifProducts.reduce((sum, p) => sum + p.toplam, 0);
+    
+    alert(
+      `✅ KAR MARJI UYGULANDILAR!\n\n` +
+      `📊 Ürün Sayısı: ${kesifProducts.length}\n` +
+      `💰 Uygulanan Marj: %${marginValue}\n` +
+      `📈 Toplam Artış: ${totalIncrease.toFixed(2)} TL`
+    );
   };
 
-  // Keşif Metraj Fonksiyonları
+  // Keşif Metraj Fonksiyonları - İYİLEŞTİRİLMİŞ
   const addProductToKesif = () => {
     if (productType === 'normal') {
       // Normal ürün ekleme
-      if (!selectedProduct || productQuantity <= 0) return;
+      if (!selectedProduct || productQuantity <= 0) {
+        alert('⚠️ Lütfen bir ürün seçin ve miktar girin!');
+        return;
+      }
+      
+      // KAR MARJI OTOMATİK UYGULA
+      const maliyetFiyat = selectedProduct.birimFiyat;
+      const satisFiyat = profitMargin > 0 
+        ? maliyetFiyat * (1 + profitMargin / 100)
+        : maliyetFiyat;
       
       const newProduct = {
         id: Date.now(),
@@ -1292,10 +1485,12 @@ const App = () => {
         type: 'normal',
         urun: selectedProduct.urun,
         marka: selectedProduct.marka,
-        birimFiyat: selectedProduct.birimFiyat,
+        maliyetFiyat: maliyetFiyat,
+        birimFiyat: parseFloat(satisFiyat.toFixed(2)),
         miktar: productQuantity,
         olcu: selectedProduct.olcu,
-        toplam: selectedProduct.birimFiyat * productQuantity
+        toplam: parseFloat((satisFiyat * productQuantity).toFixed(2)),
+        karMarji: profitMargin
       };
 
       setKesifProducts([...kesifProducts, newProduct]);
@@ -1307,6 +1502,13 @@ const App = () => {
       setProductSearch('');
       setProductQuantity(1);
       setShowProductDropdown(false);
+      
+      // Başarı mesajı
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-bounce';
+      toast.textContent = '✅ Ürün eklendi!';
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2000);
     } else if (productType === 'kablo') {
       // Kablo ekleme
       if (!selectedCableForKesif || productQuantity <= 0) return;
@@ -1393,13 +1595,60 @@ const App = () => {
     setKesifProducts(updated);
   };
 
+  // TOPLU DÜZENLEME - İYİLEŞTİRİLMİŞ
   const applyBulkPriceAdjustment = (percentage) => {
-    if (percentage === 0) return;
+    if (percentage === 0) {
+      alert('⚠️ Lütfen bir yüzde değeri girin!');
+      return;
+    }
+    
+    if (!confirm(`Tüm ürünlere %${percentage} ${percentage > 0 ? 'zam' : 'indirim'} uygulamak istediğinizden emin misiniz?`)) {
+      return;
+    }
+    
     const updated = kesifProducts.map(p => {
       const newPrice = p.birimFiyat * (1 + percentage / 100);
-      return { ...p, birimFiyat: newPrice, toplam: newPrice * p.miktar };
+      return { 
+        ...p, 
+        birimFiyat: parseFloat(newPrice.toFixed(2)), 
+        toplam: parseFloat((newPrice * p.miktar).toFixed(2)),
+        sonGuncelleme: new Date().toLocaleString('tr-TR')
+      };
     });
     setKesifProducts(updated);
+    alert(`✅ ${kesifProducts.length} ürüne %${percentage} ayarlama uygulandı!`);
+  };
+  
+  // TOPLU SİLME
+  const removeSelectedProducts = (selectedIds) => {
+    if (selectedIds.length === 0) {
+      alert('⚠️ Lütfen silinecek ürünleri seçin!');
+      return;
+    }
+    
+    if (!confirm(`${selectedIds.length} ürünü silmek istediğinizden emin misiniz?`)) {
+      return;
+    }
+    
+    const updated = kesifProducts.filter(p => !selectedIds.includes(p.id));
+    const reNumbered = updated.map((p, idx) => ({ ...p, sira: idx + 1 }));
+    setKesifProducts(reNumbered);
+    alert(`✅ ${selectedIds.length} ürün silindi!`);
+  };
+  
+  // TOPLU ÇOĞALTMA
+  const duplicateProduct = (productId) => {
+    const product = kesifProducts.find(p => p.id === productId);
+    if (!product) return;
+    
+    const newProduct = {
+      ...product,
+      id: Date.now(),
+      sira: kesifProducts.length + 1
+    };
+    
+    setKesifProducts([...kesifProducts, newProduct]);
+    alert('✅ Ürün kopyalandı!');
   };
 
   // Hazır Paket Ekleme Fonksiyonu
@@ -2811,25 +3060,26 @@ KURALLAR:
       
       {/* Header */}
       <header className="bg-blue-900 text-white shadow-lg no-print">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <Calculator className="h-8 w-8 text-yellow-400" />
+        <div className="container mx-auto px-3 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="flex items-center space-x-2 md:space-x-3">
+            <Calculator className="h-6 w-6 md:h-8 md:w-8 text-yellow-400" />
             <div>
-              <h1 className="text-xl font-bold">Kobinerji Mühendislik</h1>
-              <p className="text-xs text-blue-200">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
+              <h1 className="text-base md:text-xl font-bold">Kobinerji Mühendislik</h1>
+              <p className="text-[10px] md:text-xs text-blue-200">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="px-3 py-1 bg-blue-800 rounded-full text-xs text-blue-200 flex items-center">
+          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+            <div className="hidden sm:flex px-2 md:px-3 py-1 bg-blue-800 rounded-full text-[10px] md:text-xs text-blue-200 items-center">
                 <Sparkles className="w-3 h-3 mr-1 text-yellow-400"/>
                 Gemini AI Destekli
             </div>
             <button 
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="flex items-center space-x-2 bg-blue-800 hover:bg-blue-700 px-4 py-2 rounded-lg transition"
+              className="flex items-center space-x-1 md:space-x-2 bg-blue-800 hover:bg-blue-700 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition text-xs md:text-sm"
             >
-              <Settings className="h-4 w-4" />
-              <span>Parametreler</span>
+              <Settings className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Parametreler</span>
+              <span className="sm:hidden">Ayarlar</span>
             </button>
           </div>
         </div>
@@ -2838,12 +3088,12 @@ KURALLAR:
       {/* Settings Panel (Collapsible) */}
       {isSettingsOpen && (
         <div className="bg-white border-b border-gray-200 shadow-inner">
-          <div className="container mx-auto px-6 py-6">
-            <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-              <Edit3 className="h-4 w-4 mr-2" />
+          <div className="container mx-auto px-3 md:px-6 py-4 md:py-6">
+            <h3 className="font-semibold text-gray-700 mb-3 md:mb-4 flex items-center text-sm md:text-base">
+              <Edit3 className="h-3 w-3 md:h-4 md:w-4 mr-2" />
               Hesaplama Parametreleri (EMO 2026)
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Sabit Ücret (Bina 0-400)</label>
                 <div className="relative">
@@ -2975,74 +3225,81 @@ KURALLAR:
       )}
 
       {/* Main Content */}
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-2 md:px-6 py-4 md:py-8">
         
         {/* Tabs */}
-        <div className="flex space-x-2 bg-gray-200 p-1 rounded-xl w-fit mb-6 no-print overflow-x-auto">
+        <div className="flex space-x-1 md:space-x-2 bg-gray-200 p-0.5 md:p-1 rounded-xl w-full md:w-fit mb-4 md:mb-6 no-print overflow-x-auto scrollbar-hide">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'dashboard' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            <FileSpreadsheet className="w-4 h-4 mr-2"/>
-            Dashboard & İstatistikler
+            <FileSpreadsheet className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
+            <span className="hidden sm:inline">Dashboard & İstatistikler</span>
+            <span className="sm:hidden">Dashboard</span>
           </button>
           <button 
             onClick={() => setActiveTab('gorev')}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'gorev' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'gorev' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            <CheckCircle className="w-4 h-4 mr-2"/>
-            Görev Takip
+            <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
+            <span className="hidden sm:inline">Görev Takip</span>
+            <span className="sm:hidden">Görev</span>
           </button>
           <button 
             onClick={() => setActiveTab('manual')}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'manual' ? 'bg-white shadow text-blue-700' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'manual' ? 'bg-white shadow text-blue-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            <UserPlus className="w-4 h-4 mr-2"/>
-            Kobinerji Mühendislik
+            <UserPlus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
+            <span className="hidden lg:inline">Kobinerji Mühendislik</span>
+            <span className="lg:hidden">Kobinerji</span>
           </button>
           <button 
             onClick={() => setActiveTab('periodic')}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'periodic' ? 'bg-white shadow text-green-700' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'periodic' ? 'bg-white shadow text-green-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            <RefreshCw className="w-4 h-4 mr-2"/>
-            Periyodik Kontrol
+            <RefreshCw className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
+            <span className="hidden sm:inline">Periyodik Kontrol</span>
+            <span className="sm:hidden">Kontrol</span>
           </button>
           <button 
             onClick={() => setActiveTab('kesif')}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'kesif' ? 'bg-white shadow text-orange-700' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'kesif' ? 'bg-white shadow text-orange-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            <Hammer className="w-4 h-4 mr-2"/>
-            Keşif Metraj (Malzeme + Kablo)
+            <Hammer className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
+            <span className="hidden lg:inline">Keşif Metraj (Malzeme + Kablo)</span>
+            <span className="lg:hidden">Keşif Metraj</span>
           </button>
           <button 
             onClick={() => setActiveTab('ges')}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'ges' ? 'bg-white shadow text-yellow-700' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'ges' ? 'bg-white shadow text-yellow-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            <Zap className="w-4 h-4 mr-2"/>
-            GES Teklifi
+            <Zap className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
+            <span className="hidden sm:inline">GES Teklifi</span>
+            <span className="sm:hidden">GES</span>
           </button>
           <button 
             onClick={() => setActiveTab('bordro')}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'bordro' ? 'bg-white shadow text-teal-700' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'bordro' ? 'bg-white shadow text-teal-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            <Banknote className="w-4 h-4 mr-2"/>
-            Bordro Takip
+            <Banknote className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
+            Bordro
           </button>
           <button 
             onClick={() => window.open('/osos.html', '_blank')}
-            className="px-6 py-2 rounded-lg text-sm font-medium transition flex items-center text-gray-600 hover:text-gray-900 hover:bg-white hover:shadow"
+            className="px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap text-gray-600 hover:text-gray-900 hover:bg-white hover:shadow"
           >
-            <FileText className="w-4 h-4 mr-2"/>
+            <FileText className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
             OSOS
           </button>
           <button 
             onClick={() => setActiveTab('saved')}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'saved' ? 'bg-white shadow text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'saved' ? 'bg-white shadow text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            <Save className="w-4 h-4 mr-2"/>
-            Kaydedilen Teklifler
+            <Save className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
+            <span className="hidden sm:inline">Kaydedilen Teklifler</span>
+            <span className="sm:hidden">Kayıtlı</span>
             {(allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length) > 0 && (
-              <span className="ml-2 text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">
+              <span className="ml-1 md:ml-2 text-[10px] md:text-xs bg-purple-600 text-white px-1 md:px-2 py-0.5 rounded-full">
                 {allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length}
               </span>
             )}
@@ -3050,24 +3307,25 @@ KURALLAR:
           <button 
             onClick={() => setActiveTab('proposal')}
             disabled={!selectedCompany}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition flex items-center ${activeTab === 'proposal' ? 'bg-white shadow text-blue-700' : 'text-gray-400 cursor-not-allowed'}`}
+            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'proposal' ? 'bg-white shadow text-blue-700' : 'text-gray-400 cursor-not-allowed'}`}
           >
-            Teklif Önizleme
-            {selectedCompany && <span className="ml-2 text-xs bg-blue-100 px-2 py-0.5 rounded-full text-blue-700">{selectedCompany.name.substring(0, 15)}...</span>}
+            <span className="hidden sm:inline">Teklif Önizleme</span>
+            <span className="sm:hidden">Önizleme</span>
+            {selectedCompany && <span className="ml-1 md:ml-2 text-[10px] md:text-xs bg-blue-100 px-1 md:px-2 py-0.5 rounded-full text-blue-700">{selectedCompany.name.substring(0, 8)}...</span>}
           </button>
         </div>
 
         {/* GES Teklifi Tab */}
         {activeTab === 'ges' && (
-          <div className="max-w-7xl mx-auto flex gap-6 h-[calc(100vh-200px)]">
+          <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4 md:gap-6 h-auto lg:h-[calc(100vh-200px)]">
             {/* Sol Panel - Editör */}
-            <div className="w-5/12 bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden">
-              <div className="bg-gradient-to-r from-yellow-600 to-orange-600 px-6 py-4 border-b border-yellow-800 shrink-0">
-                <h2 className="text-lg font-bold text-white flex items-center">
-                  <Zap className="mr-2 h-5 w-5"/>
+            <div className="w-full lg:w-5/12 bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden">
+              <div className="bg-gradient-to-r from-yellow-600 to-orange-600 px-4 md:px-6 py-3 md:py-4 border-b border-yellow-800 shrink-0">
+                <h2 className="text-base md:text-lg font-bold text-white flex items-center">
+                  <Zap className="mr-2 h-4 w-4 md:h-5 md:w-5"/>
                   GES Teklifi Editörü
                 </h2>
-                <p className="text-yellow-100 text-xs mt-1">Güneş Enerjisi Sistemi Fiyat Teklifi</p>
+                <p className="text-yellow-100 text-[10px] md:text-xs mt-1">Güneş Enerjisi Sistemi Fiyat Teklifi</p>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -4982,6 +5240,11 @@ KURALLAR:
 
         {/* Keşif Metraj Fiyat Teklifi Tab */}
         {activeTab === 'kesif' && (
+          <KesifMetraj />
+        )}
+
+        {/* OLD KESIF BACKUP - SILME */}
+        {false && activeTab === 'kesif_old' && (
           <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
             <div className="bg-gradient-to-r from-orange-600 to-orange-700 px-6 py-4 border-b border-orange-800">
               <h2 className="text-lg font-bold text-white flex items-center">
@@ -5158,9 +5421,9 @@ KURALLAR:
                     <textarea
                       value={quickAddText}
                       onChange={(e) => setQuickAddText(e.target.value)}
-                      placeholder="Örnek:&#10;NYY Kablo 3x2.5, 100, 45.50&#10;Priz Topraklı, 20, 12.00&#10;Anahtar Tek Tuş, 15, 8.50"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm"
-                      rows={4}
+                      placeholder="🔥 ÜÇ FARKLI FORMAT:&#10;&#10;1️⃣ BASIT: Ürün Adı | Miktar | Fiyat&#10;   NYY Kablo 3x2.5 | 100 | 45.50&#10;   Priz Topraklı | 20 | 12&#10;&#10;2️⃣ DETAYLI: Ürün | Miktar | Fiyat | Birim | Marka&#10;   NYM Kablo | 50 | 38.75 | metre | Nexans&#10;&#10;3️⃣ EXCEL KOPYALA-YAPIŞTIR: Doğrudan Excel'den kopyalayın (TAB ile ayrılmış)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm font-mono"
+                      rows={6}
                     />
                     <div className="flex gap-2 mt-2">
                       <button
@@ -5981,24 +6244,55 @@ KURALLAR:
                       </button>
                       <button 
                         type="button"
+                        onClick={() => {
+                          const percentage = prompt('Yüzde değeri girin (+artış, -indirim):', '10');
+                          if (percentage !== null && percentage !== '') {
+                            applyBulkPriceAdjustment(parseFloat(percentage));
+                          }
+                        }}
+                        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1"
+                        title="Özel yüzde ile toplu fiyat ayarlama"
+                      >
+                        <Percent className="w-3 h-3"/>
+                        Toplu %
+                      </button>
+                      <button 
+                        type="button"
                         onClick={() => applyBulkPriceAdjustment(10)}
                         className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                        title="Tüm fiyatlara %10 zam"
                       >
-                        +10% Toplu Artış
+                        +10%
                       </button>
                       <button 
                         type="button"
                         onClick={() => applyBulkPriceAdjustment(20)}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                        title="Tüm fiyatlara %20 zam"
                       >
-                        +20% Toplu Artış
+                        +20%
                       </button>
                       <button 
                         type="button"
                         onClick={() => applyBulkPriceAdjustment(-10)}
                         className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                        title="Tüm fiyatlara %10 indirim"
                       >
-                        -10% Toplu İndirim
+                        -10%
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`${kesifProducts.length} ürünün tamamını silmek istediğinizden emin misiniz?`)) {
+                            setKesifProducts([]);
+                            alert('✅ Tüm ürünler silindi!');
+                          }
+                        }}
+                        className="bg-gray-700 hover:bg-gray-800 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1"
+                        title="Tüm listeyi temizle"
+                      >
+                        <Trash2 className="w-3 h-3"/>
+                        Tümünü Sil
                       </button>
                     </div>
                   </div>
@@ -6078,15 +6372,35 @@ KURALLAR:
                               />
                               <span className="text-xs text-gray-500 ml-1">{product.olcu}</span>
                             </td>
-                            <td className="px-4 py-3 text-right font-semibold text-gray-800">{product.toplam.toFixed(2)} TL</td>
+                            <td className="px-4 py-3 text-right font-semibold text-gray-800">
+                              {product.toplam.toFixed(2)} TL
+                              {product.karMarji > 0 && (
+                                <div className="text-xs text-green-600 font-normal">
+                                  +%{product.karMarji} kar
+                                </div>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-center">
-                              <button 
-                                type="button"
-                                onClick={() => removeProductFromKesif(product.id)}
-                                className="text-red-600 hover:text-red-800 transition"
-                              >
-                                <Trash2 className="w-4 h-4"/>
-                              </button>
+                              <div className="flex items-center justify-center gap-1">
+                                {/* Çoğalt */}
+                                <button 
+                                  type="button"
+                                  onClick={() => duplicateProduct(product.id)}
+                                  className="text-blue-600 hover:text-blue-800 transition p-1 hover:bg-blue-50 rounded"
+                                  title="Çoğalt"
+                                >
+                                  <Copy className="w-4 h-4"/>
+                                </button>
+                                {/* Sil */}
+                                <button 
+                                  type="button"
+                                  onClick={() => removeProductFromKesif(product.id)}
+                                  className="text-red-600 hover:text-red-800 transition p-1 hover:bg-red-50 rounded"
+                                  title="Sil"
+                                >
+                                  <Trash2 className="w-4 h-4"/>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -6183,6 +6497,7 @@ KURALLAR:
             </form>
           </div>
         )}
+        {/* OLD KESIF BACKUP END */}
 
         {/* Kablo Keşif Metraj Tab */}
         {/* Proposal View */}
