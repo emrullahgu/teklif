@@ -1184,109 +1184,12 @@ const KesifMetraj = () => {
       return;
     }
     
-    const pages = document.querySelectorAll('.kesif-pdf-page');
-    if (!pages || pages.length === 0) {
-      alert('İçerik bulunamadı.');
-      return;
-    }
+    // Önizleme açmadan önce PDF içeriğini hazırla
+    setIsPdfPreviewOpen(true);
+    setIsTeklifModalOpen(false);
     
-    const fileName = `Teklif_${teklifForm.teklifNo}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
-    const targetWidthPx = 793;
-    const SCALE_FACTOR = 2;
-
-    // Loading indicator
-    const loadingDiv = document.createElement('div');
-    loadingDiv.innerHTML = `
-      <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-center; flex-direction: column;">
-        <div style="background: white; padding: 30px; border-radius: 10px; text-align: center;">
-          <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-          <p style="margin-top: 20px; font-size: 16px; font-weight: bold;">PDF oluşturuluyor...</p>
-          <p style="margin-top: 10px; font-size: 14px; color: #666;">Lütfen bekleyin</p>
-        </div>
-      </div>
-      <style>
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      </style>
-    `;
-    document.body.appendChild(loadingDiv);
-
-    try {
-      const pdf = new jsPDF({
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait',
-        compress: true
-      });
-
-      // Her sayfayı ayrı ayrı işle
-      for (let i = 0; i < pages.length; i++) {
-        const page = pages[i];
-        
-        // Geçici stil ayarları
-        const originalWidth = page.style.width;
-        const originalMargin = page.style.margin;
-        const originalBoxShadow = page.style.boxShadow;
-        
-        page.style.width = '210mm';
-        page.style.margin = '0 auto';
-        page.style.boxShadow = 'none';
-        page.classList.add('pdf-exporting');
-
-        // html2canvas ile yakalama - LOGO DAHİL TÜM İÇERİK
-        const canvas = await html2canvas(page, {
-          scale: SCALE_FACTOR,
-          width: targetWidthPx,
-          windowWidth: targetWidthPx,
-          useCORS: true,
-          allowTaint: false,
-          letterRendering: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          scrollX: 0,
-          scrollY: 0
-        });
-
-        const imgData = canvas.toDataURL('image/png', 1.0);
-        const imgWidth = 210;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-        // İlk sayfa değilse yeni sayfa ekle
-        if (i > 0) {
-          pdf.addPage();
-        }
-
-        // Sayfayı PDF'e ekle (logo ve tüm içerik dahil)
-        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
-
-        // Stil ayarlarını geri al
-        page.style.width = originalWidth;
-        page.style.margin = originalMargin;
-        page.style.boxShadow = originalBoxShadow;
-        page.classList.remove('pdf-exporting');
-      }
-
-      // Preview için blob URL oluştur
-      const pdfBlob = pdf.output('bloburl');
-      setPdfPreviewUrl(pdfBlob);
-      setIsPdfPreviewOpen(true);
-      setIsTeklifModalOpen(false);
-      
-      // Remove loading indicator
-      document.body.removeChild(loadingDiv);
-      
-    } catch (error) {
-      console.error('PDF oluşturma hatası:', error);
-      
-      // Remove loading indicator
-      if (document.body.contains(loadingDiv)) {
-        document.body.removeChild(loadingDiv);
-      }
-      
-      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.\n\nHata detayı: ' + error.message);
-    }
+    // DOM'un render olması için bekle
+    await new Promise(resolve => setTimeout(resolve, 100));
   };
   
   const handleLogoUpload = (e) => {
