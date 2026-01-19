@@ -1,7 +1,9 @@
 ﻿import React, { useState, useMemo, useRef } from 'react';
-import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote, Menu } from 'lucide-react';
+import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote, Menu, ExternalLink } from 'lucide-react';
 import { BordroWithPassword } from './bordro-main.jsx';
 import KesifMetraj from './KesifMetraj.jsx';
+import GorevTakip from './GorevTakip.jsx';
+import Osos from './Osos.jsx';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import jsPDF from 'jspdf';
@@ -3345,8 +3347,12 @@ KURALLAR:
               </li>
               <li>
                 <button 
-                  onClick={() => { window.open('/osos.html', '_blank'); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-all"
+                  onClick={() => { setActiveTab('osos'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'osos' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
                 >
                   <FileText className="w-5 h-5" />
                   <span>OSOS</span>
@@ -4528,15 +4534,17 @@ KURALLAR:
           </div>
         )}
 
+        {/* OSOS Tab */}
+        {activeTab === 'osos' && (
+          <div className="h-full">
+            <Osos />
+          </div>
+        )}
+
         {/* Görev Takip Tab */}
         {activeTab === 'gorev' && (
-          <div className="h-screen w-full bg-white rounded-lg shadow-lg overflow-hidden">
-            <iframe 
-              src="https://kobinerjiwt.netlify.app/dashboard"
-              className="w-full h-full border-0"
-              title="Görev Takip Sistemi"
-              allow="fullscreen"
-            />
+          <div className="h-full">
+            <GorevTakip />
           </div>
         )}
 

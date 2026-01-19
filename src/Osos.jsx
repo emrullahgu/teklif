@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Printer, FileText, Save, RotateCcw, Edit3, Download, Zap, AlertTriangle, CheckCircle, Upload, X } from 'lucide-react';
+import { Printer, FileText, Save, RotateCcw, Edit3, Download, Zap, AlertTriangle, CheckCircle, Upload, X, Activity } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
+import OsosCanliIzleme from './OsosCanliIzleme.jsx';
 
 export default function Osos() {
+  const [ososTab, setOsosTab] = useState('rapor'); // 'rapor' veya 'canli'
   const [printMode, setPrintMode] = useState(false);
   const [editMode, setEditMode] = useState(true);
   const [logo, setLogo] = useState("https://www.kobinerji.com/wp-content/uploads/2022/03/logo.png");
@@ -81,11 +83,20 @@ export default function Osos() {
     sonuc: "Uygun"
   });
 
-  // Ölçüm verileri - 3 Tip: Aktif, İndüktif, Kapasitif
+  // OSOS Otomatik Veri Analizi
   const [measurements, setMeasurements] = useState([
-    { id: 1, olcumNoktasi: "Ana Pano", parametre: "Topraklama Direnci", deger: "", birim: "Ohm", limit: "< 10", sonuc: "Uygun" },
-    { id: 2, olcumNoktasi: "Tali Pano 1", parametre: "İzolasyon Direnci", deger: "", birim: "MOhm", limit: "> 1", sonuc: "Uygun" },
-    { id: 3, olcumNoktasi: "Kompresör", parametre: "Kaçak Akım", deger: "", birim: "mA", limit: "< 30", sonuc: "Uygun" }
+    { id: 1, parametre: "Aktif Güç", deger: "", birim: "kW", referans: "Anlık tüketim", durum: "Normal" },
+    { id: 2, parametre: "Reaktif Güç", deger: "", birim: "kVAr", referans: "İndüktif yük", durum: "Normal" },
+    { id: 3, parametre: "Görünür Güç", deger: "", birim: "kVA", referans: "Toplam güç", durum: "Normal" },
+    { id: 4, parametre: "Gerilim (L1-N)", deger: "", birim: "V", referans: "220±10V", durum: "Normal" },
+    { id: 5, parametre: "Gerilim (L2-N)", deger: "", birim: "V", referans: "220±10V", durum: "Normal" },
+    { id: 6, parametre: "Gerilim (L3-N)", deger: "", birim: "V", referans: "220±10V", durum: "Normal" },
+    { id: 7, parametre: "Akım (L1)", deger: "", birim: "A", referans: "Maks akım", durum: "Normal" },
+    { id: 8, parametre: "Akım (L2)", deger: "", birim: "A", referans: "Maks akım", durum: "Normal" },
+    { id: 9, parametre: "Akım (L3)", deger: "", birim: "A", referans: "Maks akım", durum: "Normal" },
+    { id: 10, parametre: "Güç Faktörü (cos φ)", deger: "", birim: "--", referans: ">0.85", durum: "Normal" },
+    { id: 11, parametre: "Frekans", deger: "", birim: "Hz", referans: "50±0.5Hz", durum: "Normal" },
+    { id: 12, parametre: "Toplam Enerji (T0)", deger: "", birim: "kWh", referans: "Kümülatif", durum: "Normal" }
   ]);
   
   // Enerji Tipi Verileri
@@ -110,12 +121,11 @@ export default function Osos() {
     const newId = measurements.length > 0 ? Math.max(...measurements.map(m => m.id)) + 1 : 1;
     setMeasurements([...measurements, {
       id: newId,
-      olcumNoktasi: "",
       parametre: "",
       deger: "",
       birim: "",
-      limit: "",
-      sonuc: "Uygun"
+      referans: "",
+      durum: "Normal"
     }]);
   };
 
@@ -1691,17 +1701,53 @@ export default function Osos() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      {/* Header */}
-      <div className={`bg-white shadow-md rounded-lg p-4 mb-4 flex justify-between items-center no-print ${printMode ? 'hidden' : ''}`}>
-        <div className="flex items-center gap-4">
-          {logo && <img src={logo} alt="Logo" className="h-12 w-auto" />}
-          <div>
-            <h1 className="text-xl font-bold text-gray-800">OSOS Rapor Sistemi</h1>
-            <p className="text-xs text-gray-500">Organize Sanayi Ölçüm Sistemi</p>
-          </div>
+    <div className="min-h-screen bg-gray-100">
+      {/* Tab Sistemi */}
+      <div className={`bg-white shadow-md no-print ${printMode ? 'hidden' : ''}`}>
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setOsosTab('canli')}
+            className={`flex items-center gap-2 px-6 py-4 font-semibold transition-colors ${
+              ososTab === 'canli'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+            }`}
+          >
+            <Activity className="w-5 h-5" />
+            Canlı İzleme
+          </button>
+          <button
+            onClick={() => setOsosTab('rapor')}
+            className={`flex items-center gap-2 px-6 py-4 font-semibold transition-colors ${
+              ososTab === 'rapor'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            Rapor Oluştur
+          </button>
         </div>
-        <div className="flex gap-2">
+      </div>
+
+      {/* Canlı İzleme Tab */}
+      {ososTab === 'canli' && (
+        <OsosCanliIzleme />
+      )}
+
+      {/* Rapor Tab */}
+      {ososTab === 'rapor' && (
+        <div className="p-4">
+          {/* Header */}
+          <div className={`bg-white shadow-md rounded-lg p-4 mb-4 flex justify-between items-center no-print ${printMode ? 'hidden' : ''}`}>
+            <div className="flex items-center gap-4">
+              {logo && <img src={logo} alt="Logo" className="h-12 w-auto" />}
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">OSOS Rapor Sistemi</h1>
+                <p className="text-xs text-gray-500">Organize Sanayi Ölçüm Sistemi</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
           <button 
             onClick={raporuKaydet}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
@@ -2561,31 +2607,24 @@ export default function Osos() {
           <div className="p-6 bg-white shadow-md rounded-lg max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-gray-800 border-b pb-2 flex items-center gap-2">
-                <Zap size={18} /> Ölçüm Verileri
+                <Zap size={18} /> OSOS Otomatik Veri Analizi
               </h2>
               <button
                 onClick={addMeasurement}
                 className="flex items-center gap-2 px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
               >
-                <FileText size={14} /> Yeni Ölçüm
+                <FileText size={14} /> Yeni Parametre
               </button>
             </div>
             <div className="space-y-3">
               {measurements.map((m, idx) => (
-                <div key={m.id} className="p-3 bg-gray-50 rounded border grid grid-cols-7 gap-2 items-center">
-                  <input
-                    type="text"
-                    value={m.olcumNoktasi}
-                    onChange={(e) => handleMeasurementChange(m.id, 'olcumNoktasi', e.target.value)}
-                    className="p-2 border rounded text-sm"
-                    placeholder="Ölçüm noktası"
-                  />
+                <div key={m.id} className="p-3 bg-gray-50 rounded border grid grid-cols-6 gap-2 items-center">
                   <input
                     type="text"
                     value={m.parametre}
                     onChange={(e) => handleMeasurementChange(m.id, 'parametre', e.target.value)}
-                    className="p-2 border rounded text-sm"
-                    placeholder="Parametre"
+                    className="p-2 border rounded text-sm col-span-2"
+                    placeholder="Parametre (örn: Aktif Güç)"
                   />
                   <input
                     type="text"
@@ -2603,26 +2642,29 @@ export default function Osos() {
                   />
                   <input
                     type="text"
-                    value={m.limit}
-                    onChange={(e) => handleMeasurementChange(m.id, 'limit', e.target.value)}
+                    value={m.referans}
+                    onChange={(e) => handleMeasurementChange(m.id, 'referans', e.target.value)}
                     className="p-2 border rounded text-sm"
-                    placeholder="Limit"
+                    placeholder="Referans"
                   />
-                  <select
-                    value={m.sonuc}
-                    onChange={(e) => handleMeasurementChange(m.id, 'sonuc', e.target.value)}
-                    className="p-2 border rounded text-sm"
-                  >
-                    <option value="Uygun">✅ Uygun</option>
-                    <option value="Uygun Değil">❌ Uygun Değil</option>
-                  </select>
-                  <button
-                    onClick={() => removeMeasurement(m.id)}
-                    className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 text-sm"
-                    disabled={measurements.length === 1}
-                  >
-                    <X size={16} />
-                  </button>
+                  <div className="flex gap-1">
+                    <select
+                      value={m.durum}
+                      onChange={(e) => handleMeasurementChange(m.id, 'durum', e.target.value)}
+                      className="p-2 border rounded text-sm flex-1"
+                    >
+                      <option value="Normal">✅ Normal</option>
+                      <option value="Uyarı">⚠️ Uyarı</option>
+                      <option value="Kritik">❌ Kritik</option>
+                    </select>
+                    <button
+                      onClick={() => removeMeasurement(m.id)}
+                      className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 text-sm"
+                      disabled={measurements.length === 1}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -3019,36 +3061,41 @@ export default function Osos() {
           </div>
         </div>
 
-        {/* Ölçüm Verileri Tablosu */}
+        {/* OSOS Otomatik Veri Analizi Tablosu */}
         {measurements.length > 0 && (
           <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-3 text-gray-800 border-b border-gray-300 pb-1">Ölçüm Verileri</h2>
+            <h2 className="text-lg font-semibold mb-3 text-gray-800 border-b border-gray-300 pb-1">
+              📊 OSOS Otomatik Veri Analizi
+            </h2>
+            <p className="text-xs text-gray-600 mb-3 italic">
+              * Bu veriler OSOS (Otomatik Sayaç Okuma Sistemi) tarafından otomatik olarak kaydedilmiş ve analiz edilmiştir.
+            </p>
             <table className="w-full text-sm border-collapse border border-gray-300">
               <thead>
                 <tr className="bg-gray-100">
                   <th className="border border-gray-300 p-2 text-left">#</th>
-                  <th className="border border-gray-300 p-2 text-left">Ölçüm Noktası</th>
                   <th className="border border-gray-300 p-2 text-left">Parametre</th>
-                  <th className="border border-gray-300 p-2 text-center">Değer</th>
+                  <th className="border border-gray-300 p-2 text-center">Ölçülen Değer</th>
                   <th className="border border-gray-300 p-2 text-center">Birim</th>
-                  <th className="border border-gray-300 p-2 text-center">Limit</th>
-                  <th className="border border-gray-300 p-2 text-center">Sonuç</th>
+                  <th className="border border-gray-300 p-2 text-center">Referans</th>
+                  <th className="border border-gray-300 p-2 text-center">Durum</th>
                 </tr>
               </thead>
               <tbody>
                 {measurements.map((m, idx) => (
                   <tr key={m.id}>
                     <td className="border border-gray-300 p-2">{idx + 1}</td>
-                    <td className="border border-gray-300 p-2">{m.olcumNoktasi || '-'}</td>
-                    <td className="border border-gray-300 p-2">{m.parametre || '-'}</td>
-                    <td className="border border-gray-300 p-2 text-center font-semibold">{m.deger || '-'}</td>
-                    <td className="border border-gray-300 p-2 text-center">{m.birim || '-'}</td>
-                    <td className="border border-gray-300 p-2 text-center">{m.limit || '-'}</td>
+                    <td className="border border-gray-300 p-2 font-medium">{m.parametre || '-'}</td>
+                    <td className="border border-gray-300 p-2 text-center font-bold text-blue-700">{m.deger || '-'}</td>
+                    <td className="border border-gray-300 p-2 text-center text-gray-600">{m.birim || '-'}</td>
+                    <td className="border border-gray-300 p-2 text-center text-xs text-gray-500">{m.referans || '-'}</td>
                     <td className="border border-gray-300 p-2 text-center">
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                        m.sonuc === 'Uygun' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        m.durum === 'Normal' ? 'bg-green-100 text-green-700' : 
+                        m.durum === 'Uyarı' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-700'
                       }`}>
-                        {m.sonuc}
+                        {m.durum}
                       </span>
                     </td>
                   </tr>
@@ -3105,6 +3152,8 @@ export default function Osos() {
           <p className="mt-1">Organize Sanayi Ölçüm Sistemi (OSOS) - Elektronik Rapor Sistemi</p>
         </div>
       </div>
+      </div>
+      )}
     </div>
   );
 }
