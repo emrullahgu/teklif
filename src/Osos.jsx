@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import OsosCanliIzleme from './OsosCanliIzleme.jsx';
+import { supabase } from './supabaseClient';
 
 export default function Osos() {
   const [ososTab, setOsosTab] = useState('rapor'); // 'rapor' veya 'canli'
@@ -745,14 +746,14 @@ export default function Osos() {
   };
 
   // Excel/JSON Import - Geliştirilmiş
-  const handleExcelImport = (event) => {
+  const handleExcelImport = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
     setExcelFileName(file.name);
     const reader = new FileReader();
     
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const jsonData = JSON.parse(e.target.result);
         
@@ -762,14 +763,29 @@ export default function Osos() {
           return;
         }
         
-        // İlk satırdan veri yapısını kontrol et
+        // OSOS veri formatını kontrol et
         const firstRow = jsonData[0];
-        const hasOSOSFormat = firstRow.hasOwnProperty("Tarih") && 
+        
+        // Format 1: KOSBI/OSOS Portal JSON formatı
+        const hasKOSBIFormat = firstRow.hasOwnProperty("Tarih") && 
                               firstRow.hasOwnProperty("Tüketim ()") && 
                               firstRow.hasOwnProperty("Çarpan");
         
-        if (!hasOSOSFormat) {
-          alert('⚠️ OSOS veri formatı algılanamadı!\n\nBeklenen alanlar:\n- Tarih\n- Tüketim ()\n- Çarpan\n- Okunan Endeks Değeri');
+        // Format 2: Doğrudan OSOS ölçüm verisi formatı
+        const hasDirectOSOSFormat = firstRow.hasOwnProperty("aktif_guc") || 
+                                   firstRow.hasOwnProperty("gerilim_l1") ||
+                                   firstRow.hasOwnProperty("sayac_no");
+        
+        if (hasDirectOSOSFormat) {
+          // Doğrudan OSOS ölçüm formatı - Supabase'e kaydet
+          await saveDirectOSOSData(jsonData, file.name);
+          return;
+        }
+        
+        if (!hasKOSBIFormat) {
+          alert('⚠️ OSOS veri formatı algılanamadı!\n\nBeklenen formatlar:\n' +
+                '1) KOSBI/Portal: Tarih, Tüketim (), Çarpan\n' +
+                '2) OSOS Ölçüm: aktif_guc, gerilim_l1, sayac_no');
           return;
         }
         
@@ -786,6 +802,65 @@ export default function Osos() {
     };
     
     reader.readAsText(file);
+  };
+
+  // Doğrudan OSOS ölçüm verilerini Supabase'e kaydet
+  const saveDirectOSOSData = async (jsonData, fileName) => {
+    try {
+      const fabrikaAdi = prompt('Fabrika/Tesis Adı:', formData.firmaAdi || 'Yeni Tesis');
+      if (!fabrikaAdi) return;
+
+      let kaydedilenSayisi = 0;
+      const hatalar = [];
+
+      for (const row of jsonData) {
+        try {
+          const { error } = await supabase
+            .from('osos_olcumler')
+            .insert([{
+              fabrika_adi: fabrikaAdi,
+              sayac_no: row.sayac_no || null,
+              aktif_guc: parseFloat(row.aktif_guc || 0),
+              reaktif_guc: parseFloat(row.reaktif_guc || 0),
+              kapasitif_guc: parseFloat(row.kapasitif_guc || 0),
+              gorunen_guc: parseFloat(row.gorunen_guc || 0),
+              gerilim_l1: parseFloat(row.gerilim_l1 || row.gerilim || 0),
+              gerilim_l2: parseFloat(row.gerilim_l2 || 0),
+              gerilim_l3: parseFloat(row.gerilim_l3 || 0),
+              akim_l1: parseFloat(row.akim_l1 || row.akim || 0),
+              akim_l2: parseFloat(row.akim_l2 || 0),
+              akim_l3: parseFloat(row.akim_l3 || 0),
+              guc_faktoru: parseFloat(row.guc_faktoru || 0),
+              frekans: parseFloat(row.frekans || 50.0),
+              toplam_enerji: parseFloat(row.toplam_enerji || row.enerji || 0),
+              olcum_zamani: row.zaman || row.tarih || new Date().toISOString()
+            }]);
+
+          if (error) {
+            hatalar.push(error.message);
+          } else {
+            kaydedilenSayisi++;
+          }
+        } catch (err) {
+          hatalar.push(err.message);
+        }
+      }
+
+      if (kaydedilenSayisi > 0) {
+        alert(`✅ OSOS Verileri Kaydedildi!\n\n` +
+              `📊 Toplam: ${jsonData.length} kayıt\n` +
+              `✓ Başarılı: ${kaydedilenSayisi} kayıt\n` +
+              `✗ Hatalı: ${hatalar.length} kayıt\n\n` +
+              `🏭 Fabrika: ${fabrikaAdi}`);
+        
+        // Canlı İzleme sekmesine geç
+        if (ososTab) setOsosTab('canli');
+      } else {
+        alert(`❌ Veri kaydedilemedi!\n\n${hatalar.join('\n')}`);
+      }
+    } catch (error) {
+      alert(`❌ Hata: ${error.message}`);
+    }
   };
 
   // Enerji tipi otomatik tespit

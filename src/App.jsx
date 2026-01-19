@@ -171,9 +171,17 @@ const PERIODIC_PRICES = {
 
 const App = () => {
   // --- State Definitions ---
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro', 'gorev'
+  const [activeTab, setActiveTab] = useState(() => {
+    // Sayfa yenilendiğinde son aktif sekmeyi geri yükle
+    return localStorage.getItem('activeTab') || 'dashboard';
+  }); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro', 'gorev', 'osos'
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // ActiveTab değiştiğinde localStorage'a kaydet
+  React.useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
