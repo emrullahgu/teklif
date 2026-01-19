@@ -7,7 +7,7 @@ import FaturaData from '../fatura/Fatura.json';
 import FaturaData2 from '../fatura/Fatura2.json';
 import { supabase } from './supabaseClient';
 
-const KesifMetraj = () => {
+const KesifMetraj = ({ onCustomerUpdate, onNavigateToPreview }) => {
   // Fatura verilerini birleştir ve kategorize et
   const initialData = useMemo(() => {
     const products = [];
@@ -90,7 +90,7 @@ const KesifMetraj = () => {
     return Array.from(uniqueMap.values());
   }, []);
 
-  const [discount, setDiscount] = useState(52);
+  const [discount, setDiscount] = useState(45);
   const [profit, setProfit] = useState(15);
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState([]);
@@ -103,7 +103,7 @@ const KesifMetraj = () => {
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
   const [isSavedTeklifModalOpen, setIsSavedTeklifModalOpen] = useState(false);
-  const [isMusteriModalOpen, setIsMusteriModalOpen] = useState(true);
+  const [isMusteriModalOpen, setIsMusteriModalOpen] = useState(false);
   const [isProductEditModalOpen, setIsProductEditModalOpen] = useState(false);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -1179,8 +1179,12 @@ const KesifMetraj = () => {
 
   // HTML-based PDF (önizleme için - App.jsx GES PDF tarzı)
   const generateHTMLPDF = async () => {
-    if (!teklifForm.musteriAdi || cart.length === 0) {
-      alert('Lütfen müşteri bilgilerini doldurun ve ürün ekleyin.');
+    if (!teklifForm.musteriAdi || !teklifForm.firmaAdi || !teklifForm.yetkili || cart.length === 0) {
+      if (!teklifForm.musteriAdi || !teklifForm.firmaAdi || !teklifForm.yetkili) {
+        setIsMusteriModalOpen(true);
+      } else {
+        alert('Lütfen ürün ekleyin.');
+      }
       return;
     }
     
@@ -1246,61 +1250,72 @@ const KesifMetraj = () => {
         <div className="flex-1 flex flex-col space-y-3 md:space-y-4 overflow-hidden">
           
           {/* Arama ve Filtre */}
-          <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-gray-200 sticky top-16 md:top-24 z-10">
-            <div className="flex flex-col sm:flex-row gap-2 md:gap-4 mb-3 md:mb-4">
-               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-2.5 md:top-3 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-                <input
-                  type="text"
-                  placeholder="Malzeme ara..."
-                  className="w-full pl-9 md:pl-10 p-2 md:p-3 text-sm md:text-base rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-3">
+            {/* Arama Alanı - Üstte tam genişlik */}
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 md:w-6 md:h-6" />
+              <input
+                type="text"
+                placeholder="🔍 Malzeme ara... (örn: NYY 4x25, Otomat, LED)"
+                className="w-full pl-12 md:pl-14 pr-12 py-3 md:py-3.5 text-sm md:text-base rounded-lg border-2 border-gray-300 bg-gray-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all placeholder-gray-400"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            
+            {/* Butonlar - Grid düzende */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
               <button 
                 onClick={() => setIsNewProductModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 md:gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 md:px-4 py-2 rounded-lg text-sm md:text-base font-medium shadow-md transition-colors whitespace-nowrap"
-                title="Yeni Ürün Ekle"
+                className="flex items-center justify-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2.5 rounded-lg text-xs md:text-sm font-medium shadow-md transition-colors"
+                title="Listede Olmayan Özel Ürün Ekle - Kendi ürününüzü manuel olarak ekleyin"
               >
-                <Plus className="w-4 h-4 md:w-5 md:h-5" />
-                <span className="hidden md:inline">Yeni Ürün</span>
+                <Plus className="w-4 h-4" />
+                <span>Yeni Ürün</span>
               </button>
               <button 
                 onClick={() => setIsMusteriModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 md:gap-2 bg-orange-600 hover:bg-orange-700 text-white px-3 md:px-4 py-2 rounded-lg text-sm md:text-base font-medium shadow-md transition-colors whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white px-3 py-2.5 rounded-lg text-xs md:text-sm font-medium shadow-md transition-colors"
                 title="Müşteri Bilgilerini Düzenle"
               >
-                <User className="w-4 h-4 md:w-5 md:h-5" />
-                <span className="hidden sm:inline">Müşteri Bilgileri</span>
-                <span className="sm:hidden">Müşteri</span>
+                <User className="w-4 h-4" />
+                <span>Müşteri Bilgileri</span>
               </button>
               <button 
                 onClick={() => setIsScenarioModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 md:gap-2 bg-green-600 hover:bg-green-700 text-white px-3 md:px-4 py-2 rounded-lg text-sm md:text-base font-medium shadow-md transition-colors whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-3 py-2.5 rounded-lg text-xs md:text-sm font-medium shadow-md transition-colors"
+                title="Hazır Senaryolar - Trafo değişimi, pano revizyonu gibi hazır paketleri yükle"
               >
-                <FileText className="w-4 h-4 md:w-5 md:h-5" />
-                <span className="hidden sm:inline">Hazır Senaryolar</span>
-                <span className="sm:hidden">Senaryo</span>
+                <FileText className="w-4 h-4" />
+                <span>Hazır Senaryolar</span>
               </button>
               <button 
                 onClick={loadSavedTeklifler}
-                className="flex items-center justify-center gap-1.5 md:gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-sm md:text-base font-medium shadow-md transition-colors whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2.5 rounded-lg text-xs md:text-sm font-medium shadow-md transition-colors"
+                title="Kaydedilmiş Teklifler - Daha önce kaydetmiş olduğunuz teklifleri görüntüle ve yükle"
               >
-                <Save className="w-4 h-4 md:w-5 md:h-5" />
-                <span className="hidden sm:inline">Kaydedilmiş Teklifler</span>
-                <span className="sm:hidden">Teklifler</span>
+                <Save className="w-4 h-4" />
+                <span>Teklifler</span>
               </button>
               <button 
                 onClick={() => setIsAiModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 md:gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 md:px-4 py-2 rounded-lg text-sm md:text-base font-medium shadow-md transition-colors whitespace-nowrap"
+                className="col-span-2 sm:col-span-3 lg:col-span-1 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-2.5 rounded-lg text-xs md:text-sm font-bold shadow-lg transition-all"
+                title="Yapay Zeka ile Akıllı Keşif - Proje tanımınızı yazın, gerekli malzemeleri otomatik bulsun!"
               >
-                <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-yellow-300" />
-                <span className="hidden sm:inline">Akıllı Keşif</span>
-                <span className="sm:hidden">AI</span>
+                <Sparkles className="w-5 h-5 text-yellow-300 animate-pulse" />
+                <span>AI Akıllı Keşif</span>
               </button>
             </div>
 
+            {/* Kategori Filtreleri */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
               {categories.map(cat => (
                 <button
@@ -1471,6 +1486,11 @@ const KesifMetraj = () => {
                  <button 
                   onClick={() => {
                     if (cart.length > 0) {
+                      // Müşteri bilgilerini kontrol et
+                      if (!teklifForm.musteriAdi || !teklifForm.firmaAdi || !teklifForm.yetkili) {
+                        setIsMusteriModalOpen(true);
+                        return;
+                      }
                       setIsPdfPreviewOpen(true);
                     }
                   }}
@@ -1859,10 +1879,18 @@ const KesifMetraj = () => {
                       return;
                     }
                     setIsMusteriModalOpen(false);
+                    // Eğer callback sağlanmışsa, müşteri bilgilerini güncelle
+                    if (onCustomerUpdate && typeof onCustomerUpdate === 'function') {
+                      onCustomerUpdate(teklifForm);
+                    }
+                    // Keşif Metraj'ın kendi PDF önizlemesini aç
+                    if (cart.length > 0) {
+                      setTimeout(() => setIsPdfPreviewOpen(true), 300);
+                    }
                   }}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl"
                 >
-                  ✓ Kaydet ve Devam Et
+                  ✓ Kaydet ve Önizle
                 </button>
               </div>
             </div>

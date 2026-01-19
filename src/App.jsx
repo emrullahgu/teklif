@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useRef } from 'react';
-import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote } from 'lucide-react';
+import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote, Menu } from 'lucide-react';
 import { BordroWithPassword } from './bordro-main.jsx';
 import KesifMetraj from './KesifMetraj.jsx';
 import ReactQuill from 'react-quill';
@@ -169,8 +169,9 @@ const PERIODIC_PRICES = {
 
 const App = () => {
   // --- State Definitions ---
-  const [activeTab, setActiveTab] = useState('manual'); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro', 'gorev'
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro', 'gorev'
   const [selectedCompany, setSelectedCompany] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
@@ -2349,7 +2350,7 @@ KURALLAR:
 
       if (selectedCompany.regionCoeff !== 1) {
         calculationRows.push(createTableRow(
-          `Bölgesel Katsayı (x${selectedCompany.regionCoeff.toFixed(2)})`,
+          `Bölgesel Katsayı (x${(selectedCompany.regionCoeff || 1.0).toFixed(2)})`,
           formatCurrency(selectedCompany.nominalFee - (selectedCompany.nominalFee / selectedCompany.regionCoeff))
         ));
       }
@@ -2420,7 +2421,7 @@ KURALLAR:
               spacing: { after: 100 }
             }),
             new Paragraph({
-              text: `• Bölge/Katsayı: ${selectedCompany.region || 'Belirtilmemiş'} (x${selectedCompany.regionCoeff.toFixed(2)})`,
+              text: `• Bölge/Katsayı: ${selectedCompany.region || 'Belirtilmemiş'} (x${(selectedCompany.regionCoeff || 1.0).toFixed(2)})`,
               spacing: { after: 100 }
             }),
             new Paragraph({
@@ -3224,96 +3225,189 @@ KURALLAR:
         </div>
       )}
 
+      {/* Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div className={`fixed top-0 left-0 h-full w-72 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        <div className="flex flex-col h-full">
+          {/* Sidebar Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 flex justify-between items-center">
+            <h2 className="text-white font-bold text-lg">Menü</h2>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="text-white hover:bg-white/20 p-2 rounded-lg transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Sidebar Navigation */}
+          <nav className="flex-1 overflow-y-auto p-4">
+            <ul className="space-y-2">
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'dashboard' 
+                      ? 'bg-indigo-100 text-indigo-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-5 h-5" />
+                  <span>Dashboard & İstatistikler</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('gorev'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'gorev' 
+                      ? 'bg-indigo-100 text-indigo-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  <span>Görev Takip</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('manual'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'manual' 
+                      ? 'bg-blue-100 text-blue-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <UserPlus className="w-5 h-5" />
+                  <span>YG Trafo İşletme Sorumlusu Teklif</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('periodic'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'periodic' 
+                      ? 'bg-green-100 text-green-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  <span>Periyodik Kontrol</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('kesif'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'kesif' 
+                      ? 'bg-orange-100 text-orange-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Hammer className="w-5 h-5" />
+                  <span>Keşif Metraj (Malzeme + Kablo)</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('ges'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'ges' 
+                      ? 'bg-yellow-100 text-yellow-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Zap className="w-5 h-5" />
+                  <span>GES Teklifi</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('bordro'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'bordro' 
+                      ? 'bg-teal-100 text-teal-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Banknote className="w-5 h-5" />
+                  <span>Bordro</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { window.open('/osos.html', '_blank'); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-all"
+                >
+                  <FileText className="w-5 h-5" />
+                  <span>OSOS</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('saved'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'saved' 
+                      ? 'bg-purple-100 text-purple-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Save className="w-5 h-5" />
+                  <div className="flex items-center justify-between flex-1">
+                    <span>Kaydedilen Teklifler</span>
+                    {(allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length) > 0 && (
+                      <span className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded-full">
+                        {allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { if(selectedCompany) { setActiveTab('proposal'); setIsSidebarOpen(false); } }}
+                  disabled={!selectedCompany}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'proposal' 
+                      ? 'bg-blue-100 text-blue-700 shadow-sm font-semibold' 
+                      : selectedCompany ? 'text-gray-700 hover:bg-gray-100' : 'text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  <FileText className="w-5 h-5" />
+                  <div className="flex items-center justify-between flex-1">
+                    <span>Teklif Önizleme</span>
+                    {selectedCompany && (
+                      <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
+                        {selectedCompany.name.substring(0, 8)}...
+                      </span>
+                    )}
+                  </div>
+                </button>
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </div>
+
       {/* Main Content */}
       <div className="container mx-auto px-2 md:px-6 py-4 md:py-8">
         
-        {/* Tabs */}
-        <div className="flex space-x-1 md:space-x-2 bg-gray-200 p-0.5 md:p-1 rounded-xl w-full md:w-fit mb-4 md:mb-6 no-print overflow-x-auto scrollbar-hide">
-          <button 
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            <FileSpreadsheet className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
-            <span className="hidden sm:inline">Dashboard & İstatistikler</span>
-            <span className="sm:hidden">Dashboard</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('gorev')}
-            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'gorev' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
-            <span className="hidden sm:inline">Görev Takip</span>
-            <span className="sm:hidden">Görev</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('manual')}
-            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'manual' ? 'bg-white shadow text-blue-700' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            <UserPlus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
-            <span className="hidden lg:inline">Kobinerji Mühendislik</span>
-            <span className="lg:hidden">Kobinerji</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('periodic')}
-            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'periodic' ? 'bg-white shadow text-green-700' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            <RefreshCw className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
-            <span className="hidden sm:inline">Periyodik Kontrol</span>
-            <span className="sm:hidden">Kontrol</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('kesif')}
-            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'kesif' ? 'bg-white shadow text-orange-700' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            <Hammer className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
-            <span className="hidden lg:inline">Keşif Metraj (Malzeme + Kablo)</span>
-            <span className="lg:hidden">Keşif Metraj</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('ges')}
-            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'ges' ? 'bg-white shadow text-yellow-700' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            <Zap className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
-            <span className="hidden sm:inline">GES Teklifi</span>
-            <span className="sm:hidden">GES</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('bordro')}
-            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'bordro' ? 'bg-white shadow text-teal-700' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            <Banknote className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
-            Bordro
-          </button>
-          <button 
-            onClick={() => window.open('/osos.html', '_blank')}
-            className="px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap text-gray-600 hover:text-gray-900 hover:bg-white hover:shadow"
-          >
-            <FileText className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
-            OSOS
-          </button>
-          <button 
-            onClick={() => setActiveTab('saved')}
-            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'saved' ? 'bg-white shadow text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            <Save className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/>
-            <span className="hidden sm:inline">Kaydedilen Teklifler</span>
-            <span className="sm:hidden">Kayıtlı</span>
-            {(allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length) > 0 && (
-              <span className="ml-1 md:ml-2 text-[10px] md:text-xs bg-purple-600 text-white px-1 md:px-2 py-0.5 rounded-full">
-                {allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length}
-              </span>
-            )}
-          </button>
-          <button 
-            onClick={() => setActiveTab('proposal')}
-            disabled={!selectedCompany}
-            className={`px-2 md:px-6 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-medium transition flex items-center whitespace-nowrap ${activeTab === 'proposal' ? 'bg-white shadow text-blue-700' : 'text-gray-400 cursor-not-allowed'}`}
-          >
-            <span className="hidden sm:inline">Teklif Önizleme</span>
-            <span className="sm:hidden">Önizleme</span>
-            {selectedCompany && <span className="ml-1 md:ml-2 text-[10px] md:text-xs bg-blue-100 px-1 md:px-2 py-0.5 rounded-full text-blue-700">{selectedCompany.name.substring(0, 8)}...</span>}
-          </button>
-        </div>
+        {/* Menu Button */}
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed top-4 left-4 z-30 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg shadow-lg transition-all no-print"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
 
         {/* GES Teklifi Tab */}
         {activeTab === 'ges' && (
@@ -5240,7 +5334,37 @@ KURALLAR:
 
         {/* Keşif Metraj Fiyat Teklifi Tab */}
         {activeTab === 'kesif' && (
-          <KesifMetraj />
+          <KesifMetraj 
+            onCustomerUpdate={(customerData) => {
+              // Keşif müşteri bilgilerini güncelle
+              setKesifCustomer({
+                name: customerData.musteriAdi || '',
+                address: customerData.adres || '',
+                contactName: customerData.yetkili || '',
+                phone: customerData.telefon || '',
+                date: customerData.tarih || new Date().toLocaleDateString('tr-TR')
+              });
+              // Aynı zamanda selectedCompany'yi de güncelle ki önizleme aktif olsun
+              setSelectedCompany({
+                name: customerData.musteriAdi || 'Firma',
+                yetkili: customerData.yetkili || '',
+                telefon: customerData.telefon || '',
+                email: customerData.email || '',
+                address: customerData.adres || '',
+                projeAdi: customerData.projeAdi || '',
+                regionCoeff: 1.0,
+                totalKVA: 0,
+                region: '',
+                sector: '',
+                type: 'bina',
+                powerStr: ''
+              });
+            }}
+            onNavigateToPreview={() => {
+              // Teklif önizleme tabına geç
+              setActiveTab('proposal');
+            }}
+          />
         )}
 
         {/* OLD KESIF BACKUP - SILME */}
@@ -6980,9 +7104,9 @@ KURALLAR:
                     <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-3">
                       <ul className="list-disc list-inside text-[9.5pt] leading-tight">
                         <li>Trafo Güçleri Dağılımı: <strong>{selectedCompany.powerStr} kVA</strong></li>
-                        <li>Toplam Kurulu Güç: <strong>{selectedCompany.totalKVA} kVA ({(selectedCompany.totalKVA / 1000).toFixed(2)} MVA)</strong></li>
+                        <li>Toplam Kurulu Güç: <strong>{selectedCompany.totalKVA || 0} kVA ({((selectedCompany.totalKVA || 0) / 1000).toFixed(2)} MVA)</strong></li>
                         <li>Tesis Tipi: <strong>{selectedCompany.type === 'direk' ? 'Direk Tipi Trafo Merkezi' : 'Bina Tipi Trafo Merkezi'}</strong></li>
-                        <li>Bölge/Katsayı: <strong>{selectedCompany.region || 'Belirtilmemiş'} (x{selectedCompany.regionCoeff.toFixed(2)})</strong></li>
+                        <li>Bölge/Katsayı: <strong>{selectedCompany.region || 'Belirtilmemiş'} (x{(selectedCompany.regionCoeff || 1.0).toFixed(2)})</strong></li>
                         <li>Sektör: <strong>{selectedCompany.sector}</strong></li>
                       </ul>
                     </div>
