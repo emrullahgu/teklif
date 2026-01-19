@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, Zap, TrendingUp, Activity, DollarSign, AlertTriangle, Settings } from 'lucide-react';
+import { RefreshCw, Zap, TrendingUp, Activity, DollarSign, AlertTriangle, Settings, Download, Play, Square } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { supabase } from './supabaseClient';
 
@@ -8,6 +8,7 @@ const OsosCanliIzleme = () => {
   const [gecmisVeriler, setGecmisVeriler] = useState([]);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false); // Başlangıçta kapalı
+  const [liveCollecting, setLiveCollecting] = useState(false); // Canlı toplama durumu
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -54,6 +55,65 @@ const OsosCanliIzleme = () => {
       console.error('OSOS verisi yüklenemedi:', err);
       setError('OSOS bağlantısı kurulamadı. Lütfen veri kaynağını kontrol edin.');
       setLoading(false);
+    }
+  };
+
+  // OSOS Portal'dan canlı veri çek
+  const fetchLiveData = async () => {
+    try {
+      setLoading(true);
+      
+      const response = await fetch('/api/osos/update-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`✅ Canlı veri çekildi!\n\n` +
+              `✓ Güncellenen: ${result.updated}\n` +
+              `✗ Hatalı: ${result.errors}`);
+        
+        // Verileri yeniden yükle
+        await loadData();
+      } else {
+        throw new Error(result.error || 'Veri çekme başarısız');
+      }
+    } catch (err) {
+      console.error('Canlı veri çekme hatası:', err);
+      alert(`❌ Hata: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Otomatik veri toplama başlat/durdur
+  const toggleLiveCollection = async (start) => {
+    try {
+      const endpoint = start ? '/api/osos/auto-update/start' : '/api/osos/auto-update/stop';
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ intervalMinutes: 5 })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setLiveCollecting(start);
+        alert(result.message);
+      } else {
+        throw new Error(result.error || 'İşlem başarısız');
+      }
+    } catch (err) {
+      console.error('Otomatik toplama ayar hatası:', err);
+      alert(`❌ Hata: ${err.message}`);
     }
   };
 
@@ -127,12 +187,43 @@ const OsosCanliIzleme = () => {
         </div>
         <div className="flex items-center gap-4">
           <button
+            onClick={fetchLiveData}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            OSOS'tan Çek
+          </button>
+          
+          <button
+            onClick={() => toggleLiveCollection(!liveCollecting)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              liveCollecting 
+                ? 'bg-red-600 hover:bg-red-700 text-white' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            {liveCollecting ? (
+              <>
+                <Square className="w-4 h-4" />
+                Otomatik Toplamayı Durdur
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" />
+                Otomatik Toplama Başlat
+              </>
+            )}
+          </button>
+          
+          <button
             onClick={loadData}
             className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-medium transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Yenile
           </button>
+          
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -142,11 +233,8 @@ const OsosCanliIzleme = () => {
             }`}
           >
             <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} />
-            {autoRefresh ? 'Otomatik Yenileme Açık' : 'Otomatik Yenileme Kapalı'}
+            {autoRefresh ? 'Görüntü Yenileme Açık' : 'Görüntü Yenileme Kapalı'}
           </button>
-          <div className="text-sm text-gray-500">
-            Son güncelleme: {new Date(olcum.zaman).toLocaleTimeString('tr-TR')}
-          </div>
         </div>
       </div>
 

@@ -3,6 +3,10 @@ const cors = require('cors');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cookieParser = require('cookie-parser');
+require('dotenv').config();
+
+// OSOS Service import
+const ososService = require('./osos-service');
 
 const app = express();
 const PORT = 3001;
@@ -203,14 +207,30 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000); // Her 1 saatte bir
 
+// OSOS API Routes
+app.use('/api/osos', ososService.router);
+
 app.listen(PORT, () => {
   console.log(`🚀 KOSBI Proxy Server çalışıyor: http://localhost:${PORT}`);
   console.log(`📡 CORS enabled for: http://localhost:3000, http://localhost:5173, https://kobinerji.netlify.app`);
-  console.log(`🔐 Endpoints:`);
+  console.log(`🔐 KOSBI Endpoints:`);
   console.log(`   POST   /api/kosbi/login`);
   console.log(`   GET    /api/kosbi/meters/:sessionId`);
   console.log(`   DELETE /api/kosbi/logout/:sessionId`);
   console.log(`   GET    /health`);
+  console.log(`⚡ OSOS Endpoints:`);
+  console.log(`   GET    /api/osos/live/:fabrikaAdi/:sayacNo`);
+  console.log(`   POST   /api/osos/update-all`);
+  console.log(`   POST   /api/osos/manual-collect`);
+  console.log(`   GET    /api/osos/status`);
+  console.log(`   POST   /api/osos/auto-update/start`);
+  console.log(`   POST   /api/osos/auto-update/stop`);
+  
+  // Otomatik OSOS güncellemesini başlat (opsiyonel)
+  if (process.env.OSOS_AUTO_START === 'true') {
+    ososService.startAutoUpdate(5); // 5 dakika
+    console.log(`✅ OSOS otomatik güncelleme başlatıldı (5 dakika)`);
+  }
 });
 
 module.exports = app;
