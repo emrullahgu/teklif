@@ -285,14 +285,33 @@ const BeyazYakaBordro: React.FC = () => {
     }
   }, [currentUserId]);
 
-  // Kayıtlı kullanıcıları yükle
+  // Kayıtlı kullanıcıları yükle - Mevcut çalışanlardan benzersiz kullanıcıları al
   const loadAvailableUsers = async () => {
     try {
-      const { data, error } = await supabase.auth.admin.listUsers();
-      if (error) throw error;
-      setAvailableUsers(data.users || []);
+      // Mevcut sistemdeki tüm kullanıcıları beyaz_yaka_employees tablosundan çek
+      const { data: employeesData, error: empError } = await supabase
+        .from('beyaz_yaka_employees')
+        .select('user_id, name, email')
+        .not('user_id', 'is', null);
+      
+      if (empError) throw empError;
+      
+      // Benzersiz kullanıcıları listele
+      const uniqueUsers = employeesData
+        ?.filter((emp, index, self) => 
+          emp.user_id && self.findIndex(e => e.user_id === emp.user_id) === index
+        )
+        .map(emp => ({
+          id: emp.user_id,
+          email: emp.email || '',
+          user_metadata: { full_name: emp.name }
+        })) || [];
+      
+      setAvailableUsers(uniqueUsers);
     } catch (error) {
       console.error('Kullanıcılar yüklenirken hata:', error);
+      // Hata durumunda boş liste
+      setAvailableUsers([]);
     }
   };
 
