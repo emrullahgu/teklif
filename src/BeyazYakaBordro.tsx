@@ -338,21 +338,39 @@ const BeyazYakaBordro: React.FC = () => {
 
   const loadEmployees = async () => {
     try {
+      setLoading(true);
+      console.log('📋 Çalışanlar yükleniyor...');
+      
       const { data, error } = await supabase
         .from('beyaz_yaka_employees')
         .select('*')
         .eq('active', true)
         .order('name');
-      
-      if (error) throw error;
+
+      if (error) {
+        console.error('❌ Supabase hatası:', error);
+        
+        // Tablo yoksa kullanıcıya açık mesaj göster
+        if (error.code === '42P01') {
+          alert('⚠️ VERİTABANI HATASI\n\n"beyaz_yaka_employees" tablosu bulunamadı!\n\n👉 Çözüm:\n1. Supabase Dashboard\'a gidin\n2. SQL Editor\'ı açın\n3. beyaz-yaka-bordro-migration.sql dosyasındaki SQL\'leri çalıştırın');
+        } else if (error.code === 'PGRST116' || error.message?.includes('RLS')) {
+          alert('⚠️ ERİŞİM HATASI\n\nRow Level Security (RLS) politikaları hatalı!\n\n👉 Çözüm:\n1. Supabase Dashboard → Database → Policies\n2. beyaz_yaka_employees tablosu için politikaları kontrol edin\n3. Geçici olarak RLS\'i devre dışı bırakabilirsiniz:\n\nALTER TABLE beyaz_yaka_employees DISABLE ROW LEVEL SECURITY;');
+        } else {
+          alert('❌ Çalışan listesi yüklenemedi!\n\nHata: ' + error.message + '\n\nSupabase bağlantınızı kontrol edin.');
+        }
+        throw error;
+      }
+
+      console.log('✅ Çalışanlar yüklendi:', data?.length || 0, 'kişi');
       setEmployees(data || []);
       
       if (data && data.length > 0 && !selectedEmployeeId) {
         setSelectedEmployeeId(data[0].id);
       }
     } catch (error) {
-      console.error('Çalışanlar yüklenirken hata:', error);
-      showMessage('error', 'Çalışanlar yüklenemedi');
+      console.error('❌ Çalışan yükleme hatası:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -679,28 +697,34 @@ const BeyazYakaBordro: React.FC = () => {
     }
   };
 
-  const deleteEmployee = async (employeeId: string) => {
-    if (!confirm('Bu çalışanı silmek istediğinizden emin misiniz? Tüm bordro kayıtları da silinecektir!')) return;
-    
-    setLoading(true);
+  const deleteEmployee = async (empId: string, empName: string) => {
+    if (!confirm(`${empName} isimli çalışanı silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz ve tüm bordro kayıtları da silinecektir.`)) {
+      return;
+    }
+
     try {
+      setLoading(true);
+      
+      // Çalışanı pasif yap (soft delete)
       const { error } = await supabase
         .from('beyaz_yaka_employees')
-        .delete()
-        .eq('id', employeeId);
-      
+        .update({ active: false, updated_at: new Date().toISOString() })
+        .eq('id', empId);
+
       if (error) throw error;
       
-      showMessage('success', 'Çalışan silindi');
-      loadEmployees();
+      await loadEmployees();
       
-      // Eğer silinen çalışan seçiliyse, başka birine geç
-      if (selectedEmployeeId === employeeId) {
-        setSelectedEmployeeId('');
+      // Silinen çalışan seçiliyse, seçimi temizle
+      if (selectedEmployeeId === empId) {
+        setSelectedEmployeeId(employees.length > 1 ? employees[0].id : '');
       }
+      
+      alert(`✅ ${empName} başarıyla silindi.`);
+      
     } catch (error) {
-      console.error('Çalışan silinirken hata:', error);
-      showMessage('error', 'Çalışan silinemedi');
+      console.error('Çalışan silme hatası:', error);
+      alert('Çalışan silinirken bir hata oluştu!');
     } finally {
       setLoading(false);
     }
@@ -1077,51 +1101,47 @@ const BeyazYakaBordro: React.FC = () => {
                         <td className="px-4 py-3">{emp.department || '-'}</td>
                         <td className="px-4 py-3 text-right font-semibold">{maskSalary(emp)}</td>
                         <td className="px-4 py-3">{new Date(emp.start_date).toLocaleDateString('tr-TR')}</td>
-                        <td className="px-4 py-3 text-center">
-                          {canViewDetails(emp) && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setEditingEmployee(emp);
-                                  setEmployeeForm({
-                                    name: emp.name,
-                                    tc_no: emp.tc_no || '',
-                                    email: emp.email || '',
-                                    phone: emp.phone || '',
-                                    position: emp.position || '',
-                                    department: emp.department || '',
-                                    start_date: emp.start_date,
-                                    monthly_salary: emp.monthly_salary.toString(),
-                                    gross_salary: emp.gross_salary?.toString() || '',
-                                    sgk_base: emp.sgk_base?.toString() || '',
-                                    bank_name: emp.bank_name || '',
-                                    iban: emp.iban || ''
-                                  });
-                                  setShowEmployeeModal(true);
-                                }}
-                                className="text-blue-600 hover:text-blue-800 mr-3"
-                                title="Düzenle"
-                              >
-                                <Edit size={18} />
-                              </button>
-                              <button
-                                onClick={() => deleteEmployee(emp.id)}
-                                className="text-red-600 hover:text-red-800 mr-3"
-                                title="Sil"
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                            </>
-                          )}
-                          <button
+                        <td className="px-4 py-3 text-center flex justify-center space-x-2">
+                          <button 
+                            onClick={() => {
+                              setEditingEmployee(emp);
+                              setEmployeeForm({
+                                name: emp.name,
+                                tc_no: emp.tc_no || '',
+                                email: emp.email || '',
+                                phone: emp.phone || '',
+                                position: emp.position || '',
+                                department: emp.department || '',
+                                start_date: emp.start_date,
+                                monthly_salary: emp.monthly_salary.toString(),
+                                gross_salary: emp.gross_salary?.toString() || '',
+                                sgk_base: emp.sgk_base?.toString() || '',
+                                bank_name: emp.bank_name || '',
+                                iban: emp.iban || ''
+                              });
+                              setShowEmployeeModal(true);
+                            }}
+                            className="bg-yellow-100 text-yellow-700 p-2 rounded-full hover:bg-yellow-200 transition"
+                            title="Bilgileri Düzenle"
+                          >
+                            <Edit className="w-4 h-4"/>
+                          </button>
+                          <button 
+                            onClick={() => deleteEmployee(emp.id, emp.name)}
+                            className="bg-red-100 text-red-700 p-2 rounded-full hover:bg-red-200 transition"
+                            title="Çalışanı Sil"
+                          >
+                            <Trash2 className="w-4 h-4"/>
+                          </button>
+                          <button 
                             onClick={() => {
                               setSelectedEmployeeId(emp.id);
                               setActiveTab('detail');
                             }}
-                            className="text-green-600 hover:text-green-800"
+                            className="bg-blue-100 text-blue-700 p-2 rounded-full hover:bg-blue-200 transition"
                             title="Bordro Detayı"
                           >
-                            <FileSpreadsheet size={18} />
+                            <FileSpreadsheet className="w-4 h-4"/>
                           </button>
                         </td>
                       </tr>
