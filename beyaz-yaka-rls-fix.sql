@@ -182,3 +182,15 @@ CREATE POLICY "Users can delete white collar bonuses" ON beyaz_yaka_bonuses
 -- 1. user_id NULL olan kayıtlar (admin kayıtları) HERKES tarafından görülebilir
 -- 2. user_id dolu olan kayıtlar sadece o kullanıcı tarafından görülebilir
 -- 3. Tüm adminler birbirlerinin eklediği kayıtları görebilir
+
+-- TEMİZLİK: Geçersiz user_id değerlerini null yap (UUID formatında olmayanları)
+UPDATE beyaz_yaka_employees 
+SET user_id = NULL 
+WHERE user_id IS NOT NULL 
+  AND user_id::text !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+
+-- Geçersiz employee_id değerlerini null yap (UUID formatında olmayanları) - payroll tablosunda
+UPDATE beyaz_yaka_monthly_payroll 
+SET employee_id = NULL 
+WHERE employee_id IS NOT NULL 
+  AND employee_id::text !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';

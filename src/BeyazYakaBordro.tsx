@@ -181,6 +181,13 @@ const calculateTaxesAndDeductions = (grossSalary: number) => {
   };
 };
 
+// UUID doğrulama fonksiyonu
+const isValidUUID = (str: string | null | undefined): boolean => {
+  if (!str) return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
 // --- ANA COMPONENT ---
 const BeyazYakaBordro: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -275,8 +282,14 @@ const BeyazYakaBordro: React.FC = () => {
   // Kullanıcı bilgilerini yükle
   useEffect(() => {
     checkUserAuth();
-    loadAvailableUsers();
   }, []);
+
+  // Kullanıcı bilgileri yüklendikten sonra available users'ı yükle
+  useEffect(() => {
+    if (currentUserId !== null) {
+      loadAvailableUsers();
+    }
+  }, [currentUserId, isAdmin]);
 
   // Çalışanları yükle
   useEffect(() => {
@@ -288,30 +301,80 @@ const BeyazYakaBordro: React.FC = () => {
   // Kayıtlı kullanıcıları yükle - Mevcut çalışanlardan benzersiz kullanıcıları al
   const loadAvailableUsers = async () => {
     try {
-      // Mevcut sistemdeki tüm kullanıcıları beyaz_yaka_employees tablosundan çek
-      const { data: employeesData, error: empError } = await supabase
-        .from('beyaz_yaka_employees')
-        .select('user_id, name, email')
-        .not('user_id', 'is', null);
-      
-      if (empError) throw empError;
-      
-      // Benzersiz kullanıcıları listele
-      const uniqueUsers = employeesData
-        ?.filter((emp, index, self) => 
-          emp.user_id && self.findIndex(e => e.user_id === emp.user_id) === index
-        )
-        .map(emp => ({
-          id: emp.user_id,
-          email: emp.email || '',
-          user_metadata: { full_name: emp.name }
+      if (isAdmin) {
+        // Admin için: Sistemdeki tüm onaylı kullanıcıları users tablosundan çek
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
+          .select('id, name, email, company, role')
+          .eq('approved', true)
+          .order('name');
+        
+        if (usersError) throw usersError;
+        
+        // Kullanıcıları uygun formata dönüştür
+        const formattedUsers = usersData?.map(user => ({
+          id: user.id,
+          email: user.email || '',
+          user_metadata: { 
+            full_name: user.name,
+            company: user.company,
+            role: user.role
+          }
         })) || [];
-      
-      setAvailableUsers(uniqueUsers);
+        
+        setAvailableUsers(formattedUsers);
+      } else {
+        // Normal kullanıcı için: Sadece kendi bilgilerini göster
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setAvailableUsers([{
+            id: user.id,
+            email: user.email || '',
+            user_metadata: { full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || '' }
+          }]);
+        } else {
+          setAvailableUsers([]);
+        }
+      }
     } catch (error) {
       console.error('Kullanıcılar yüklenirken hata:', error);
-      // Hata durumunda boş liste
-      setAvailableUsers([]);
+      // Hata durumunda eski yöntemle dene (beyaz_yaka_employees'den)
+      try {
+        if (isAdmin) {
+          const { data: employeesData, error: empError } = await supabase
+            .from('beyaz_yaka_employees')
+            .select('user_id, name, email')
+            .not('user_id', 'is', null);
+          
+          if (empError) throw empError;
+          
+          const uniqueUsers = employeesData
+            ?.filter((emp, index, self) => 
+              emp.user_id && isValidUUID(emp.user_id) && self.findIndex(e => e.user_id === emp.user_id) === index
+            )
+            .map(emp => ({
+              id: emp.user_id,
+              email: emp.email || '',
+              user_metadata: { full_name: emp.name }
+            })) || [];
+          
+          setAvailableUsers(uniqueUsers);
+        } else {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            setAvailableUsers([{
+              id: user.id,
+              email: user.email || '',
+              user_metadata: { full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || '' }
+            }]);
+          } else {
+            setAvailableUsers([]);
+          }
+        }
+      } catch (fallbackError) {
+        console.error('Fallback kullanıcı yükleme de başarısız:', fallbackError);
+        setAvailableUsers([]);
+      }
     }
   };
 
@@ -465,8 +528,8 @@ const BeyazYakaBordro: React.FC = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Seçili kullanıcı varsa onu kullan, yoksa mevcut kullanıcıyı (admin) kullan
-      const assignedUserId = selectedUserId || (isAdmin ? null : user?.id);
+      // Seçili kullanıcı varsa ve geçerli UUID ise onu kullan, yoksa mevcut kullanıcıyı (admin) kullan
+      const assignedUserId = (selectedUserId && isValidUUID(selectedUserId)) ? selectedUserId : (isAdmin ? null : user?.id);
       
       const employeeData = {
         name: employeeForm.name,
@@ -1459,7 +1522,10 @@ const BeyazYakaBordro: React.FC = () => {
                     <option value="">-- Kullanıcı seçin veya manuel girin --</option>
                     {availableUsers.map(user => (
                       <option key={user.id} value={user.id}>
-                        {user.email} {user.user_metadata?.full_name ? `(${user.user_metadata.full_name})` : ''}
+                        {user.user_metadata?.full_name || user.email} 
+                        {user.user_metadata?.company ? `(${user.user_metadata.company})` : ''}
+                        {user.user_metadata?.role ? ` - ${user.user_metadata.role}` : ''}
+                        {user.email ? ` <${user.email}>` : ''}
                       </option>
                     ))}
                   </select>
