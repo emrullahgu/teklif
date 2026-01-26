@@ -679,6 +679,33 @@ const BeyazYakaBordro: React.FC = () => {
     }
   };
 
+  const deleteEmployee = async (employeeId: string) => {
+    if (!confirm('Bu çalışanı silmek istediğinizden emin misiniz? Tüm bordro kayıtları da silinecektir!')) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('beyaz_yaka_employees')
+        .delete()
+        .eq('id', employeeId);
+      
+      if (error) throw error;
+      
+      showMessage('success', 'Çalışan silindi');
+      loadEmployees();
+      
+      // Eğer silinen çalışan seçiliyse, başka birine geç
+      if (selectedEmployeeId === employeeId) {
+        setSelectedEmployeeId('');
+      }
+    } catch (error) {
+      console.error('Çalışan silinirken hata:', error);
+      showMessage('error', 'Çalışan silinemedi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const updatePayrollField = (field: keyof MonthlyPayroll, value: any) => {
     if (!payrollData) return;
     
@@ -1073,8 +1100,16 @@ const BeyazYakaBordro: React.FC = () => {
                                   setShowEmployeeModal(true);
                                 }}
                                 className="text-blue-600 hover:text-blue-800 mr-3"
+                                title="Düzenle"
                               >
                                 <Edit size={18} />
+                              </button>
+                              <button
+                                onClick={() => deleteEmployee(emp.id)}
+                                className="text-red-600 hover:text-red-800 mr-3"
+                                title="Sil"
+                              >
+                                <Trash2 size={18} />
                               </button>
                             </>
                           )}
@@ -1084,6 +1119,7 @@ const BeyazYakaBordro: React.FC = () => {
                               setActiveTab('detail');
                             }}
                             className="text-green-600 hover:text-green-800"
+                            title="Bordro Detayı"
                           >
                             <FileSpreadsheet size={18} />
                           </button>
