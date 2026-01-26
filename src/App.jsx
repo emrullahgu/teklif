@@ -1,6 +1,7 @@
 ﻿import React, { useState, useMemo, useRef } from 'react';
 import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote, Menu, ExternalLink } from 'lucide-react';
 import { BordroWithPassword } from './bordro-main.jsx';
+import BeyazYakaBordro from './BeyazYakaBordro.tsx';
 import KesifMetraj from './KesifMetraj.jsx';
 import GorevTakip from './GorevTakip.jsx';
 import Osos from './Osos.jsx';
@@ -3355,6 +3356,19 @@ KURALLAR:
               </li>
               <li>
                 <button 
+                  onClick={() => { setActiveTab('beyaz-yaka'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'beyaz-yaka' 
+                      ? 'bg-indigo-100 text-indigo-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Users className="w-5 h-5" />
+                  <span>Beyaz Yaka Bordro</span>
+                </button>
+              </li>
+              <li>
+                <button 
                   onClick={() => { setActiveTab('osos'); setIsSidebarOpen(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                     activeTab === 'osos' 
@@ -4539,6 +4553,13 @@ KURALLAR:
         {activeTab === 'bordro' && (
           <div className="max-w-full mx-auto">
             <BordroWithPassword />
+          </div>
+        )}
+
+        {/* Beyaz Yaka Bordro Tab */}
+        {activeTab === 'beyaz-yaka' && (
+          <div className="max-w-full mx-auto">
+            <BeyazYakaBordro />
           </div>
         )}
 

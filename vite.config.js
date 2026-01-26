@@ -6,7 +6,7 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
+    port: 5173,
     open: true
   },
   build: {
@@ -15,6 +15,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         admin: resolve(__dirname, 'admin.html'),
         bordro: resolve(__dirname, 'bordro.html'),
+        'beyaz-yaka': resolve(__dirname, 'beyaz-yaka.html'),
         kontrol: resolve(__dirname, 'kontrol.html'),
         osos: resolve(__dirname, 'osos.html')
       }
