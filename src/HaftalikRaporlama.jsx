@@ -203,6 +203,7 @@ export default function HaftalikRaporlama() {
 
   const exportToPDF = async (rapor) => {
     try {
+      // Logo yükle ve base64'e çevir
       const loadLogo = async () => {
         return new Promise((resolve, reject) => {
           const img = new Image();
@@ -225,8 +226,10 @@ export default function HaftalikRaporlama() {
       };
 
       const logoInfo = await loadLogo();
-      const maxLogoWidth = 60;
-      const maxLogoHeight = 24;
+      
+      // Logo boyutlarını hesapla (aspect ratio koruyarak)
+      const maxLogoWidth = 60; // mm
+      const maxLogoHeight = 24; // mm
       const logoAspectRatio = logoInfo.width / logoInfo.height;
       let logoWidth = maxLogoWidth;
       let logoHeight = logoWidth / logoAspectRatio;
@@ -239,26 +242,27 @@ export default function HaftalikRaporlama() {
       setSelectedRapor(rapor);
       setShowPdfPreview(true);
       
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // React component'in render olması için kısa bir bekleme
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       const element = pdfPreviewRef.current;
       if (!element) {
         alert('PDF önizleme yüklenemedi!');
         setShowPdfPreview(false);
+        setSelectedRapor(null);
         return;
       }
 
+      // Logoları gizle
       const logos = element.querySelectorAll('.pdf-logo');
       logos.forEach(logo => { logo.style.visibility = 'hidden'; });
 
+      // html2canvas ile component'i görüntüye çevir
       const canvas = await html2canvas(element, {
-        scale: 2.5,
+        scale: 2,
         useCORS: true,
-        allowTaint: true,
         logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: 794,
-        windowHeight: 1123
+        backgroundColor: '#ffffff'
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -269,9 +273,12 @@ export default function HaftalikRaporlama() {
       const imgWidth = pageWidth;
       const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
+      // İlk sayfa
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      // Logo ekle
       pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
 
+      // Eğer içerik bir sayfadan fazlaysa, sadece o zaman ek sayfa ekle
       if (imgHeight > pageHeight) {
         let heightLeft = imgHeight - pageHeight;
         let position = -pageHeight;
@@ -279,6 +286,7 @@ export default function HaftalikRaporlama() {
         while (heightLeft > 0) {
           pdf.addPage();
           pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          // Her sayfaya logo ekle
           pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
           position -= pageHeight;
           heightLeft -= pageHeight;
@@ -288,7 +296,9 @@ export default function HaftalikRaporlama() {
       const fileName = `haftalik_rapor_${rapor.fabrika_adi}_${rapor.hafta_baslangic}.pdf`;
       pdf.save(fileName);
       
+      // Logoları tekrar göster
       logos.forEach(logo => { logo.style.visibility = 'visible'; });
+      
       setShowPdfPreview(false);
       setSelectedRapor(null);
     } catch (error) {
