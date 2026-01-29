@@ -927,7 +927,7 @@ export default function HaftalikRaporlama() {
                               <img src="/fatura_logo.png" alt="Logo" style={{ width: '100%', height: 'auto', maxHeight: '20mm', objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none'; }} />
                             </div>
                             <div style={{ flex: 1, textAlign: 'right' }}>
-                              <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: 0 }}>Rapor No: HFT-{String(selectedRapor.id).padStart(6, '0')}</p>
+                              <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: 0 }}>Rapor No: HFT-{String(selectedRapor.id).substring(0, 6).toUpperCase()}</p>
                               <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: '2px 0 0 0' }}>{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                             </div>
                           </div>
@@ -1091,6 +1091,18 @@ export default function HaftalikRaporlama() {
                             </div>
                           </div>
                         )}
+
+                        <div style={{ marginBottom: '8mm' }}>
+                          <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: '0 0 5mm 0', borderBottom: '1px solid #2980b9', paddingBottom: '2mm' }}>SONRAKİ ADIMLAR VE TAKİP</h3>
+                          <div style={{ background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '8px', padding: '12px' }}>
+                            <div style={{ fontSize: '10px', color: '#2c3e50', lineHeight: '1.8' }}>
+                              <p style={{ margin: '0 0 8px 0' }}><strong>📅 Bir Sonraki Rapor:</strong> {new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('tr-TR')}</p>
+                              <p style={{ margin: '0 0 8px 0' }}><strong>🔧 Önerilen Bakım:</strong> {durum.text === 'UYGUN' ? 'Rutin kontrol yeterli' : durum.text === 'DİKKAT' ? 'Önümüzdeki 2 hafta içinde kontrol' : 'Acil müdahale gerekli'}</p>
+                              <p style={{ margin: '0 0 8px 0' }}><strong>📞 Destek İletişim:</strong> Teknik destek için +90 535 714 52 88 numaralı telefonu arayabilirsiniz.</p>
+                              <p style={{ margin: '0' }}><strong>📧 Rapor Gönderimi:</strong> Bu rapor otomatik olarak kayıt altına alınmıştır.</p>
+                            </div>
+                          </div>
+                        </div>
 
                         <div style={{ position: 'absolute', bottom: '8mm', left: '20mm', right: '20mm', paddingTop: '3mm', borderTop: '2px solid #2980b9' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '8px', color: '#555' }}>
