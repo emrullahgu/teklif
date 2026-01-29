@@ -261,43 +261,164 @@ export default function AkaryakitTakip() {
     XLSX.writeFile(wb, `akaryakıt_kayıtları_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  // PDF'e aktar - Basitleştirilmiş
+  // PDF'e aktar - Profesyonel
   const exportToPDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF('p', 'mm', 'a4');
     
-    doc.setFontSize(16);
-    doc.text('Akaryakıt Takip Raporu', 14, 15);
+    // Sayfa boyutları
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
     
-    doc.setFontSize(10);
-    doc.text(`Rapor Tarihi: ${new Date().toLocaleDateString('tr-TR')}`, 14, 22);
+    // Header - Şirket Bilgileri ve Logo Alanı
+    doc.setFillColor(37, 99, 235); // Blue-600
+    doc.rect(0, 0, pageWidth, 45, 'F');
     
+    // Başlık
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AKARYAKIT TAKIP RAPORU', pageWidth / 2, 20, { align: 'center' });
+    
+    // Alt başlık
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    const dateStr = new Date().toLocaleDateString('tr-TR', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    doc.text(`Rapor Tarihi: ${dateStr}`, pageWidth / 2, 28, { align: 'center' });
+    
+    // Dönem bilgisi
+    if (aylikGoruntule && secilenAy) {
+      const monthYear = new Date(secilenAy + '-01').toLocaleDateString('tr-TR', { 
+        year: 'numeric', 
+        month: 'long' 
+      });
+      doc.text(`Donem: ${monthYear}`, pageWidth / 2, 36, { align: 'center' });
+    }
+    
+    // İstatistik kutuları
+    doc.setTextColor(0, 0, 0);
+    let startY = 55;
+    
+    const stats = [
+      { label: 'Toplam Kayit', value: istatistikler.toplamKayit.toString(), icon: '📊' },
+      { label: 'Toplam Litre', value: istatistikler.toplamLitre.toFixed(2) + ' L', icon: '⛽' },
+      { label: 'Toplam Tutar', value: istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL', icon: '💰' },
+      { label: 'Ort. Birim Fiyat', value: istatistikler.ortalamaBirimFiyat.toFixed(2) + ' TL/L', icon: '📈' }
+    ];
+    
+    const boxWidth = 45;
+    const boxHeight = 18;
+    const gap = 5;
+    const totalWidth = (boxWidth * 4) + (gap * 3);
+    const startX = (pageWidth - totalWidth) / 2;
+    
+    stats.forEach((stat, index) => {
+      const x = startX + (index * (boxWidth + gap));
+      
+      // Kutu arka planı
+      doc.setFillColor(248, 250, 252); // Gray-50
+      doc.roundedRect(x, startY, boxWidth, boxHeight, 2, 2, 'F');
+      
+      // Çerçeve
+      doc.setDrawColor(226, 232, 240); // Gray-200
+      doc.setLineWidth(0.5);
+      doc.roundedRect(x, startY, boxWidth, boxHeight, 2, 2, 'S');
+      
+      // Label
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139); // Gray-500
+      doc.text(stat.label, x + boxWidth / 2, startY + 6, { align: 'center' });
+      
+      // Value
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'bold');
+      doc.text(stat.value, x + boxWidth / 2, startY + 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+    });
+    
+    // Tablo
     const tableData = filtreliKayitlar.map(kayit => [
       new Date(kayit.date).toLocaleDateString('tr-TR'),
       kayit.vehicles?.plate || '-',
       kayit.drivers?.full_name || '-',
-      kayit.liters.toFixed(2),
-      kayit.price_per_liter.toFixed(2),
-      kayit.total_amount.toFixed(2)
+      kayit.liters.toFixed(2) + ' L',
+      kayit.price_per_liter.toFixed(2) + ' TL',
+      kayit.total_amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL'
     ]);
 
     doc.autoTable({
-      startY: 30,
-      head: [['Tarih', 'Plaka', 'Sürücü', 'Litre', 'Birim', 'Tutar']],
+      startY: startY + boxHeight + 10,
+      head: [['Tarih', 'Plaka', 'Surucu', 'Litre', 'Birim Fiyat', 'Toplam Tutar']],
       body: tableData,
       foot: [[
-        'TOPLAM',
+        { content: 'TOPLAM', colSpan: 3, styles: { halign: 'center', fontStyle: 'bold' } },
+        istatistikler.toplamLitre.toFixed(2) + ' L',
         '',
-        '',
-        istatistikler.toplamLitre.toFixed(2),
-        '',
-        istatistikler.toplamTutar.toFixed(2) + ' ₺'
+        istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL'
       ]],
-      theme: 'grid',
-      headStyles: { fillColor: [59, 130, 246] },
-      footStyles: { fillColor: [229, 231, 235], textColor: [0, 0, 0], fontStyle: 'bold' }
+      theme: 'striped',
+      headStyles: { 
+        fillColor: [37, 99, 235],
+        textColor: [255, 255, 255],
+        fontSize: 10,
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      bodyStyles: {
+        fontSize: 9,
+        cellPadding: 4
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252]
+      },
+      footStyles: { 
+        fillColor: [226, 232, 240],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 25 },
+        1: { halign: 'center', cellWidth: 30 },
+        2: { halign: 'left', cellWidth: 40 },
+        3: { halign: 'right', cellWidth: 25 },
+        4: { halign: 'right', cellWidth: 30 },
+        5: { halign: 'right', cellWidth: 35 }
+      },
+      margin: { left: 10, right: 10 },
+      didDrawPage: function (data) {
+        // Footer
+        doc.setFontSize(8);
+        doc.setTextColor(128);
+        doc.text(
+          `Sayfa ${data.pageNumber} / ${doc.internal.getNumberOfPages()}`,
+          pageWidth / 2,
+          pageHeight - 10,
+          { align: 'center' }
+        );
+      }
     });
-
-    doc.save(`akaryakıt_raporu_${new Date().toISOString().split('T')[0]}.pdf`);
+    
+    // Dosya adını Türkçe karakterler olmadan oluştur
+    const fileName = `akaryakıt_raporu_${new Date().toISOString().split('T')[0]}.pdf`
+      .replace(/ğ/g, 'g')
+      .replace(/Ğ/g, 'G')
+      .replace(/ü/g, 'u')
+      .replace(/Ü/g, 'U')
+      .replace(/ş/g, 's')
+      .replace(/Ş/g, 'S')
+      .replace(/ı/g, 'i')
+      .replace(/İ/g, 'I')
+      .replace(/ö/g, 'o')
+      .replace(/Ö/g, 'O')
+      .replace(/ç/g, 'c')
+      .replace(/Ç/g, 'C');
+    
+    doc.save(fileName);
   };
 
   if (loading) {
