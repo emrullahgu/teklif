@@ -293,21 +293,22 @@ export default function HaftalikRaporlama() {
       
       const imgWidth = 210; // A4 genişlik mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageHeight = 297; // A4 yükseklik mm
 
-      // Görseli PDF'e ekle
+      // İlk sayfayı ekle
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
       
       // Logo'yu yüksek kalitede ekle (sol üst köşe, aspect ratio korunarak)
       pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
 
-      // Eğer içerik bir sayfadan fazlaysa ek sayfa ekle
-      if (imgHeight > 297) {
-        let position = -297;
+      // Eğer içerik bir sayfadan fazlaysa, otomatik olarak ikinci sayfa ekle
+      if (imgHeight > pageHeight) {
+        let position = -pageHeight;
         while (position > -imgHeight) {
           pdf.addPage();
           pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, '', 'FAST');
           pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST'); // Her sayfada logo
-          position -= 297;
+          position -= pageHeight;
         }
       }
 
@@ -914,9 +915,6 @@ export default function HaftalikRaporlama() {
                     <img src="/fatura_logo.png" alt="Logo" className="pdf-logo" style={{ height: '70px', maxWidth: '200px', objectFit: 'contain' }} />
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ backgroundColor: '#1e40af', color: 'white', padding: '10px 20px', borderRadius: '4px', marginBottom: '10px' }}>
-                      <h1 style={{ fontSize: '15px', fontWeight: 'bold', margin: '0', letterSpacing: '0.5px' }}>HAFTALIK ENERJİ VE KOMPANZASYON RAPORU</h1>
-                    </div>
                     <div style={{ backgroundColor: '#f3f4f6', padding: '10px 15px', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
                       <p style={{ fontSize: '10px', color: '#374151', margin: '3px 0', fontWeight: '600' }}>
                         Rapor No: HFT-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
@@ -932,9 +930,9 @@ export default function HaftalikRaporlama() {
                 </div>
 
                 {/* Fabrika Bilgisi - Prominent */}
-                <div style={{ backgroundColor: '#1e40af', color: 'white', padding: '18px 20px', borderRadius: '6px', marginBottom: '25px', border: '1px solid #1e3a8a' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0', letterSpacing: '0.3px' }}>{selectedRapor.fabrika_adi}</h2>
-                  <p style={{ fontSize: '11px', margin: '0', opacity: 0.9 }}>
+                <div style={{ backgroundColor: '#d1fae5', color: '#065f46', padding: '18px 20px', borderRadius: '6px', marginBottom: '25px', border: '1px solid #059669' }}>
+                  <h2 style={{ fontSize: '13.5px', fontWeight: 'bold', margin: '0 0 5px 0', letterSpacing: '0.3px' }}>{selectedRapor.fabrika_adi}</h2>
+                  <p style={{ fontSize: '8.25px', margin: '0', opacity: 0.9 }}>
                     Haftalık Performans Değerlendirme Raporu
                   </p>
                 </div>
