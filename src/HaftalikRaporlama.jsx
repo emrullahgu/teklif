@@ -206,9 +206,28 @@ export default function HaftalikRaporlama() {
     const SCALE_FACTOR = 2;
     
     try {
+      // Loading indicator ekle
+      const loadingDiv = document.createElement('div');
+      loadingDiv.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+          <div style="background: white; padding: 30px; border-radius: 10px; text-align: center;">
+            <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+            <p style="margin-top: 20px; font-size: 16px; font-weight: bold;">PDF oluşturuluyor...</p>
+            <p style="margin-top: 10px; font-size: 14px; color: #666;">Lütfen bekleyin</p>
+          </div>
+        </div>
+        <style>
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        </style>
+      `;
+      document.body.appendChild(loadingDiv);
+      
       // Logo yükle ve base64'e çevir (boyutlarıyla birlikte)
       const loadLogo = async () => {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => {
@@ -223,7 +242,13 @@ export default function HaftalikRaporlama() {
               height: img.height
             });
           };
-          img.onerror = reject;
+          img.onerror = () => {
+            resolve({
+              data: '',
+              width: 0,
+              height: 0
+            });
+          };
           img.src = '/fatura_logo.png';
         });
       };
@@ -233,13 +258,18 @@ export default function HaftalikRaporlama() {
       // Logo boyutlarını hesapla (aspect ratio koruyarak)
       const maxLogoWidth = 60; // mm
       const maxLogoHeight = 24; // mm
-      const logoAspectRatio = logoInfo.width / logoInfo.height;
-      let logoWidth = maxLogoWidth;
-      let logoHeight = logoWidth / logoAspectRatio;
+      let logoWidth = 0;
+      let logoHeight = 0;
       
-      if (logoHeight > maxLogoHeight) {
-        logoHeight = maxLogoHeight;
-        logoWidth = logoHeight * logoAspectRatio;
+      if (logoInfo.width > 0 && logoInfo.height > 0) {
+        const logoAspectRatio = logoInfo.width / logoInfo.height;
+        logoWidth = maxLogoWidth;
+        logoHeight = logoWidth / logoAspectRatio;
+        
+        if (logoHeight > maxLogoHeight) {
+          logoHeight = maxLogoHeight;
+          logoWidth = logoHeight * logoAspectRatio;
+        }
       }
 
       setSelectedRapor(rapor);
@@ -251,6 +281,7 @@ export default function HaftalikRaporlama() {
       const element = pdfPreviewRef.current;
       if (!element) {
         alert('PDF önizleme yüklenemedi!');
+        document.body.removeChild(loadingDiv);
         setShowPdfPreview(false);
         setSelectedRapor(null);
         return;
@@ -276,6 +307,7 @@ export default function HaftalikRaporlama() {
         width: targetWidthPx,
         windowWidth: targetWidthPx,
         useCORS: true,
+        allowTaint: false,
         letterRendering: true,
         logging: false,
         backgroundColor: '#ffffff',
@@ -284,6 +316,7 @@ export default function HaftalikRaporlama() {
       });
 
       const imgData = canvas.toDataURL('image/png', 1.0);
+      
       const pdf = new jsPDF({
         unit: 'mm',
         format: 'a4',
@@ -291,25 +324,15 @@ export default function HaftalikRaporlama() {
         compress: true
       });
       
-      const imgWidth = 210; // A4 genişlik mm
+      const imgWidth = 210;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const pageHeight = 297; // A4 yükseklik mm
 
-      // İlk sayfayı ekle
+      // Görüntüyü ekle
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
       
-      // Logo'yu yüksek kalitede ekle (sol üst köşe, aspect ratio korunarak)
-      pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
-
-      // Eğer içerik bir sayfadan fazlaysa, otomatik olarak ikinci sayfa ekle
-      if (imgHeight > pageHeight) {
-        let position = -pageHeight;
-        while (position > -imgHeight) {
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, '', 'FAST');
-          pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST'); // Her sayfada logo
-          position -= pageHeight;
-        }
+      // Logo ekle
+      if (logoInfo.data && logoWidth > 0 && logoHeight > 0) {
+        pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
       }
 
       const fileName = `haftalik_rapor_${rapor.fabrika_adi}_${rapor.hafta_baslangic}.pdf`;
@@ -324,10 +347,21 @@ export default function HaftalikRaporlama() {
       element.style.boxShadow = originalBoxShadow;
       element.classList.remove('pdf-exporting');
       
+      // Loading indicator'ı kaldır
+      document.body.removeChild(loadingDiv);
+      
       setShowPdfPreview(false);
       setSelectedRapor(null);
+      
     } catch (error) {
       console.error('PDF oluşturma hatası:', error);
+      
+      // Loading indicator'ı kaldır
+      const loadingDiv = document.querySelector('[style*="z-index: 10000"]');
+      if (loadingDiv && document.body.contains(loadingDiv)) {
+        document.body.removeChild(loadingDiv);
+      }
+      
       alert('PDF oluşturulurken bir hata oluştu: ' + error.message);
       setShowPdfPreview(false);
       setSelectedRapor(null);
