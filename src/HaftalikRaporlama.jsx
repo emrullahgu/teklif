@@ -910,19 +910,19 @@ export default function HaftalikRaporlama() {
             <div ref={pdfPreviewRef} style={{ width: '210mm', backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }}>
               <div style={{ padding: '10mm', paddingBottom: '12mm' }}>
                 {/* Header with Logo and Report Info */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #9ca3af', paddingBottom: '12px', marginBottom: '15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #9ca3af', paddingBottom: '12px', marginBottom: '15px' }}>
                   <div style={{ minWidth: '150px' }}>
                     <img src="/fatura_logo.png" alt="Logo" className="pdf-logo" style={{ height: '45px', maxWidth: '140px', objectFit: 'contain' }} />
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ backgroundColor: '#f3f4f6', padding: '10px 15px', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
-                      <p style={{ fontSize: '10px', color: '#374151', margin: '3px 0', fontWeight: '600' }}>
+                    <div style={{ backgroundColor: '#f3f4f6', padding: '6px 12px', borderRadius: '4px', border: '1px solid #e5e7eb', height: '45px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <p style={{ fontSize: '8px', color: '#374151', margin: '1px 0', fontWeight: '600' }}>
                         Rapor No: HFT-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
                       </p>
-                      <p style={{ fontSize: '10px', color: '#6b7280', margin: '3px 0' }}>
+                      <p style={{ fontSize: '8px', color: '#6b7280', margin: '1px 0' }}>
                         Tarih: {new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
                       </p>
-                      <p style={{ fontSize: '10px', color: '#6b7280', margin: '3px 0' }}>
+                      <p style={{ fontSize: '8px', color: '#6b7280', margin: '1px 0' }}>
                         Dönem: {new Date(selectedRapor.hafta_baslangic).toLocaleDateString('tr-TR')} - {new Date(selectedRapor.hafta_bitis).toLocaleDateString('tr-TR')}
                       </p>
                     </div>
