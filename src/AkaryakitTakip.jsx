@@ -760,10 +760,10 @@ export default function AkaryakitTakip() {
         {/* PDF Preview Modal - Ekranda görünmez, sadece PDF'e çevirmek için */}
         {showPdfPreview && (
           <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-            <div ref={pdfPreviewRef} style={{ width: '210mm', backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }}>
+            <div ref={pdfPreviewRef} style={{ width: '210mm', minHeight: '297mm', backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif', position: 'relative' }}>
               
               {/* Content Area */}
-              <div style={{ padding: '15mm' }}>
+              <div style={{ padding: '15mm', paddingBottom: '40mm' }}>
                 {/* Header - Logo solda, Bilgiler sağda */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: '20px', marginBottom: '30px' }}>
                   <div style={{ minWidth: '150px' }}>
@@ -859,18 +859,18 @@ export default function AkaryakitTakip() {
                     </tr>
                   </tfoot>
                 </table>
+              </div>
 
-                {/* Footer - Şirket Bilgileri */}
-                <div style={{ marginTop: '30px', paddingTop: '15px', borderTop: '2px solid #e5e7eb' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 8px 0' }}>KOBİNERJİ MÜHENDİSLİK</p>
-                    <p style={{ fontSize: '10px', color: '#6b7280', margin: '3px 0' }}>
-                      Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir
-                    </p>
-                    <p style={{ fontSize: '10px', color: '#6b7280', margin: '3px 0' }}>
-                      Tel: +90 535 714 52 88 | www.kobinerji.com
-                    </p>
-                  </div>
+              {/* Footer - Şirket Bilgileri (Sayfanın altına sabitlenmiş) */}
+              <div style={{ position: 'absolute', bottom: '10mm', left: '0', right: '0', padding: '0 15mm' }}>
+                <div style={{ paddingTop: '15px', borderTop: '2px solid #e5e7eb', textAlign: 'center' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 8px 0' }}>KOBİNERJİ MÜHENDİSLİK</p>
+                  <p style={{ fontSize: '10px', color: '#6b7280', margin: '3px 0' }}>
+                    Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir
+                  </p>
+                  <p style={{ fontSize: '10px', color: '#6b7280', margin: '3px 0' }}>
+                    Tel: +90 535 714 52 88 | www.kobinerji.com
+                  </p>
                 </div>
               </div>
             </div>
