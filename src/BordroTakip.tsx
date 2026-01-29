@@ -24,7 +24,9 @@ import {
   UploadCloud,
   FileDown,
   FileText,
-  CheckCircle
+  CheckCircle,
+  Shield,
+  History
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import ActivityLogger from './activityLogger';
@@ -47,6 +49,9 @@ interface DailyLog {
   endTime: string;
   overtimeHours: number;
   description: string;
+  lastModifiedBy?: string;  // 🛡️ KİM değiştirdi
+  lastModifiedAt?: string;  // 🛡️ NE ZAMAN değiştirdi
+  createdAt?: string;       // 🛡️ NE ZAMAN oluşturuldu
 }
 
 interface Expense {
@@ -222,7 +227,11 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
 export default function BordroTakip() {
   const [activeTab, setActiveTab] = useState<TabType>('summary');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 11, 1)); 
+  const [currentDate, setCurrentDate] = useState(() => {
+    // Her zaman güncel ayın 1'ine ayarla
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }); 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [logo, setLogo] = useState<string | null>(() => {
     // Logo'yu localStorage'dan yükle, yoksa default logo
@@ -239,6 +248,18 @@ export default function BordroTakip() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [pendingSaves, setPendingSaves] = useState<Set<string>>(new Set());
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 🛡️ EK KORUMA KATMANLARI
+  const [lastBackupTime, setLastBackupTime] = useState<Date | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const backupIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 🛡️ KENDİLİĞİNDEN SİLME KORUMALARI (YENİ!)
+  const [changeHistory, setChangeHistory] = useState<any[]>([]);
+  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random()}`);
+  const [lastDbCheck, setLastDbCheck] = useState<Date | null>(null);
+  const dbCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [dataSnapshot, setDataSnapshot] = useState<any>(null);
   
   // Avans Modal
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
@@ -260,6 +281,262 @@ export default function BordroTakip() {
   const currentYear = currentDate.getFullYear();
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const monthKey = `${currentYear}-${currentMonth}`;
+
+  // --- 🛡️ EK KORUMA FONKSİYONLARI ---
+
+  // KATMAN 8: LocalStorage Yedekleme (Çift Güvenlik)
+  const saveToLocalStorage = (data: any, key: string) => {
+    try {
+      const backupData = {
+        data,
+        timestamp: new Date().toISOString(),
+        employeeId: selectedEmployeeId,
+        month: currentMonth,
+        year: currentYear
+      };
+      localStorage.setItem(`bordro_backup_${key}`, JSON.stringify(backupData));
+      console.log('💾 LocalStorage yedekleme yapıldı:', key);
+    } catch (error) {
+      console.error('❌ LocalStorage yedekleme hatası:', error);
+    }
+  };
+
+  const loadFromLocalStorage = (key: string) => {
+    try {
+      const stored = localStorage.getItem(`bordro_backup_${key}`);
+      if (stored) {
+        const backupData = JSON.parse(stored);
+        console.log('📂 LocalStorage\'dan yüklendi:', key, 'Tarih:', backupData.timestamp);
+        return backupData.data;
+      }
+    } catch (error) {
+      console.error('❌ LocalStorage yükleme hatası:', error);
+    }
+    return null;
+  };
+
+  // KATMAN 9: Otomatik Periyodik Yedekleme (Her 30 saniyede)
+  const createAutoBackup = () => {
+    try {
+      const backupData = {
+        appData,
+        employees,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('bordro_auto_backup', JSON.stringify(backupData));
+      setLastBackupTime(new Date());
+      console.log('🔄 Otomatik yedekleme yapıldı:', new Date().toLocaleTimeString('tr-TR'));
+    } catch (error) {
+      console.error('❌ Otomatik yedekleme hatası:', error);
+    }
+  };
+
+  // KATMAN 10: Kurtarma Modu (Recovery)
+  const restoreFromBackup = () => {
+    try {
+      const stored = localStorage.getItem('bordro_auto_backup');
+      if (stored) {
+        const backupData = JSON.parse(stored);
+        const backupDate = new Date(backupData.timestamp);
+        
+        if (window.confirm(`🔄 YEDEKTEN GERİ YÜKLEME\n\nYedek Tarihi: ${backupDate.toLocaleString('tr-TR')}\n\n⚠️ Mevcut veriler yedeğin üzerine yazılacak.\nDevam etmek istiyor musunuz?`)) {
+          setAppData(backupData.appData || {});
+          setEmployees(backupData.employees || []);
+          alert('✅ Veriler yedeğten geri yüklendi!\n\n📊 Kontrol edin ve gerekirse veritabanına kaydedin.');
+          console.log('✅ Yedekten geri yükleme başarılı');
+        }
+      } else {
+        alert('❌ Yedek bulunamadı!\n\nHenüz otomatik yedekleme yapılmamış.');
+      }
+    } catch (error) {
+      console.error('❌ Geri yükleme hatası:', error);
+      alert('❌ Geri yükleme başarısız!\n\nHata: ' + (error as any)?.message);
+    }
+  };
+
+  // KATMAN 11: Silme İçin Güvenlik Kodu
+  const verifyDeleteCode = (itemType: string): boolean => {
+    const deleteCode = prompt(`🔐 GÜVENLİK KODU GEREKLİ\n\n${itemType} silmek için güvenlik kodunu girin:\n\n"SIL" yazıp ENTER'a basın\n\n(Büyük/küçük harf duyarlı)`);
+    
+    if (deleteCode === null) {
+      console.log('🛑 İşlem iptal edildi');
+      return false;
+    }
+    
+    if (deleteCode !== 'SIL') {
+      alert('❌ HATALI GÜVENLİK KODU!\n\nİşlem iptal edildi.\n\nDoğru kod: "SIL" (tırnak işaretleri olmadan)');
+      console.log('❌ Hatalı güvenlik kodu girildi');
+      return false;
+    }
+    
+    console.log('✅ Güvenlik kodu doğrulandı');
+    return true;
+  };
+
+  // 🛡️ KATMAN 13: Değişiklik Geçmişi Kaydet
+  const logChange = (action: string, details: any) => {
+    const changeLog = {
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId,
+      action: action,
+      details: details,
+      user: 'current_user', // Buraya kullanıcı bilgisi eklenebilir
+      employeeId: selectedEmployeeId,
+      month: currentMonth,
+      year: currentYear
+    };
+    
+    setChangeHistory(prev => [...prev.slice(-99), changeLog]); // Son 100 değişiklik
+    
+    // LocalStorage'a da yaz
+    try {
+      const allHistory = JSON.parse(localStorage.getItem('bordro_change_history') || '[]');
+      allHistory.push(changeLog);
+      localStorage.setItem('bordro_change_history', JSON.stringify(allHistory.slice(-500))); // Son 500
+      console.log('📝 Değişiklik kaydedildi:', action);
+    } catch (error) {
+      console.error('❌ Değişiklik geçmişi yazma hatası:', error);
+    }
+  };
+
+  // 🛡️ KATMAN 14: Veritabanı Değişiklik Kontrolü (Her 10 saniyede)
+  const checkDatabaseChanges = async () => {
+    if (!selectedEmployeeId) return;
+    
+    try {
+      console.log('🔍 Veritabanı kontrolü yapılıyor...');
+      
+      const { data, error } = await supabase
+        .from('bordro_daily_logs')
+        .select('*')
+        .eq('employee_id', selectedEmployeeId)
+        .eq('month', currentMonth)
+        .eq('year', currentYear);
+
+      if (error) throw error;
+
+      const currentLogs = appData[selectedEmployeeId]?.[monthKey]?.logs || {};
+      const currentLogCount = Object.keys(currentLogs).length;
+      const dbLogCount = data?.length || 0;
+
+      // 🚨 UYARI: Veritabanında kayıt azalmış!
+      if (dbLogCount < currentLogCount) {
+        console.error('🚨 DİKKAT: Veritabanında kayıt azaldı!', {
+          önceki: currentLogCount,
+          şimdi: dbLogCount,
+          fark: currentLogCount - dbLogCount
+        });
+        
+        const missingDays = Object.keys(currentLogs).filter(day => 
+          !data?.find(log => log.day === parseInt(day))
+        );
+        
+        alert(`🚨 UYARI: KENDİLİĞİNDEN SİLME TESPİT EDİLDİ!\n\n` +
+          `Veritabanında ${currentLogCount - dbLogCount} kayıt eksik!\n\n` +
+          `Eksik günler: ${missingDays.join(', ')}\n\n` +
+          `❌ Bu kayıtlar BAŞKA BİR OTURUMDAN veya OTOMATIK bir işlemle silinmiş olabilir!\n\n` +
+          `✅ Yerel kopyalarınız korundu.\n` +
+          `🔄 Geri yüklemek için "Kurtarma Modu" butonunu kullanın.`);
+        
+        logChange('EXTERNAL_DELETE_DETECTED', {
+          missingDays,
+          previousCount: currentLogCount,
+          currentCount: dbLogCount
+        });
+        
+        // Otomatik geri yükleme öner
+        if (confirm('🔄 Eksik kayıtları şimdi OTOMATIK olarak geri yüklemek ister misiniz?')) {
+          await restoreMissingLogs(missingDays);
+        }
+      }
+      
+      setLastDbCheck(new Date());
+      
+    } catch (error) {
+      console.error('❌ Veritabanı kontrol hatası:', error);
+    }
+  };
+
+  // 🛡️ KATMAN 15: Eksik Kayıtları Geri Yükle
+  const restoreMissingLogs = async (missingDays: string[]) => {
+    try {
+      const currentLogs = appData[selectedEmployeeId]?.[monthKey]?.logs || {};
+      let restoredCount = 0;
+      
+      for (const dayStr of missingDays) {
+        const day = parseInt(dayStr);
+        const log = currentLogs[day];
+        
+        if (log) {
+          const logData = {
+            employee_id: selectedEmployeeId,
+            day,
+            month: currentMonth,
+            year: currentYear,
+            type: log.type,
+            start_time: log.startTime,
+            end_time: log.endTime,
+            overtime_hours: log.overtimeHours,
+            description: log.description,
+            last_modified_by: sessionId,
+            last_modified_at: new Date().toISOString(),
+            restored_at: new Date().toISOString()
+          };
+          
+          const { error } = await supabase
+            .from('bordro_daily_logs')
+            .insert([logData]);
+          
+          if (!error) {
+            restoredCount++;
+            console.log('✅ Gün', day, 'geri yüklendi');
+          } else {
+            console.error('❌ Gün', day, 'geri yüklenemedi:', error);
+          }
+        }
+      }
+      
+      alert(`✅ ${restoredCount} kayıt başarıyla geri yüklendi!`);
+      logChange('RESTORED_LOGS', { restoredDays: missingDays, count: restoredCount });
+      
+    } catch (error) {
+      console.error('❌ Geri yükleme hatası:', error);
+      alert('❌ Geri yükleme başarısız!');
+    }
+  };
+
+  // 🛡️ KATMAN 16: Anlık Veri Snapshot (Anlık görüntü)
+  const createDataSnapshot = () => {
+    const snapshot = {
+      timestamp: new Date().toISOString(),
+      sessionId,
+      data: JSON.parse(JSON.stringify(appData)),
+      employees: JSON.parse(JSON.stringify(employees))
+    };
+    setDataSnapshot(snapshot);
+    localStorage.setItem('bordro_last_snapshot', JSON.stringify(snapshot));
+    console.log('📸 Veri snapshot oluşturuldu');
+  };
+
+  // 🛡️ KATMAN 17: Değişiklik Geçmişini Görüntüle
+  const showChangeHistory = () => {
+    const allHistory = JSON.parse(localStorage.getItem('bordro_change_history') || '[]');
+    const recent = allHistory.slice(-20).reverse();
+    
+    let message = '📋 SON 20 DEĞİŞİKLİK GEÇMİŞİ:\n\n';
+    
+    recent.forEach((change: any, index: number) => {
+      const date = new Date(change.timestamp);
+      message += `${index + 1}. ${date.toLocaleString('tr-TR')}\n`;
+      message += `   📌 ${change.action}\n`;
+      if (change.action === 'EXTERNAL_DELETE_DETECTED') {
+        message += `   ❌ Silinen günler: ${change.details.missingDays?.join(', ')}\n`;
+      }
+      message += '\n';
+    });
+    
+    alert(message || 'Henüz değişiklik kaydı yok.');
+  };
 
   // --- SUPABASE CRUD FONKSİYONLARI ---
 
@@ -367,13 +644,29 @@ export default function BordroTakip() {
 
       console.log('✅ Veri yüklendi:', Object.keys(logs).length, 'gün,', expenses.length, 'gider');
 
-      setAppData(prev => ({
-        ...prev,
-        [employeeId]: {
-          ...prev[employeeId],
-          [monthKey]: { month: currentMonth, year: currentYear, logs, expenses }
-        }
-      }));
+      // 🔒 GÜVENLİK: Mevcut state verilerini ASLA silme, sadece veritabanından gelenleri ekle
+      setAppData(prev => {
+        const existingLogs = prev[employeeId]?.[monthKey]?.logs || {};
+        const existingExpenses = prev[employeeId]?.[monthKey]?.expenses || [];
+        
+        // Veritabanından gelen verilerle mevcut verileri birleştir (veritabanı öncelikli)
+        const mergedLogs = { ...existingLogs, ...logs };
+        
+        console.log('🔒 Veri birleştirme:', Object.keys(existingLogs).length, 'mevcut +', Object.keys(logs).length, 'yeni =', Object.keys(mergedLogs).length, 'toplam');
+        
+        return {
+          ...prev,
+          [employeeId]: {
+            ...prev[employeeId],
+            [monthKey]: { 
+              month: currentMonth, 
+              year: currentYear, 
+              logs: mergedLogs, 
+              expenses: expenses.length > 0 ? expenses : existingExpenses // Veritabanında varsa kullan
+            }
+          }
+        };
+      });
 
     } catch (error) {
       console.error('❌ Aylık veri yükleme hatası:', error);
@@ -456,16 +749,38 @@ export default function BordroTakip() {
     }
   };
 
-  // Personel Sil
+  // 🔒 Personel Sil (Soft Delete - Veriler korunur)
   const deleteEmployee = async (empId: string, empName: string) => {
-    if (!confirm(`${empName} isimli personeli silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz ve tüm puantaj kayıtları da silinecektir.`)) {
+    // UYARI: Gerçekte silmiyoruz, sadece "active=false" yapıyoruz
+    const warningMessage = `⚠️ DİKKAT: ${empName} isimli personeli silmek üzeresiniz!\n\n` +
+      `🔒 GÜVENLİK BİLGİSİ:\n` +
+      `• Personel "pasif" yapılacak (gerçekten silinmeyecek)\n` +
+      `• Tüm puantaj kayıtları VERİTABANINDA KORUNACAK\n` +
+      `• Gerekirse tekrar aktif hale getirilebilir\n\n` +
+      `📋 Personel sadece listeden gizlenecektir.\n\n` +
+      `Devam etmek istiyor musunuz?`;
+    
+    if (!confirm(warningMessage)) {
+      console.log('🛑 Personel silme işlemi iptal edildi');
+      return;
+    }
+
+    // 🛡️ KATMAN 11: Güvenlik Kodu Kontrolü
+    if (!verifyDeleteCode(`${empName} personeli`)) {
+      return;
+    }
+
+    // İkinci onay
+    if (!confirm(`⚠️ SON ONAY\n\n${empName} personelini pasif yapmak istediğinize emin misiniz?\n\n(Puantaj kayıtları korunacak)`)) {
+      console.log('🛑 İkinci onayda iptal edildi');
       return;
     }
 
     try {
       setLoading(true);
+      console.log('🔄 Personel pasif yapılıyor (soft delete):', empId);
       
-      // Personeli pasif yap (soft delete)
+      // Personeli pasif yap (soft delete - veriler korunur)
       const { error } = await supabase
         .from('bordro_employees')
         .update({ active: false, updated_at: new Date().toISOString() })
@@ -481,11 +796,11 @@ export default function BordroTakip() {
         setSelectedEmployeeId(employees.length > 1 ? employees[0].id : '');
       }
       
-      alert(`✅ ${empName} başarıyla silindi.`);
+      alert(`✅ ${empName} listeden kaldırıldı.\n\n🔒 Not: Tüm puantaj kayıtları veritabanında güvenle saklanmaktadır.\n\n💡 Gerekirse personeli tekrar aktif yapabilirsiniz.`);
       
     } catch (error) {
-      console.error('Personel silme hatası:', error);
-      alert('Personel silinirken bir hata oluştu!');
+      console.error('❌ Personel silme hatası:', error);
+      alert('❌ İşlem başarısız!\n\nHata: ' + (error as any)?.message);
     } finally {
       setLoading(false);
     }
@@ -511,10 +826,32 @@ export default function BordroTakip() {
         start_time: log.startTime,
         end_time: log.endTime,
         overtime_hours: log.overtimeHours,
-        description: log.description
+        description: log.description,
+        last_modified_by: sessionId,        // 🛡️ Hangi oturum değiştirdi
+        last_modified_at: new Date().toISOString(), // 🛡️ Ne zaman değiştirdi
+        created_at: log.createdAt || new Date().toISOString() // 🛡️ İlk oluşturulma
       };
 
       console.log('📝 Puantaj kaydediliyor:', logData);
+      
+      // 🛡️ Değişikliği kaydet
+      logChange('SAVE_DAILY_LOG', { day, type: log.type, sessionId });
+
+      // 🔒 GÜVENLİK: Önce mevcut kaydı kontrol et
+      const { data: existingData } = await supabase
+        .from('bordro_daily_logs')
+        .select('*')
+        .eq('employee_id', selectedEmployeeId)
+        .eq('day', day)
+        .eq('month', currentMonth)
+        .eq('year', currentYear)
+        .single();
+
+      if (existingData) {
+        console.log('🔄 Mevcut kayıt güncelleniyor:', existingData.id);
+      } else {
+        console.log('➕ Yeni kayıt ekleniyor');
+      }
 
       const { data, error } = await supabase
         .from('bordro_daily_logs')
@@ -529,6 +866,10 @@ export default function BordroTakip() {
       }
       
       console.log('✅ Puantaj kaydedildi:', data);
+      
+      // 💾 KATMAN 8: LocalStorage'a da yedekle (Çift güvenlik)
+      saveToLocalStorage(log, `log_${selectedEmployeeId}_${day}_${monthKey}`);
+      setHasUnsavedChanges(false);
       
       // Kayıt başarılı, pending listesinden kaldır
       setPendingSaves(prev => {
@@ -575,9 +916,11 @@ export default function BordroTakip() {
     }
   };
 
-  // Gider Sil
+  // 🔒 Gider/Avans Sil (Çift onaylı güvenli silme)
   const deleteExpenseFromDB = async (id: string) => {
     try {
+      console.log('🗑️ Veritabanından siliniyor:', id);
+      
       const { error } = await supabase
         .from('bordro_expenses')
         .delete()
@@ -585,15 +928,26 @@ export default function BordroTakip() {
 
       if (error) throw error;
       
+      console.log('✅ Veritabanından silindi:', id);
+      
     } catch (error) {
-      console.error('Gider silme hatası:', error);
-      alert('Gider silinirken bir hata oluştu!');
+      console.error('❌ Gider silme hatası:', error);
+      alert('❌ Veritabanından silme başarısız!\n\nHata: ' + (error as any)?.message + '\n\n⚠️ Kayıt state\'den silindi ama veritabanında kalabilir. Sayfayı yenileyin.');
+      throw error; // Hatayı yukarı fırlat
     }
   };
 
-  // Puantaj Sil (Boş bırakılan günler için)
+  // 🚫 PUANTAJ SİLME TAMAMEN DEVRE DIŞI!
+  // Bu fonksiyon artık ASLA çağrılmayacak
   const deleteDailyLog = async (day: number) => {
+    console.error('🚫 SİLME İŞLEMİ ENGELLENDİ! Bu fonksiyon güvenlik nedeniyle devre dışı bırakılmıştır.');
+    alert('🚫 KAYIT SİLİNEMEZ!\n\n🔒 Güvenlik politikası gereği puantaj kayıtları silinemez.\n\n💡 Çözüm: Çalışmadığı günleri "İzinli" veya "Raporlu" olarak işaretleyin.');
+    return; // Hiçbir şey yapma
+    
+    /* SİLME KODU DEVRE DIŞI
     try {
+      console.log('🗑️ Puantaj siliniyor:', { employee: selectedEmployeeId, day, month: currentMonth, year: currentYear });
+      
       const { error } = await supabase
         .from('bordro_daily_logs')
         .delete()
@@ -603,11 +957,13 @@ export default function BordroTakip() {
         .eq('year', currentYear);
 
       if (error) throw error;
-      console.log('✅ Puantaj silindi:', day);
+      console.log('✅ Puantaj veritabanından silindi:', day);
       
     } catch (error) {
-      console.error('Puantaj silme hatası:', error);
+      console.error('❌ Puantaj silme hatası:', error);
+      alert('⚠️ Kayıt silinirken hata oluştu!\n\nHata: ' + (error as any)?.message);
     }
+    */
   };
 
   // --- AYLIK BORDRO KAYDET ---
@@ -711,44 +1067,121 @@ export default function BordroTakip() {
     loadEmployees();
   }, []);
 
+  // 🛡️ KATMAN 9: Otomatik Periyodik Yedekleme (Her 30 saniyede)
+  useEffect(() => {
+    // İlk yedekleme
+    createAutoBackup();
+    
+    // Periyodik yedekleme
+    backupIntervalRef.current = setInterval(() => {
+      createAutoBackup();
+    }, 30000); // 30 saniye
+
+    return () => {
+      if (backupIntervalRef.current) {
+        clearInterval(backupIntervalRef.current);
+      }
+    };
+  }, [appData, employees]);
+
+  // 🛡️ KATMAN 10: Sayfa Kapatma Uyarısı (Kaydedilmemiş değişiklik varsa)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingSaves.size > 0 || hasUnsavedChanges) {
+        const message = '⚠️ Kaydedilmemiş değişiklikleriniz var! Sayfayı kapatmak istediğinizden emin misiniz?';
+        e.preventDefault();
+        e.returnValue = message;
+        return message;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [pendingSaves, hasUnsavedChanges]);
+
+  // 🛡️ KATMAN 14: Veritabanı Değişiklik Kontrolü (Her 10 saniyede)
+  useEffect(() => {
+    // İlk kontrol
+    if (selectedEmployeeId) {
+      checkDatabaseChanges();
+    }
+    
+    // Periyodik kontrol
+    dbCheckIntervalRef.current = setInterval(() => {
+      if (selectedEmployeeId) {
+        checkDatabaseChanges();
+      }
+    }, 10000); // 10 saniye
+
+    return () => {
+      if (dbCheckIntervalRef.current) {
+        clearInterval(dbCheckIntervalRef.current);
+      }
+    };
+  }, [selectedEmployeeId, monthKey, appData]);
+
+  // 🛡️ KATMAN 16: Her değişiklikte snapshot oluştur
+  useEffect(() => {
+    if (Object.keys(appData).length > 0) {
+      createDataSnapshot();
+    }
+  }, [appData]);
+
   // Personel listesi yüklendiğinde, tüm personeller için aylık verileri yükle
   useEffect(() => {
     if (employees.length > 0) {
       console.log('👥 Tüm personeller için veri yükleniyor...');
-      employees.forEach(emp => {
-        loadMonthlyData(emp.id);
-      });
+      // Sırayla yükle (yarış koşulunu önle)
+      const loadAllData = async () => {
+        for (const emp of employees) {
+          await loadMonthlyData(emp.id);
+        }
+      };
+      loadAllData();
     }
   }, [employees.length, monthKey]);
 
   // Personel veya Ay Değiştiğinde Verileri Yükle
   useEffect(() => {
     if (selectedEmployeeId) {
-      loadMonthlyData(selectedEmployeeId);
+      // Veri yoksa veya yüklenmediyse yükle
+      const hasData = appData[selectedEmployeeId]?.[monthKey];
+      if (!hasData) {
+        console.log('📥 Seçili personel verisi yükleniyor:', selectedEmployeeId);
+        loadMonthlyData(selectedEmployeeId);
+      }
     }
   }, [selectedEmployeeId, monthKey]);
 
-  // Veri İlklendirme
+  // Veri İlklendirme - SADECE VERİTABANINDA VERİ YOKSA
   useEffect(() => {
     if (employees.length > 0 && !employees.find(e => e.id === selectedEmployeeId)) {
         setSelectedEmployeeId(employees[0].id);
     }
     
-    if (selectedEmployeeId && (!appData[selectedEmployeeId] || !appData[selectedEmployeeId][monthKey])) {
-      setAppData(prev => ({
-        ...prev,
-        [selectedEmployeeId]: {
-          ...prev[selectedEmployeeId],
-          [monthKey]: { month: currentMonth, year: currentYear, logs: {}, expenses: [] }
-        }
-      }));
+    // 🔒 GÜVENLİK: SADECE veritabanından yükleme tamamlandıktan SONRA
+    // ve logs TAMAMEN boşsa otomatik doldur
+    if (selectedEmployeeId && appData[selectedEmployeeId]?.[monthKey]) {
+      const currentLogs = appData[selectedEmployeeId][monthKey].logs;
+      const hasAnyLogs = Object.keys(currentLogs).length > 0;
       
-      // Otomatik olarak tüm günleri Normal/08:00-18:00 ile doldur
-      setTimeout(() => {
-        fillMonthDefaults();
-      }, 300);
+      // Eğer hiç kayıt yoksa, kullanıcıya sor ve otomatik doldur
+      if (!hasAnyLogs && !loading) {
+        console.log('📝 Hiç kayıt yok, otomatik doldurma önerilecek...');
+        setTimeout(() => {
+          const autoFill = window.confirm(`📋 ${selectedEmployee.name} için ${MONTHS[currentMonth]} ${currentYear} ayında hiç puantaj kaydı yok.\n\n🤖 Tüm günleri otomatik olarak doldurulsun mu?\n\n✅ Evet: Normal mesai ile doldurur\n❌ Hayır: Manuel giriş yaparsınız`);
+          if (autoFill) {
+            fillMonthDefaults();
+          }
+        }, 800);
+      } else if (hasAnyLogs) {
+        console.log('✅ Mevcut kayıtlar yüklendi ve korundu:', Object.keys(currentLogs).length, 'gün');
+      }
     }
-  }, [selectedEmployeeId, monthKey, employees]);
+  }, [selectedEmployeeId, monthKey, appData[selectedEmployeeId]?.[monthKey]?.logs, loading]);
 
   const currentData = appData[selectedEmployeeId]?.[monthKey] || { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId) || { id: '0', name: '', agreedSalary: 0, officialSalary: 0 };
@@ -761,6 +1194,9 @@ export default function BordroTakip() {
 
   const handleLogChange = (day: number, field: keyof DailyLog, value: any) => {
     console.log(`📝 Değişiklik: Gün ${day}, Alan: ${field}, Değer:`, value);
+    
+    // 🛡️ Kaydedilmemiş değişiklik bayrağını kaldır
+    setHasUnsavedChanges(true);
     
     setAppData(prev => {
       const newData = { ...prev };
@@ -807,21 +1243,18 @@ export default function BordroTakip() {
 
       console.log('📊 Güncellenmiş log:', currentLogs[day]);
       
-      // Eğer type boş/null yapıldıysa, günü tamamen sil
+      // 🚫 SİLME İŞLEMİ TAMAMEN DEVRE DIŞI!
+      // Kullanıcı type'ı boş yapmaya çalışırsa, "İzinli" olarak işaretle
       if (field === 'type' && (!value || value === '')) {
-        delete currentLogs[day];
+        alert('⚠️ KAYIT SİLİNEMEZ!\n\n📋 Bir günü silmek yerine "İzinli" veya "Raporlu" olarak işaretleyebilirsiniz.\n\n🔒 Tüm kayıtlar güvenlik nedeniyle korunmaktadır.');
         
-        // IMMUTABILITY: Yeni nested object oluştur (silme ile)
-        newData[selectedEmployeeId] = {
-          ...newData[selectedEmployeeId],
-          [monthKey]: {
-            ...newData[selectedEmployeeId][monthKey],
-            logs: currentLogs
-          }
-        };
-        
-        // Database'den de sil
-        setTimeout(() => deleteDailyLog(day), 100);
+        // Değişikliği iptal et, önceki değeri koru
+        console.log('🛑 Silme işlemi engellendi - kayıt korundu');
+        return prev; // HİÇBİR DEĞİŞİKLİK YAPMA
+      }
+      
+      // ⚠️ UYARI: "İzinli" veya "Raporlu" günler hesaplamaya dahil edilmez
+      // ama kayıt korunur ve veritabanında saklanır
       } else {
         // IMMUTABILITY: Yeni nested object oluştur
         newData[selectedEmployeeId] = {
@@ -923,7 +1356,36 @@ export default function BordroTakip() {
   };
 
   const deleteExpense = async (id: string) => {
-    if (window.confirm('Bu kaydı silmek istediğinizden emin misiniz?')) {
+    // 🔒 GÜVENLİK: Gerçekten silmek yerine onay iste
+    const expense = currentData.expenses.find(e => e.id === id);
+    if (!expense) return;
+    
+    const confirmMessage = `⚠️ Bu kaydı silmek istediğinizden EMİN misiniz?\n\n` +
+      `Tür: ${expense.type}\n` +
+      `Tutar: ${formatCurrency(expense.amount)}\n` +
+      `Açıklama: ${expense.description}\n\n` +
+      `🔒 Bu işlem GERİ ALINAMAZ!\n\n` +
+      `💡 Emin değilseniz İPTAL edin!`;
+    
+    if (!window.confirm(confirmMessage)) {
+      console.log('🛑 Gider silme işlemi iptal edildi');
+      return;
+    }
+    
+    // 🛡️ KATMAN 11: Güvenlik Kodu Kontrolü
+    if (!verifyDeleteCode(`${expense.type} kaydı (${formatCurrency(expense.amount)})`)) {
+      return;
+    }
+    
+    // İkinci onay (ekstra güvenlik)
+    if (!window.confirm(`⚠️ SON ONAY\n\nGerçekten ${formatCurrency(expense.amount)} tutarındaki ${expense.type} kaydını silmek istediğinize emin misiniz?\n\nBu işlem GERİ ALINAMAZ!`)) {
+      console.log('🛑 İkinci onayda iptal edildi');
+      return;
+    }
+    
+    try {
+      console.log('🗑️ Gider siliniyor (kullanıcı çift onay verdi):', id);
+      
       // State güncellemesi - IMMUTABILITY KORUNARAK
       setAppData(prev => {
           const newData = {...prev};
@@ -941,35 +1403,55 @@ export default function BordroTakip() {
       });
 
       await deleteExpenseFromDB(id);
+      alert('✅ Kayıt silindi.\n\n⚠️ Not: Veritabanından tamamen silindi, geri getirilemez!');
+    } catch (error) {
+      console.error('❌ Silme hatası:', error);
+      alert('❌ Silme işlemi başarısız oldu!\n\nHata: ' + (error as any)?.message);
     }
   };
 
   const fillMonthDefaults = () => {
-    // Otomatik olarak TÜM günleri doldur
+    // 🔒 GÜVENLİK: SADECE boş günleri doldur, mevcut kayıtlara ASLA dokunma
+    console.log('🔄 Otomatik doldurma başlatılıyor...');
+    let filledCount = 0;
+    let skippedCount = 0;
+    
     for (let i = 1; i <= daysInMonth; i++) {
-      if (!currentData.logs[i] || !currentData.logs[i].type) {
-        const { isSaturday, isSunday } = isWeekend(i, currentMonth, currentYear);
-        
-        // Pazar günü Normal olarak işaretle ama mesai saati 0
-        if (isSunday) {
-          handleLogChange(i, 'type', 'Normal');
-          handleLogChange(i, 'startTime', '08:00');
-          handleLogChange(i, 'endTime', '08:00'); // Mesai saati 0
-        }
-        // Cumartesi günü Normal olarak işaretle ama mesai saati 0
-        else if (isSaturday) {
-          handleLogChange(i, 'type', 'Normal');
-          handleLogChange(i, 'startTime', '08:00');
-          handleLogChange(i, 'endTime', '08:00'); // Mesai saati 0
-        }
-        // Hafta içi normal mesai
-        else {
-          handleLogChange(i, 'type', 'Normal');
-          handleLogChange(i, 'startTime', '08:00');
-          handleLogChange(i, 'endTime', '18:00');
-        }
+      const existingLog = currentData.logs[i];
+      
+      // Eğer gün zaten doluysa ATLA
+      if (existingLog && existingLog.type) {
+        console.log(`⏭️ Gün ${i} atlandı (mevcut: ${existingLog.type})`);
+        skippedCount++;
+        continue;
       }
+      
+      // Sadece boş günleri doldur
+      const { isSaturday, isSunday } = isWeekend(i, currentMonth, currentYear);
+      
+      // Pazar günü Normal olarak işaretle ama mesai saati 0
+      if (isSunday) {
+        handleLogChange(i, 'type', 'Normal');
+        handleLogChange(i, 'startTime', '08:00');
+        handleLogChange(i, 'endTime', '08:00'); // Mesai saati 0
+      }
+      // Cumartesi günü Normal olarak işaretle ama mesai saati 0
+      else if (isSaturday) {
+        handleLogChange(i, 'type', 'Normal');
+        handleLogChange(i, 'startTime', '08:00');
+        handleLogChange(i, 'endTime', '08:00'); // Mesai saati 0
+      }
+      // Hafta içi normal mesai
+      else {
+        handleLogChange(i, 'type', 'Normal');
+        handleLogChange(i, 'startTime', '08:00');
+        handleLogChange(i, 'endTime', '18:00');
+      }
+      filledCount++;
     }
+    
+    console.log(`✅ Otomatik doldurma tamamlandı: ${filledCount} gün dolduruldu, ${skippedCount} gün korundu`);
+    alert(`✅ ${filledCount} boş gün otomatik dolduruldu.\n🔒 ${skippedCount} mevcut kayıt korundu.`);
   };
 
   const openAddModal = () => {
@@ -1573,6 +2055,29 @@ export default function BordroTakip() {
           </div>
         </div>
       )}
+
+      {/* 🛡️ YEDEKLEME DURUMU GÖSTERGESİ */}
+      {lastBackupTime && (
+        <div className="fixed bottom-4 left-4 z-40">
+          <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 shadow-sm text-xs">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 text-green-600"/>
+              <span className="text-green-700">
+                Son Yedek: {lastBackupTime.toLocaleTimeString('tr-TR')}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🛡️ KURTARMA BUTONU */}
+      <button
+        onClick={restoreFromBackup}
+        className="fixed bottom-16 left-4 z-40 bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-full shadow-lg transition-all"
+        title="Yedeğen Geri Yükle"
+      >
+        <Upload className="w-5 h-5"/>
+      </button>
 
       {/* KAYIT DURUMU GÖSTERGESİ */}
       {saveStatus !== 'idle' && (
@@ -2248,6 +2753,24 @@ export default function BordroTakip() {
                                 <button onClick={() => addExpense('Avans')} className="bg-red-100 text-red-700 py-2 rounded text-xs font-bold hover:bg-red-200">AVANS</button>
                                 <button onClick={() => addExpense('Gider')} className="bg-orange-100 text-orange-700 py-2 rounded text-xs font-bold hover:bg-orange-200">GİDER</button>
                                 <button onClick={() => addExpense('Prim')} className="bg-green-100 text-green-700 py-2 rounded text-xs font-bold hover:bg-green-200">PRİM</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                                <button 
+                                  onClick={restoreFromBackup}
+                                  className="bg-orange-100 text-orange-700 py-2 rounded text-xs font-bold hover:bg-orange-200 flex items-center justify-center gap-1"
+                                  title="Silinen kayıtları geri yükle"
+                                >
+                                  <Shield className="w-4 h-4"/>
+                                  GERİ YÜKLE
+                                </button>
+                                <button 
+                                  onClick={showChangeHistory}
+                                  className="bg-purple-100 text-purple-700 py-2 rounded text-xs font-bold hover:bg-purple-200 flex items-center justify-center gap-1"
+                                  title="Değişiklik geçmişini görüntüle"
+                                >
+                                  <History className="w-4 h-4"/>
+                                  GEÇMİŞ
+                                </button>
                             </div>
                             <button 
                                 onClick={() => exportSinglePDF(selectedEmployee)} 
