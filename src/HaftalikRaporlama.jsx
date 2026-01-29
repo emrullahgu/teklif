@@ -875,88 +875,76 @@ export default function HaftalikRaporlama() {
             <div ref={pdfPreviewRef} style={{ width: '210mm', backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }}>
               <div style={{ padding: '15mm' }}>
                 {/* Header with Logo and Report Info */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #4f46e5', paddingBottom: '20px', marginBottom: '25px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #1e40af', paddingBottom: '20px', marginBottom: '25px' }}>
                   <div style={{ minWidth: '150px' }}>
                     <img src="/fatura_logo.png" alt="Logo" className="pdf-logo" style={{ height: '70px', maxWidth: '200px', objectFit: 'contain' }} />
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ backgroundColor: '#4f46e5', color: 'white', padding: '8px 16px', borderRadius: '6px', marginBottom: '10px', display: 'inline-block' }}>
-                      <h1 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0' }}>HAFTALIK ENERJİ VE KOMPANZASYON RAPORU</h1>
+                    <div style={{ backgroundColor: '#1e40af', color: 'white', padding: '10px 20px', borderRadius: '4px', marginBottom: '10px' }}>
+                      <h1 style={{ fontSize: '15px', fontWeight: 'bold', margin: '0', letterSpacing: '0.5px' }}>HAFTALIK ENERJİ VE KOMPANZASYON RAPORU</h1>
                     </div>
-                    <div style={{ backgroundColor: '#f3f4f6', padding: '10px', borderRadius: '6px', marginTop: '8px' }}>
-                      <p style={{ fontSize: '11px', color: '#374151', margin: '3px 0', fontWeight: 'bold' }}>
-                        📋 Rapor No: HFT-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
+                    <div style={{ backgroundColor: '#f3f4f6', padding: '10px 15px', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
+                      <p style={{ fontSize: '10px', color: '#374151', margin: '3px 0', fontWeight: '600' }}>
+                        Rapor No: HFT-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
                       </p>
-                      <p style={{ fontSize: '11px', color: '#374151', margin: '3px 0' }}>
-                        📅 Tarih: {new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      <p style={{ fontSize: '10px', color: '#6b7280', margin: '3px 0' }}>
+                        Tarih: {new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
                       </p>
-                      <p style={{ fontSize: '11px', color: '#374151', margin: '3px 0' }}>
-                        🏭 Dönem: {new Date(selectedRapor.hafta_baslangic).toLocaleDateString('tr-TR')} - {new Date(selectedRapor.hafta_bitis).toLocaleDateString('tr-TR')}
+                      <p style={{ fontSize: '10px', color: '#6b7280', margin: '3px 0' }}>
+                        Dönem: {new Date(selectedRapor.hafta_baslangic).toLocaleDateString('tr-TR')} - {new Date(selectedRapor.hafta_bitis).toLocaleDateString('tr-TR')}
                       </p>
                     </div>
                   </div>
                 </div>
 
                 {/* Fabrika Bilgisi - Prominent */}
-                <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '20px', borderRadius: '10px', marginBottom: '25px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
-                      🏢
-                    </div>
-                    <div>
-                      <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 5px 0' }}>{selectedRapor.fabrika_adi}</h2>
-                      <p style={{ fontSize: '12px', margin: '0', opacity: 0.9 }}>
-                        Haftalık Performans Değerlendirme Raporu
-                      </p>
-                    </div>
-                  </div>
+                <div style={{ backgroundColor: '#1e40af', color: 'white', padding: '18px 20px', borderRadius: '6px', marginBottom: '25px', border: '1px solid #1e3a8a' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0', letterSpacing: '0.3px' }}>{selectedRapor.fabrika_adi}</h2>
+                  <p style={{ fontSize: '11px', margin: '0', opacity: 0.9 }}>
+                    Haftalık Performans Değerlendirme Raporu
+                  </p>
                 </div>
 
                 {/* Durum Badge - Large and Clear */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '25px' }}>
                   <div style={{ 
-                    padding: '20px 50px', 
-                    borderRadius: '12px', 
-                    fontSize: '22px', 
+                    padding: '15px 40px', 
+                    borderRadius: '6px', 
+                    fontSize: '18px', 
                     fontWeight: 'bold',
-                    backgroundColor: getDurum(selectedRapor).text === 'UYGUN' ? '#10b981' : getDurum(selectedRapor).text === 'DİKKAT' ? '#f59e0b' : '#ef4444',
+                    backgroundColor: getDurum(selectedRapor).text === 'UYGUN' ? '#059669' : getDurum(selectedRapor).text === 'DİKKAT' ? '#d97706' : '#dc2626',
                     color: 'white',
                     textAlign: 'center',
-                    boxShadow: '0 6px 12px rgba(0,0,0,0.15)',
-                    border: '3px solid rgba(255,255,255,0.8)'
+                    letterSpacing: '1px'
                   }}>
-                    {getDurum(selectedRapor).text === 'UYGUN' ? '✓ ' : getDurum(selectedRapor).text === 'DİKKAT' ? '⚠ ' : '✗ '}
                     {getDurum(selectedRapor).text}
                   </div>
                 </div>
 
                 {/* Özet Bilgiler - Enhanced Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '30px' }}>
-                  <div style={{ padding: '20px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '10px', textAlign: 'center', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                    <div style={{ fontSize: '30px', marginBottom: '8px' }}>⚡</div>
-                    <p style={{ fontSize: '10px', marginBottom: '8px', fontWeight: 'bold', opacity: 0.9 }}>GÜÇ FAKTÖRÜ (cosφ)</p>
-                    <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '0' }}>{selectedRapor.guc_faktoru}</p>
-                    <p style={{ fontSize: '10px', marginTop: '8px', opacity: 0.8 }}>Hedef: {selectedRapor.hedef_guc_faktoru}</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '25px' }}>
+                  <div style={{ padding: '18px', backgroundColor: '#eff6ff', border: '2px solid #2563eb', borderRadius: '6px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '9px', marginBottom: '8px', fontWeight: 'bold', color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Güç Faktörü (cosφ)</p>
+                    <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#1e3a8a' }}>{selectedRapor.guc_faktoru}</p>
+                    <p style={{ fontSize: '9px', marginTop: '6px', color: '#64748b' }}>Hedef: {selectedRapor.hedef_guc_faktoru}</p>
                   </div>
-                  <div style={{ padding: '20px', background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', borderRadius: '10px', textAlign: 'center', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                    <div style={{ fontSize: '30px', marginBottom: '8px' }}>🔋</div>
-                    <p style={{ fontSize: '10px', marginBottom: '8px', fontWeight: 'bold', opacity: 0.9 }}>AKTİF GÜÇ</p>
-                    <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '0' }}>{selectedRapor.aktif_guc}</p>
-                    <p style={{ fontSize: '10px', marginTop: '8px', opacity: 0.8 }}>kW</p>
+                  <div style={{ padding: '18px', backgroundColor: '#f0fdf4', border: '2px solid #16a34a', borderRadius: '6px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '9px', marginBottom: '8px', fontWeight: 'bold', color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Aktif Güç</p>
+                    <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#166534' }}>{selectedRapor.aktif_guc}</p>
+                    <p style={{ fontSize: '9px', marginTop: '6px', color: '#64748b' }}>kW</p>
                   </div>
-                  <div style={{ padding: '20px', background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', borderRadius: '10px', textAlign: 'center', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                    <div style={{ fontSize: '30px', marginBottom: '8px' }}>⚙️</div>
-                    <p style={{ fontSize: '10px', marginBottom: '8px', fontWeight: 'bold', opacity: 0.9 }}>REAKTİF GÜÇ</p>
-                    <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '0' }}>{selectedRapor.reaktif_guc}</p>
-                    <p style={{ fontSize: '10px', marginTop: '8px', opacity: 0.8 }}>kVAr</p>
+                  <div style={{ padding: '18px', backgroundColor: '#fefce8', border: '2px solid #ca8a04', borderRadius: '6px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '9px', marginBottom: '8px', fontWeight: 'bold', color: '#a16207', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reaktif Güç</p>
+                    <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#854d0e' }}>{selectedRapor.reaktif_guc}</p>
+                    <p style={{ fontSize: '9px', marginTop: '6px', color: '#64748b' }}>kVAr</p>
                   </div>
                 </div>
 
                 {/* Uploaded Image Section */}
                 {selectedRapor.gorsel_url && (
-                  <div style={{ marginBottom: '30px', border: '2px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
-                    <div style={{ backgroundColor: '#4f46e5', color: 'white', padding: '10px 15px', fontSize: '12px', fontWeight: 'bold' }}>
-                      📸 SAHA GÖRSELİ / TEKNİK FOTOĞRAF
+                  <div style={{ marginBottom: '25px', border: '1px solid #d1d5db', borderRadius: '6px', overflow: 'hidden' }}>
+                    <div style={{ backgroundColor: '#374151', color: 'white', padding: '10px 15px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                      SAHA GÖRSELİ / TEKNİK FOTOĞRAF
                     </div>
                     <div style={{ padding: '15px', backgroundColor: '#f9fafb' }}>
                       <img 
@@ -969,36 +957,36 @@ export default function HaftalikRaporlama() {
                 )}
 
                 {/* Detaylı Bilgiler Table - Enhanced */}
-                <div style={{ marginBottom: '30px' }}>
-                  <div style={{ backgroundColor: '#1f2937', color: 'white', padding: '12px 15px', fontSize: '13px', fontWeight: 'bold', borderRadius: '8px 8px 0 0' }}>
-                    📊 DETAYLI PERFORMANS VERİLERİ
+                <div style={{ marginBottom: '25px' }}>
+                  <div style={{ backgroundColor: '#374151', color: 'white', padding: '10px 15px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px', borderRadius: '6px 6px 0 0' }}>
+                    DETAYLI PERFORMANS VERİLERİ
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                     <tbody>
                       <tr style={{ backgroundColor: '#f9fafb' }}>
                         <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#374151' }}>
-                          <span style={{ marginRight: '8px' }}>🔧</span>Kompanzasyon Durumu
+                          Kompanzasyon Durumu
                         </td>
                         <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', color: '#1f2937', fontWeight: '600' }}>{selectedRapor.kompanzasyon_durumu}</td>
                       </tr>
                       <tr style={{ backgroundColor: 'white' }}>
                         <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#374151' }}>
-                          <span style={{ marginRight: '8px' }}>⚡</span>Enerji Tüketimi
+                          Enerji Tüketimi
                         </td>
                         <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', color: '#1f2937', fontWeight: '600' }}>{selectedRapor.enerji_tuketimi} kWh</td>
                       </tr>
                       <tr style={{ backgroundColor: '#f9fafb' }}>
                         <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#374151' }}>
-                          <span style={{ marginRight: '8px' }}>📈</span>Önceki Hafta Güç Faktörü
+                          Önceki Hafta Güç Faktörü
                         </td>
                         <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', color: '#1f2937', fontWeight: '600' }}>{selectedRapor.onceki_hafta_guc_faktoru}</td>
                       </tr>
-                      <tr style={{ backgroundColor: '#f9fafb' }}>
+                      <tr style={{ backgroundColor: 'white' }}>
                         <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#374151' }}>
-                          <span style={{ marginRight: '8px' }}>📊</span>Trend Durumu
+                          Trend Durumu
                         </td>
                         <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', color: '#1f2937', fontWeight: '600' }}>
-                          {getTrend(selectedRapor).text === 'Yükseliş' ? '📈 Yükseliş' : getTrend(selectedRapor).text === 'Düşüş' ? '📉 Düşüş' : '➡️ Sabit'}
+                          {getTrend(selectedRapor).text}
                         </td>
                       </tr>
                     </tbody>
@@ -1006,27 +994,27 @@ export default function HaftalikRaporlama() {
                 </div>
 
                 {/* Grafik Gösterimleri */}
-                <div style={{ marginBottom: '30px' }}>
-                  <div style={{ backgroundColor: '#1f2937', color: 'white', padding: '12px 15px', fontSize: '13px', fontWeight: 'bold', borderRadius: '8px 8px 0 0' }}>
-                    📈 GRAFİK ANALİZLER
+                <div style={{ marginBottom: '25px' }}>
+                  <div style={{ backgroundColor: '#374151', color: 'white', padding: '10px 15px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px', borderRadius: '6px 6px 0 0' }}>
+                    GRAFİK ANALİZLER
                   </div>
                   <div style={{ backgroundColor: '#f9fafb', padding: '20px', border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
                     
                     {/* Güç Faktörü Progress Bar */}
-                    <div style={{ marginBottom: '20px' }}>
+                    <div style={{ marginBottom: '18px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#374151' }}>⚡ Güç Faktörü Durumu</span>
-                        <span style={{ fontSize: '11px', color: '#6b7280' }}>{selectedRapor.guc_faktoru} / {selectedRapor.hedef_guc_faktoru}</span>
+                        <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#374151' }}>Güç Faktörü Durumu</span>
+                        <span style={{ fontSize: '10px', color: '#6b7280' }}>{selectedRapor.guc_faktoru} / {selectedRapor.hedef_guc_faktoru}</span>
                       </div>
-                      <div style={{ width: '100%', height: '30px', backgroundColor: '#e5e7eb', borderRadius: '15px', overflow: 'hidden', position: 'relative', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)' }}>
+                      <div style={{ width: '100%', height: '24px', backgroundColor: '#e5e7eb', borderRadius: '4px', overflow: 'hidden', position: 'relative', border: '1px solid #d1d5db' }}>
                         <div style={{ 
                           width: `${(parseFloat(selectedRapor.guc_faktoru) / parseFloat(selectedRapor.hedef_guc_faktoru)) * 100}%`, 
                           height: '100%', 
-                          background: parseFloat(selectedRapor.guc_faktoru) >= parseFloat(selectedRapor.hedef_guc_faktoru) 
-                            ? 'linear-gradient(90deg, #10b981 0%, #34d399 100%)' 
+                          backgroundColor: parseFloat(selectedRapor.guc_faktoru) >= parseFloat(selectedRapor.hedef_guc_faktoru) 
+                            ? '#059669' 
                             : parseFloat(selectedRapor.guc_faktoru) >= parseFloat(selectedRapor.hedef_guc_faktoru) - 0.05
-                            ? 'linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%)'
-                            : 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)',
+                            ? '#d97706'
+                            : '#dc2626',
                           borderRadius: '15px',
                           transition: 'width 0.3s ease',
                           display: 'flex',
@@ -1042,25 +1030,25 @@ export default function HaftalikRaporlama() {
                     </div>
 
                     {/* Haftalık Karşılaştırma - Bar Chart */}
-                    <div style={{ marginBottom: '20px' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#374151', marginBottom: '10px' }}>📊 Haftalık Performans Karşılaştırması</div>
+                    <div style={{ marginBottom: '18px' }}>
+                      <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#374151', marginBottom: '10px' }}>Haftalık Performans Karşılaştırması</div>
                       <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', height: '120px' }}>
                         {/* Önceki Hafta */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
                           <div style={{ 
                             width: '100%', 
                             height: `${(parseFloat(selectedRapor.onceki_hafta_guc_faktoru) / 1) * 100}px`,
-                            background: 'linear-gradient(180deg, #94a3b8 0%, #64748b 100%)',
-                            borderRadius: '8px 8px 0 0',
+                            backgroundColor: '#94a3b8',
+                            borderRadius: '4px 4px 0 0',
                             display: 'flex',
                             alignItems: 'flex-start',
                             justifyContent: 'center',
                             paddingTop: '8px',
-                            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
+                            border: '1px solid #64748b'
                           }}>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'white' }}>{selectedRapor.onceki_hafta_guc_faktoru}</span>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'white' }}>{selectedRapor.onceki_hafta_guc_faktoru}</span>
                           </div>
-                          <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '6px', textAlign: 'center' }}>Önceki Hafta</div>
+                          <div style={{ fontSize: '9px', color: '#64748b', marginTop: '6px', textAlign: 'center', fontWeight: '600' }}>Önceki Hafta</div>
                         </div>
                         
                         {/* Bu Hafta */}
@@ -1068,24 +1056,20 @@ export default function HaftalikRaporlama() {
                           <div style={{ 
                             width: '100%', 
                             height: `${(parseFloat(selectedRapor.guc_faktoru) / 1) * 100}px`,
-                            background: parseFloat(selectedRapor.guc_faktoru) >= parseFloat(selectedRapor.hedef_guc_faktoru)
-                              ? 'linear-gradient(180deg, #34d399 0%, #10b981 100%)'
-                              : 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)',
-                            borderRadius: '8px 8px 0 0',
+                            backgroundColor: parseFloat(selectedRapor.guc_faktoru) >= parseFloat(selectedRapor.hedef_guc_faktoru)
+                              ? '#059669'
+                              : '#d97706',
+                            borderRadius: '4px 4px 0 0',
                             display: 'flex',
                             alignItems: 'flex-start',
                             justifyContent: 'center',
                             paddingTop: '8px',
-                            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
+                            border: parseFloat(selectedRapor.guc_faktoru) >= parseFloat(selectedRapor.hedef_guc_faktoru)
+                              ? '1px solid #047857'
+                              : '1px solid #b45309',
                             position: 'relative'
                           }}>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'white' }}>{selectedRapor.guc_faktoru}</span>
-                            {parseFloat(selectedRapor.guc_faktoru) > parseFloat(selectedRapor.onceki_hafta_guc_faktoru) && (
-                              <span style={{ position: 'absolute', top: '-20px', fontSize: '18px' }}>📈</span>
-                            )}
-                            {parseFloat(selectedRapor.guc_faktoru) < parseFloat(selectedRapor.onceki_hafta_guc_faktoru) && (
-                              <span style={{ position: 'absolute', top: '-20px', fontSize: '18px' }}>📉</span>
-                            )}
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'white' }}>{selectedRapor.guc_faktoru}</span>
                           </div>
                           <div style={{ fontSize: '9px', color: '#1f2937', marginTop: '6px', textAlign: 'center', fontWeight: 'bold' }}>Bu Hafta</div>
                         </div>
@@ -1095,41 +1079,40 @@ export default function HaftalikRaporlama() {
                           <div style={{ 
                             width: '100%', 
                             height: `${(parseFloat(selectedRapor.hedef_guc_faktoru) / 1) * 100}px`,
-                            background: 'linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%)',
-                            borderRadius: '8px 8px 0 0',
+                            backgroundColor: '#1e40af',
+                            borderRadius: '4px 4px 0 0',
                             display: 'flex',
                             alignItems: 'flex-start',
                             justifyContent: 'center',
                             paddingTop: '8px',
-                            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
-                            border: '2px dashed white'
+                            border: '2px dashed #1e3a8a'
                           }}>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'white' }}>{selectedRapor.hedef_guc_faktoru}</span>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'white' }}>{selectedRapor.hedef_guc_faktoru}</span>
                           </div>
-                          <div style={{ fontSize: '9px', color: '#7c3aed', marginTop: '6px', textAlign: 'center', fontWeight: 'bold' }}>🎯 Hedef</div>
+                          <div style={{ fontSize: '9px', color: '#1e40af', marginTop: '6px', textAlign: 'center', fontWeight: 'bold' }}>Hedef</div>
                         </div>
                       </div>
                     </div>
 
                     {/* Enerji & Güç Dağılımı */}
                     <div>
-                      <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#374151', marginBottom: '10px' }}>⚡ Güç Dağılımı</div>
+                      <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#374151', marginBottom: '10px' }}>Güç Dağılımı</div>
                       <div style={{ display: 'flex', gap: '10px' }}>
                         {/* Aktif Güç */}
-                        <div style={{ flex: 1, backgroundColor: 'white', padding: '12px', borderRadius: '8px', border: '2px solid #f472b6' }}>
-                          <div style={{ fontSize: '9px', color: '#9ca3af', marginBottom: '4px' }}>AKTİF GÜÇ</div>
-                          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#f472b6' }}>{selectedRapor.aktif_guc} kW</div>
-                          <div style={{ width: '100%', height: '4px', backgroundColor: '#fce7f3', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
-                            <div style={{ width: '70%', height: '100%', background: 'linear-gradient(90deg, #f472b6 0%, #ec4899 100%)' }}></div>
+                        <div style={{ flex: 1, backgroundColor: '#f0fdf4', padding: '12px', borderRadius: '6px', border: '1px solid #16a34a' }}>
+                          <div style={{ fontSize: '9px', color: '#6b7280', marginBottom: '4px', fontWeight: '600' }}>AKTİF GÜÇ</div>
+                          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#15803d' }}>{selectedRapor.aktif_guc} kW</div>
+                          <div style={{ width: '100%', height: '3px', backgroundColor: '#d1fae5', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
+                            <div style={{ width: '70%', height: '100%', backgroundColor: '#16a34a' }}></div>
                           </div>
                         </div>
                         
                         {/* Reaktif Güç */}
-                        <div style={{ flex: 1, backgroundColor: 'white', padding: '12px', borderRadius: '8px', border: '2px solid #facc15' }}>
-                          <div style={{ fontSize: '9px', color: '#9ca3af', marginBottom: '4px' }}>REAKTİF GÜÇ</div>
-                          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#facc15' }}>{selectedRapor.reaktif_guc} kVAr</div>
-                          <div style={{ width: '100%', height: '4px', backgroundColor: '#fef9c3', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
-                            <div style={{ width: '50%', height: '100%', background: 'linear-gradient(90deg, #facc15 0%, #eab308 100%)' }}></div>
+                        <div style={{ flex: 1, backgroundColor: '#fefce8', padding: '12px', borderRadius: '6px', border: '1px solid #ca8a04' }}>
+                          <div style={{ fontSize: '9px', color: '#6b7280', marginBottom: '4px', fontWeight: '600' }}>REAKTİF GÜÇ</div>
+                          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#a16207' }}>{selectedRapor.reaktif_guc} kVAr</div>
+                          <div style={{ width: '100%', height: '3px', backgroundColor: '#fef3c7', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
+                            <div style={{ width: '50%', height: '100%', backgroundColor: '#ca8a04' }}></div>
                           </div>
                         </div>
                       </div>
@@ -1139,9 +1122,9 @@ export default function HaftalikRaporlama() {
 
                 {/* Notlar */}
                 {selectedRapor.notlar && (
-                  <div style={{ padding: '18px', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', borderRadius: '10px', marginBottom: '25px', border: '2px solid #fbbf24' }}>
-                    <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#92400e', marginBottom: '10px' }}>
-                      📝 NOTLAR VE AÇIKLAMALAR
+                  <div style={{ padding: '15px', backgroundColor: '#fffbeb', borderRadius: '6px', marginBottom: '25px', border: '1px solid #fbbf24' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#92400e', marginBottom: '8px', letterSpacing: '0.5px' }}>
+                      NOTLAR VE AÇIKLAMALAR
                     </p>
                     <p style={{ fontSize: '11px', color: '#78350f', margin: '0', lineHeight: '1.7' }}>{selectedRapor.notlar}</p>
                   </div>
