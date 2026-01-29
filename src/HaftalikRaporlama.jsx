@@ -949,7 +949,7 @@ export default function HaftalikRaporlama() {
                     <img src="/fatura_logo.png" alt="Logo" className="pdf-logo" style={{ height: '45px', maxWidth: '140px', objectFit: 'contain' }} />
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ backgroundColor: '#f3f4f6', padding: '6px 12px', borderRadius: '4px', border: '1px solid #e5e7eb', height: '45px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ padding: '6px 12px', height: '45px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                       <p style={{ fontSize: '8px', color: '#374151', margin: '1px 0', fontWeight: '600' }}>
                         Rapor No: HFT-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
                       </p>
