@@ -32,8 +32,9 @@ export default function IsTakip() {
   const [lokasyonForm, setLokasyonForm] = useState({ ad: '', adres: '', koordinat: '' });
   const [malzemeForm, setMalzemeForm] = useState({ ad: '', kategori: '', birim: 'Adet', stok_durumu: 0 });
 
-  // PDF için ref
-  const contentRef = useRef(null);
+  // PDF için ref ve state
+  const pdfPreviewRef = useRef(null);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   // Filtreleme için state'ler
   const [filtreCalisan, setFiltreCalisan] = useState('');
@@ -386,81 +387,107 @@ export default function IsTakip() {
     XLSX.writeFile(wb, `is_takip_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const loadLogo = async () => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const maxWidth = 60 * 3.78;
-        const maxHeight = 24 * 3.78;
-        let width = img.width;
-        let height = img.height;
-        const aspectRatio = width / height;
-        if (width > maxWidth) {
-          width = maxWidth;
-          height = width / aspectRatio;
-        }
-        if (height > maxHeight) {
-          height = maxHeight;
-          width = height * aspectRatio;
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      img.onerror = () => resolve(null);
-      img.src = '/logo.png';
-    });
-  };
-
   const exportToPDF = async () => {
     try {
-      if (!contentRef.current) return;
-      const logo = await loadLogo();
-      contentRef.current.style.display = 'block';
-      const logoElements = contentRef.current.querySelectorAll('img[alt="Logo"]');
-      logoElements.forEach(el => el.style.display = 'none');
-      const canvas = await html2canvas(contentRef.current, {
+      // Logo yükle ve base64'e çevir
+      const loadLogo = async () => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve({
+              data: canvas.toDataURL('image/png'),
+              width: img.width,
+              height: img.height
+            });
+          };
+          img.onerror = reject;
+          img.src = '/fatura_logo.png';
+        });
+      };
+
+      const logoInfo = await loadLogo();
+      
+      // Logo boyutlarını hesapla (aspect ratio koruyarak)
+      const maxLogoWidth = 60; // mm
+      const maxLogoHeight = 24; // mm
+      const logoAspectRatio = logoInfo.width / logoInfo.height;
+      let logoWidth = maxLogoWidth;
+      let logoHeight = logoWidth / logoAspectRatio;
+      
+      if (logoHeight > maxLogoHeight) {
+        logoHeight = maxLogoHeight;
+        logoWidth = logoHeight * logoAspectRatio;
+      }
+
+      setShowPdfPreview(true);
+      
+      // React component'in render olması için kısa bir bekleme
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const element = pdfPreviewRef.current;
+      if (!element) {
+        alert('PDF önizleme yüklenemedi!');
+        setShowPdfPreview(false);
+        return;
+      }
+
+      // Logoları gizle
+      const logos = element.querySelectorAll('img[alt="Logo"]');
+      logos.forEach(logo => { logo.style.visibility = 'hidden'; });
+
+      // html2canvas ile component'i görüntüye çevir
+      const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff'
       });
-      logoElements.forEach(el => el.style.display = '');
-      contentRef.current.style.display = 'none';
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth - 30;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 40;
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-      if (logo) {
-        pdf.addImage(logo, 'PNG', 15, 15, 60, 24);
-      }
-      pdf.addImage(imgData, 'PNG', 15, position, imgWidth, imgHeight);
-      heightLeft -= (pdfHeight - position);
+      // İlk sayfa
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      // Logo ekle
+      pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
 
-      while (heightLeft > 0) {
-        pdf.addPage();
-        position = heightLeft - imgHeight + 15;
-        if (logo) {
-          pdf.addImage(logo, 'PNG', 15, 15, 60, 24);
+      // Eğer içerik bir sayfadan fazlaysa, sadece o zaman ek sayfa ekle
+      if (imgHeight > pageHeight) {
+        let heightLeft = imgHeight - pageHeight;
+        let position = -pageHeight;
+
+        while (heightLeft > 0) {
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          // Her sayfaya logo ekle
+          pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
+          position -= pageHeight;
+          heightLeft -= pageHeight;
         }
-        pdf.addImage(imgData, 'PNG', 15, 40, imgWidth, imgHeight, '', 'FAST', position);
-        heightLeft -= (pdfHeight - 40);
       }
 
-      pdf.save(`is_takip_${new Date().toISOString().split('T')[0]}.pdf`);
+      const fileName = `is_takip_raporu_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+      
+      // Logoları tekrar göster
+      logos.forEach(logo => { logo.style.visibility = 'visible'; });
+      
+      setShowPdfPreview(false);
     } catch (error) {
       console.error('PDF oluşturma hatası:', error);
-      alert('PDF oluşturulurken bir hata oluştu.');
+      alert('PDF oluşturulurken bir hata oluştu: ' + error.message);
+      setShowPdfPreview(false);
     }
   };
 
@@ -979,80 +1006,104 @@ export default function IsTakip() {
           </div>
         )}
 
-        {/* PDF için gizli içerik */}
-        <div ref={contentRef} style={{ display: 'none', padding: '20px', backgroundColor: 'white' }}>
-          <div style={{ marginBottom: '20px' }}>
-            <img src="/logo.png" alt="Logo" style={{ width: '200px', marginBottom: '10px' }} />
-            <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '10px' }}>İş Takip Raporu</h1>
-            <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
-              Tarih: {new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}
-            </p>
-          </div>
+        {/* PDF Preview Modal - Ekranda görünmez, sadece PDF'e çevirmek için */}
+        {showPdfPreview && (
+          <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+            <div ref={pdfPreviewRef} style={{ width: '210mm', backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }}>
+              
+              {/* Content Area */}
+              <div style={{ padding: '15mm' }}>
+                {/* Header - Logo solda, Bilgiler sağda */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: '20px', marginBottom: '30px' }}>
+                  <div style={{ minWidth: '150px' }}>
+                    <img src="/fatura_logo.png" alt="Logo" style={{ height: '60px', maxWidth: '180px', objectFit: 'contain' }} />
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 8px 0' }}>İŞ TAKİP RAPORU</h1>
+                    <p style={{ fontSize: '11px', color: '#6b7280', margin: '3px 0' }}>
+                      Rapor No: IST-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
+                    </p>
+                    <p style={{ fontSize: '11px', color: '#6b7280', margin: '3px 0' }}>
+                      Tarih: {new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </p>
+                    {(filtreTarihBaslangic || filtreTarihBitis) && (
+                      <p style={{ fontSize: '11px', color: '#8b5cf6', margin: '3px 0', fontWeight: 'bold' }}>
+                        Dönem: {filtreTarihBaslangic ? new Date(filtreTarihBaslangic).toLocaleDateString('tr-TR') : '...'} - {filtreTarihBitis ? new Date(filtreTarihBitis).toLocaleDateString('tr-TR') : '...'}
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-          {/* İstatistikler */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '20px' }}>
-            <div style={{ padding: '15px', backgroundColor: '#3B82F6', color: 'white', borderRadius: '8px' }}>
-              <p style={{ fontSize: '12px', marginBottom: '5px' }}>Toplam Kayıt</p>
-              <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{istatistikler.toplamKayit}</p>
-            </div>
-            <div style={{ padding: '15px', backgroundColor: '#A855F7', color: 'white', borderRadius: '8px' }}>
-              <p style={{ fontSize: '12px', marginBottom: '5px' }}>Toplam Süre</p>
-              <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{istatistikler.toplamSure} saat</p>
-            </div>
-            <div style={{ padding: '15px', backgroundColor: '#10B981', color: 'white', borderRadius: '8px' }}>
-              <p style={{ fontSize: '12px', marginBottom: '5px' }}>Aktif Çalışan</p>
-              <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{istatistikler.aktifCalisan}</p>
-            </div>
-            <div style={{ padding: '15px', backgroundColor: '#F97316', color: 'white', borderRadius: '8px' }}>
-              <p style={{ fontSize: '12px', marginBottom: '5px' }}>Aktif Lokasyon</p>
-              <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{istatistikler.aktifLokasyon}</p>
+                {/* Özet Bilgiler - Tek satırda */}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Kayıt Sayısı</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.toplamKayit}</div>
+                  </div>
+                  <div style={{ width: '1px', backgroundColor: '#d1d5db' }}></div>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Toplam Süre</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#8b5cf6' }}>{istatistikler.toplamSure} saat</div>
+                  </div>
+                  <div style={{ width: '1px', backgroundColor: '#d1d5db' }}></div>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Aktif Çalışan</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.aktifCalisan}</div>
+                  </div>
+                  <div style={{ width: '1px', backgroundColor: '#d1d5db' }}></div>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Aktif Lokasyon</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.aktifLokasyon}</div>
+                  </div>
+                </div>
+
+                {/* Tablo */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f3f4f6' }}>
+                      <th style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Tarih</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Çalışan</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Lokasyon</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Saat Aralığı</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Süre</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Yapılan İş</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtreliKayitlar.map((kayit, index) => (
+                      <tr key={kayit.id} style={{ backgroundColor: index % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                        <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                          {new Date(kayit.tarih).toLocaleDateString('tr-TR')}
+                        </td>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb' }}>
+                          {kayit.calisan?.ad_soyad || '-'}
+                        </td>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb' }}>
+                          {kayit.lokasyon?.ad || '-'}
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                          {kayit.baslangic_saat} - {kayit.bitis_saat}
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#8b5cf6' }}>
+                          {kayit.toplam_sure} saat
+                        </td>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb', fontSize: '9px' }}>
+                          {kayit.yapilan_is}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Alt bilgi */}
+                <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '2px solid #e5e7eb', fontSize: '10px', color: '#666' }}>
+                  <p><strong>KONERJİ Teklif Sistemi</strong> - İş Takip Raporu</p>
+                  <p>www.kobinerji.com | info@kobinerji.com</p>
+                </div>
+              </div>
             </div>
           </div>
-
-          {/* Tablo */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#8B5CF6', color: 'white' }}>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Tarih</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Çalışan</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Lokasyon</th>
-                <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #ddd' }}>Saat</th>
-                <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #ddd' }}>Süre</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Yapılan İş</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtreliKayitlar.map((kayit, index) => (
-                <tr key={kayit.id} style={{ backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb' }}>
-                  <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                    {new Date(kayit.tarih).toLocaleDateString('tr-TR')}
-                  </td>
-                  <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                    {kayit.calisan?.ad_soyad || '-'}
-                  </td>
-                  <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                    {kayit.lokasyon?.ad || '-'}
-                  </td>
-                  <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>
-                    {kayit.baslangic_saat} - {kayit.bitis_saat}
-                  </td>
-                  <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center', fontWeight: 'bold' }}>
-                    {kayit.toplam_sure} saat
-                  </td>
-                  <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                    {kayit.yapilan_is}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Alt bilgi */}
-          <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '2px solid #e5e7eb', fontSize: '10px', color: '#666' }}>
-            <p><strong>KONERJİ Teklif Sistemi</strong> - İş Takip Raporu</p>
-            <p>www.kobinerji.com | info@kobinerji.com</p>
-          </div>
-        </div>
+        )}
 
         {/* Modal */}
         {showModal && (
