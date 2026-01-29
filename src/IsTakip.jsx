@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit3, Trash2, Save, X, Download, FileText, Clock, MapPin, User, Wrench, Calendar, Filter, Users, Building, Package, FileDown } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Edit3, Trash2, Save, X, Download, FileText, Clock, MapPin, User, Wrench, Calendar, Filter, Users, Building, Package, FileDown, TrendingUp } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -31,6 +31,9 @@ export default function IsTakip() {
   const [calisanForm, setCalisanForm] = useState({ ad_soyad: '', telefon: '', email: '', pozisyon: '' });
   const [lokasyonForm, setLokasyonForm] = useState({ ad: '', adres: '', koordinat: '' });
   const [malzemeForm, setMalzemeForm] = useState({ ad: '', kategori: '', birim: 'Adet', stok_durumu: 0 });
+
+  // PDF için ref
+  const contentRef = useRef(null);
 
   // Filtreleme için state'ler
   const [filtreCalisan, setFiltreCalisan] = useState('');
@@ -383,150 +386,81 @@ export default function IsTakip() {
     XLSX.writeFile(wb, `is_takip_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const loadLogo = async () => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 60 * 3.78;
+        const maxHeight = 24 * 3.78;
+        let width = img.width;
+        let height = img.height;
+        const aspectRatio = width / height;
+        if (width > maxWidth) {
+          width = maxWidth;
+          height = width / aspectRatio;
+        }
+        if (height > maxHeight) {
+          height = maxHeight;
+          width = height * aspectRatio;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve(null);
+      img.src = '/logo.png';
+    });
+  };
+
   const exportToPDF = async () => {
     try {
-      const loadingDiv = document.createElement('div');
-      loadingDiv.innerHTML = '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 9999;">PDF oluşturuluyor...</div>';
-      document.body.appendChild(loadingDiv);
-
-      const SCALE_FACTOR = 2;
-      const A4_WIDTH_MM = 210;
-      const targetWidthPx = (A4_WIDTH_MM / 25.4) * 96;
-
-      const loadLogo = async () => {
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            resolve({
-              data: canvas.toDataURL('image/png'),
-              width: img.width,
-              height: img.height
-            });
-          };
-          img.onerror = () => {
-            const altImg = new Image();
-            altImg.crossOrigin = 'anonymous';
-            altImg.onload = () => {
-              const canvas = document.createElement('canvas');
-              canvas.width = altImg.width;
-              canvas.height = altImg.height;
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(altImg, 0, 0);
-              resolve({
-                data: canvas.toDataURL('image/png'),
-                width: altImg.width,
-                height: altImg.height
-              });
-            };
-            altImg.onerror = () => {
-              resolve({ data: '', width: 0, height: 0 });
-            };
-            altImg.src = '/kobinerji_logo.png';
-          };
-          img.src = '/fatura_logo.png';
-        });
-      };
-
-      const logoInfo = await loadLogo();
-      
-      const maxLogoWidth = 60;
-      const maxLogoHeight = 24;
-      let logoWidth = 0;
-      let logoHeight = 0;
-      
-      if (logoInfo.width > 0 && logoInfo.height > 0) {
-        const logoAspectRatio = logoInfo.width / logoInfo.height;
-        logoWidth = maxLogoWidth;
-        logoHeight = logoWidth / logoAspectRatio;
-        
-        if (logoHeight > maxLogoHeight) {
-          logoHeight = maxLogoHeight;
-          logoWidth = logoHeight * logoAspectRatio;
-        }
-      }
-
-      const pdf = new jsPDF({
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait',
-        compress: true
-      });
-
-      const printArea = document.getElementById('is-takip-print-area');
-      if (!printArea) {
-        alert('Yazdırılacak alan bulunamadı!');
-        document.body.removeChild(loadingDiv);
-        return;
-      }
-
-      // Logoları gizle
-      const logos = printArea.querySelectorAll('img');
-      logos.forEach(logo => { logo.style.visibility = 'hidden'; });
-      
-      printArea.style.width = '210mm';
-      printArea.style.margin = '0 auto';
-      printArea.style.boxShadow = 'none';
-
-      const canvas = await html2canvas(printArea, {
-        scale: SCALE_FACTOR,
-        width: targetWidthPx,
-        windowWidth: targetWidthPx,
+      if (!contentRef.current) return;
+      const logo = await loadLogo();
+      contentRef.current.style.display = 'block';
+      const logoElements = contentRef.current.querySelectorAll('img[alt="Logo"]');
+      logoElements.forEach(el => el.style.display = 'none');
+      const canvas = await html2canvas(contentRef.current, {
+        scale: 2,
         useCORS: true,
-        allowTaint: false,
-        letterRendering: true,
         logging: false,
-        backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0
+        backgroundColor: '#ffffff'
       });
+      logoElements.forEach(el => el.style.display = '');
+      contentRef.current.style.display = 'none';
 
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      const imgWidth = 210;
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth - 30;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const pageHeight = 297;
+      let heightLeft = imgHeight;
+      let position = 40;
 
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
-      
-      if (logoInfo.data && logoWidth > 0 && logoHeight > 0) {
-        pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
+      if (logo) {
+        pdf.addImage(logo, 'PNG', 15, 15, 60, 24);
       }
+      pdf.addImage(imgData, 'PNG', 15, position, imgWidth, imgHeight);
+      heightLeft -= (pdfHeight - position);
 
-      // Sayfa taşması varsa yeni sayfalar ekle
-      if (imgHeight > pageHeight) {
-        let heightLeft = imgHeight - pageHeight;
-        let position = -pageHeight;
-
-        while (heightLeft > 0) {
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, '', 'FAST');
-          
-          if (logoInfo.data && logoWidth > 0 && logoHeight > 0) {
-            pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
-          }
-          
-          position -= pageHeight;
-          heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        pdf.addPage();
+        position = heightLeft - imgHeight + 15;
+        if (logo) {
+          pdf.addImage(logo, 'PNG', 15, 15, 60, 24);
         }
+        pdf.addImage(imgData, 'PNG', 15, 40, imgWidth, imgHeight, '', 'FAST', position);
+        heightLeft -= (pdfHeight - 40);
       }
-
-      // Logoları tekrar göster
-      logos.forEach(logo => { logo.style.visibility = 'visible'; });
-      printArea.style.width = '';
-      printArea.style.margin = '';
-      printArea.style.boxShadow = '';
 
       pdf.save(`is_takip_${new Date().toISOString().split('T')[0]}.pdf`);
-      document.body.removeChild(loadingDiv);
-      
     } catch (error) {
       console.error('PDF oluşturma hatası:', error);
-      alert('PDF oluşturulurken hata oluştu: ' + error.message);
+      alert('PDF oluşturulurken bir hata oluştu.');
     }
   };
 
@@ -577,14 +511,14 @@ export default function IsTakip() {
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
               >
                 <FileDown className="w-5 h-5" />
-                <span>PDF İndir</span>
+                <span>PDF</span>
               </button>
               <button
                 onClick={exportToExcel}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition"
               >
                 <Download className="w-5 h-5" />
-                <span>Excel İndir</span>
+                <span>Excel</span>
               </button>
               <button
                 onClick={() => { 
@@ -653,7 +587,6 @@ export default function IsTakip() {
         {/* İş Kayıtları Tab */}
         {activeTab === 'kayitlar' && (
           <>
-          <div id="is-takip-print-area">
           {/* Filtreler */}
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
@@ -721,37 +654,37 @@ export default function IsTakip() {
 
         {/* İstatistikler */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-4 text-white">
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-5 text-white transform hover:scale-105 transition-transform">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm opacity-90">Toplam Kayıt</p>
+                <p className="text-sm font-medium opacity-90 mb-1">Toplam Kayıt</p>
                 <p className="text-2xl font-bold">{istatistikler.toplamKayit}</p>
               </div>
               <FileText className="w-10 h-10 opacity-80" />
             </div>
           </div>
-          <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-4 text-white">
+          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-5 text-white transform hover:scale-105 transition-transform">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm opacity-90">Toplam Süre</p>
+                <p className="text-sm font-medium opacity-90 mb-1">Toplam Süre</p>
                 <p className="text-2xl font-bold">{istatistikler.toplamSure} saat</p>
               </div>
               <Clock className="w-10 h-10 opacity-80" />
             </div>
           </div>
-          <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-4 text-white">
+          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-5 text-white transform hover:scale-105 transition-transform">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm opacity-90">Aktif Çalışan</p>
+                <p className="text-sm font-medium opacity-90 mb-1">Aktif Çalışan</p>
                 <p className="text-2xl font-bold">{istatistikler.aktifCalisan}</p>
               </div>
               <User className="w-10 h-10 opacity-80" />
             </div>
           </div>
-          <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg p-4 text-white">
+          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-5 text-white transform hover:scale-105 transition-transform">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm opacity-90">Aktif Lokasyon</p>
+                <p className="text-sm font-medium opacity-90 mb-1">Aktif Lokasyon</p>
                 <p className="text-2xl font-bold">{istatistikler.aktifLokasyon}</p>
               </div>
               <MapPin className="w-10 h-10 opacity-80" />
@@ -830,7 +763,6 @@ export default function IsTakip() {
               </tbody>
             </table>
           </div>
-        </div>
         </div>
         </>
         )}
@@ -1046,6 +978,81 @@ export default function IsTakip() {
             </div>
           </div>
         )}
+
+        {/* PDF için gizli içerik */}
+        <div ref={contentRef} style={{ display: 'none', padding: '20px', backgroundColor: 'white' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <img src="/logo.png" alt="Logo" style={{ width: '200px', marginBottom: '10px' }} />
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '10px' }}>İş Takip Raporu</h1>
+            <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
+              Tarih: {new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+
+          {/* İstatistikler */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '20px' }}>
+            <div style={{ padding: '15px', backgroundColor: '#3B82F6', color: 'white', borderRadius: '8px' }}>
+              <p style={{ fontSize: '12px', marginBottom: '5px' }}>Toplam Kayıt</p>
+              <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{istatistikler.toplamKayit}</p>
+            </div>
+            <div style={{ padding: '15px', backgroundColor: '#A855F7', color: 'white', borderRadius: '8px' }}>
+              <p style={{ fontSize: '12px', marginBottom: '5px' }}>Toplam Süre</p>
+              <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{istatistikler.toplamSure} saat</p>
+            </div>
+            <div style={{ padding: '15px', backgroundColor: '#10B981', color: 'white', borderRadius: '8px' }}>
+              <p style={{ fontSize: '12px', marginBottom: '5px' }}>Aktif Çalışan</p>
+              <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{istatistikler.aktifCalisan}</p>
+            </div>
+            <div style={{ padding: '15px', backgroundColor: '#F97316', color: 'white', borderRadius: '8px' }}>
+              <p style={{ fontSize: '12px', marginBottom: '5px' }}>Aktif Lokasyon</p>
+              <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{istatistikler.aktifLokasyon}</p>
+            </div>
+          </div>
+
+          {/* Tablo */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#8B5CF6', color: 'white' }}>
+                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Tarih</th>
+                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Çalışan</th>
+                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Lokasyon</th>
+                <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #ddd' }}>Saat</th>
+                <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #ddd' }}>Süre</th>
+                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Yapılan İş</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtreliKayitlar.map((kayit, index) => (
+                <tr key={kayit.id} style={{ backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb' }}>
+                  <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                    {new Date(kayit.tarih).toLocaleDateString('tr-TR')}
+                  </td>
+                  <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                    {kayit.calisan?.ad_soyad || '-'}
+                  </td>
+                  <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                    {kayit.lokasyon?.ad || '-'}
+                  </td>
+                  <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>
+                    {kayit.baslangic_saat} - {kayit.bitis_saat}
+                  </td>
+                  <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center', fontWeight: 'bold' }}>
+                    {kayit.toplam_sure} saat
+                  </td>
+                  <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                    {kayit.yapilan_is}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Alt bilgi */}
+          <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '2px solid #e5e7eb', fontSize: '10px', color: '#666' }}>
+            <p><strong>KONERJİ Teklif Sistemi</strong> - İş Takip Raporu</p>
+            <p>www.kobinerji.com | info@kobinerji.com</p>
+          </div>
+        </div>
 
         {/* Modal */}
         {showModal && (
