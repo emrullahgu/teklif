@@ -1255,22 +1255,21 @@ export default function BordroTakip() {
       
       // ⚠️ UYARI: "İzinli" veya "Raporlu" günler hesaplamaya dahil edilmez
       // ama kayıt korunur ve veritabanında saklanır
-      } else {
-        // IMMUTABILITY: Yeni nested object oluştur
-        newData[selectedEmployeeId] = {
-          ...newData[selectedEmployeeId],
-          [monthKey]: {
-            ...newData[selectedEmployeeId][monthKey],
-            logs: currentLogs
-          }
-        };
+      
+      // IMMUTABILITY: Yeni nested object oluştur
+      newData[selectedEmployeeId] = {
+        ...newData[selectedEmployeeId],
+        [monthKey]: {
+          ...newData[selectedEmployeeId][monthKey],
+          logs: currentLogs
+        }
+      };
+      
+      // Pending kayıt listesine ekle
+      setPendingSaves(prev => new Set(prev).add(`${selectedEmployeeId}-${day}`));
         
-        // Pending kayıt listesine ekle
-        setPendingSaves(prev => new Set(prev).add(`${selectedEmployeeId}-${day}`));
-        
-        // Hızlı kaydetme - timeout olmadan anında kaydet
-        saveDailyLog(day, currentLogs[day]);
-      }
+      // Hızlı kaydetme - timeout olmadan anında kaydet
+      saveDailyLog(day, currentLogs[day]);
 
       return newData;
     });
