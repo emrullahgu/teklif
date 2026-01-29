@@ -348,7 +348,7 @@ const OsosCanliIzleme = () => {
               <ul className="space-y-1 text-orange-700">
                 {!gerilimDurumu && <li>• Gerilim normal aralığın dışında (Beklenen: 210-240V)</li>}
                 {!frekansDurumu && <li>• Frekans normal aralığın dışında (Beklenen: 49.5-50.5Hz)</li>}
-                {!gucFaktoruDurumu && <li>• Güç faktörü düşük (Beklenen: >0.85), kompanzasyon önerilir</li>}
+                {!gucFaktoruDurumu && <li>• Güç faktörü düşük (Beklenen: &gt;0.85), kompanzasyon önerilir</li>}
               </ul>
             </div>
           </div>
