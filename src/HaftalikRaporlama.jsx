@@ -91,7 +91,10 @@ export default function HaftalikRaporlama() {
         maliyet: parseFloat(formData.maliyet),
         onceki_hafta_guc_faktoru: parseFloat(formData.onceki_hafta_guc_faktoru),
         hedef_guc_faktoru: parseFloat(formData.hedef_guc_faktoru),
-        gorsel_url: uploadedImage || formData.gorsel_url || null
+        gorsel_url: uploadedImage || formData.gorsel_url || null,
+        rapor_hazırlayan: formData.rapor_hazırlayan || null,
+        onaylayan: formData.onaylayan || null,
+        notlar: formData.notlar || null
       };
 
       if (editingId) {
