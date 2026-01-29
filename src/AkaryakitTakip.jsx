@@ -338,24 +338,25 @@ export default function AkaryakitTakip() {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pageWidth;
       const imgHeight = (canvas.height * pageWidth) / canvas.width;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
 
       // İlk sayfa
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
       // Logo ekle
       pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
-      heightLeft -= pageHeight;
 
-      // Eğer içerik birden fazla sayfaya yayılıyorsa
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        // Her sayfaya logo ekle
-        pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
-        heightLeft -= pageHeight;
+      // Eğer içerik bir sayfadan fazlaysa, sadece o zaman ek sayfa ekle
+      if (imgHeight > pageHeight) {
+        let heightLeft = imgHeight - pageHeight;
+        let position = -pageHeight;
+
+        while (heightLeft > 0) {
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          // Her sayfaya logo ekle
+          pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
+          position -= pageHeight;
+          heightLeft -= pageHeight;
+        }
       }
 
       const fileName = `akaryakit_raporu_${new Date().toISOString().split('T')[0]}.pdf`;
