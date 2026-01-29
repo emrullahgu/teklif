@@ -248,7 +248,7 @@ export default function HaftalikRaporlama() {
         return;
       }
 
-      const logos = element.querySelectorAll('img[alt="Logo"]');
+      const logos = element.querySelectorAll('.pdf-logo');
       logos.forEach(logo => { logo.style.visibility = 'hidden'; });
 
       const canvas = await html2canvas(element, {
