@@ -1162,23 +1162,9 @@ export default function HaftalikRaporlama() {
                   </div>
                 )}
 
-                {/* Footer with Report Info */}
+                {/* Footer */}
                 <div style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #d1d5db' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '12px' }}>
-                    {selectedRapor.rapor_hazirlayan && (
-                      <div style={{ backgroundColor: '#f3f4f6', padding: '10px', borderRadius: '4px' }}>
-                        <p style={{ fontSize: '8px', color: '#6b7280', marginBottom: '3px', fontWeight: 'bold' }}>RAPOR HAZIRLAYAN</p>
-                        <p style={{ fontSize: '10px', color: '#1f2937', margin: '0', fontWeight: '600' }}>{selectedRapor.rapor_hazirlayan}</p>
-                      </div>
-                    )}
-                    {selectedRapor.onaylayan && (
-                      <div style={{ backgroundColor: '#f3f4f6', padding: '10px', borderRadius: '4px' }}>
-                        <p style={{ fontSize: '8px', color: '#6b7280', marginBottom: '3px', fontWeight: 'bold' }}>ONAYLAYAN</p>
-                        <p style={{ fontSize: '10px', color: '#1f2937', margin: '0', fontWeight: '600' }}>{selectedRapor.onaylayan}</p>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ textAlign: 'center', fontSize: '8px', color: '#6b7280', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
+                  <div style={{ textAlign: 'center', fontSize: '8px', color: '#6b7280' }}>
                     <p style={{ margin: '2px 0', fontWeight: 'bold', color: '#1f2937' }}>KOBİNERJİ Teklif Sistemi</p>
                     <p style={{ margin: '2px 0' }}>Haftalık Enerji ve Kompanzasyon Raporu</p>
                     <p style={{ margin: '2px 0' }}>www.kobinerji.com | info@kobinerji.com | +90 (XXX) XXX XX XX</p>
