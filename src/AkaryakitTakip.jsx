@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Edit3, Trash2, Save, X, Download, FileText, Fuel, Car, Calendar, TrendingUp, DollarSign, Filter } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import html2canvas from 'html2canvas';
 
 export default function AkaryakitTakip() {
   const [kayitlar, setKayitlar] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const pdfPreviewRef = useRef(null);
   const [editingId, setEditingId] = useState(null);
   
   // Ay filtresi - Varsayılan olarak güncel ay
@@ -265,182 +268,61 @@ export default function AkaryakitTakip() {
     XLSX.writeFile(wb, `akaryakıt_kayıtları_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  // Türkçe karakterleri temizle (jsPDF uyumluluğu için)
-  const turkceKarakterTemizle = (text) => {
-    if (!text) return text;
-    return text.toString()
-      .replace(/ğ/g, 'g')
-      .replace(/Ğ/g, 'G')
-      .replace(/ü/g, 'u')
-      .replace(/Ü/g, 'U')
-      .replace(/ş/g, 's')
-      .replace(/Ş/g, 'S')
-      .replace(/ı/g, 'i')
-      .replace(/İ/g, 'I')
-      .replace(/ö/g, 'o')
-      .replace(/Ö/g, 'O')
-      .replace(/ç/g, 'c')
-      .replace(/Ç/g, 'C');
-  };
-
-  // PDF'e aktar - Profesyonel (Türkçe karakter desteği)
-  const exportToPDF = () => {
-    const doc = new jsPDF('p', 'mm', 'a4');
-    
-    // Sayfa boyutları
-    const pageWidth = doc.internal.pageSize.width;
-    const pageHeight = doc.internal.pageSize.height;
-    
-    // Header - Şirket Bilgileri ve Logo Alanı
-    doc.setFillColor(37, 99, 235); // Blue-600
-    doc.rect(0, 0, pageWidth, 45, 'F');
-    
-    // Başlık
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('AKARYAKIT TAKIP RAPORU', pageWidth / 2, 20, { align: 'center' });
-    
-    // Alt başlık
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    const dateStr = new Date().toLocaleDateString('tr-TR', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-    doc.text(`Rapor Tarihi: ${turkceKarakterTemizle(dateStr)}`, pageWidth / 2, 28, { align: 'center' });
-    
-    // Dönem bilgisi
-    if (aylikGoruntule && secilenAy) {
-      const monthYear = new Date(secilenAy + '-01').toLocaleDateString('tr-TR', { 
-        year: 'numeric', 
-        month: 'long' 
-      });
-      doc.text(`Donem: ${turkceKarakterTemizle(monthYear)}`, pageWidth / 2, 36, { align: 'center' });
-    }
-    
-    // İstatistik kutuları
-    doc.setTextColor(0, 0, 0);
-    let startY = 55;
-    
-    const stats = [
-      { label: 'Toplam Kayit', value: istatistikler.toplamKayit.toString(), icon: '📊' },
-      { label: 'Toplam Litre', value: istatistikler.toplamLitre.toFixed(2) + ' L', icon: '⛽' },
-      { label: 'Toplam Tutar', value: istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL', icon: '💰' },
-      { label: 'Ort. Birim Fiyat', value: istatistikler.ortalamaBirimFiyat.toFixed(2) + ' TL/L', icon: '📈' }
-    ];
-    
-    const boxWidth = 45;
-    const boxHeight = 18;
-    const gap = 5;
-    const totalWidth = (boxWidth * 4) + (gap * 3);
-    const startX = (pageWidth - totalWidth) / 2;
-    
-    stats.forEach((stat, index) => {
-      const x = startX + (index * (boxWidth + gap));
+  // PDF'e aktar - App.jsx mantığı ile (HTML to PDF)
+  const exportToPDF = async () => {
+    try {
+      setShowPdfPreview(true);
       
-      // Kutu arka planı
-      doc.setFillColor(248, 250, 252); // Gray-50
-      doc.roundedRect(x, startY, boxWidth, boxHeight, 2, 2, 'F');
+      // React component'in render olması için kısa bir bekleme
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Çerçeve
-      doc.setDrawColor(226, 232, 240); // Gray-200
-      doc.setLineWidth(0.5);
-      doc.roundedRect(x, startY, boxWidth, boxHeight, 2, 2, 'S');
-      
-      // Label
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139); // Gray-500
-      doc.text(turkceKarakterTemizle(stat.label), x + boxWidth / 2, startY + 6, { align: 'center' });
-      
-      // Value
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'bold');
-      doc.text(turkceKarakterTemizle(stat.value), x + boxWidth / 2, startY + 14, { align: 'center' });
-      doc.setFont('helvetica', 'normal');
-    });
-    
-    // Tablo
-    const tableData = filtreliKayitlar.map(kayit => [
-      new Date(kayit.date).toLocaleDateString('tr-TR'),
-      turkceKarakterTemizle(kayit.vehicles?.plate) || '-',
-      turkceKarakterTemizle(kayit.drivers?.full_name) || '-',
-      kayit.liters.toFixed(2) + ' L',
-      kayit.price_per_liter.toFixed(2) + ' TL',
-      kayit.total_amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL'
-    ]);
-
-    doc.autoTable({
-      startY: startY + boxHeight + 10,
-      head: [['Tarih', 'Plaka', 'Surucu', 'Litre', 'Birim Fiyat', 'Toplam Tutar']],
-      body: tableData,
-      foot: [[
-        { content: 'TOPLAM', colSpan: 3, styles: { halign: 'center', fontStyle: 'bold' } },
-        istatistikler.toplamLitre.toFixed(2) + ' L',
-        '',
-        istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL'
-      ]],
-      theme: 'striped',
-      headStyles: { 
-        fillColor: [37, 99, 235],
-        textColor: [255, 255, 255],
-        fontSize: 10,
-        fontStyle: 'bold',
-        halign: 'center'
-      },
-      bodyStyles: {
-        fontSize: 9,
-        cellPadding: 4
-      },
-      alternateRowStyles: {
-        fillColor: [248, 250, 252]
-      },
-      footStyles: { 
-        fillColor: [226, 232, 240],
-        textColor: [0, 0, 0],
-        fontStyle: 'bold',
-        fontSize: 10
-      },
-      columnStyles: {
-        0: { halign: 'center', cellWidth: 25 },
-        1: { halign: 'center', cellWidth: 30 },
-        2: { halign: 'left', cellWidth: 40 },
-        3: { halign: 'right', cellWidth: 25 },
-        4: { halign: 'right', cellWidth: 30 },
-        5: { halign: 'right', cellWidth: 35 }
-      },
-      margin: { left: 10, right: 10 },
-      didDrawPage: function (data) {
-        // Footer
-        doc.setFontSize(8);
-        doc.setTextColor(128);
-        doc.text(
-          `Sayfa ${data.pageNumber} / ${doc.internal.getNumberOfPages()}`,
-          pageWidth / 2,
-          pageHeight - 10,
-          { align: 'center' }
-        );
+      const element = pdfPreviewRef.current;
+      if (!element) {
+        alert('PDF önizleme yüklenemedi!');
+        setShowPdfPreview(false);
+        return;
       }
-    });
-    
-    // Dosya adını Türkçe karakterler olmadan oluştur
-    const fileName = `akaryakıt_raporu_${new Date().toISOString().split('T')[0]}.pdf`
-      .replace(/ğ/g, 'g')
-      .replace(/Ğ/g, 'G')
-      .replace(/ü/g, 'u')
-      .replace(/Ü/g, 'U')
-      .replace(/ş/g, 's')
-      .replace(/Ş/g, 'S')
-      .replace(/ı/g, 'i')
-      .replace(/İ/g, 'I')
-      .replace(/ö/g, 'o')
-      .replace(/Ö/g, 'O')
-      .replace(/ç/g, 'c')
-      .replace(/Ç/g, 'C');
-    
-    doc.save(fileName);
+
+      // html2canvas ile component'i görüntüye çevir
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // İlk sayfa
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Eğer içerik birden fazla sayfaya yayılıyorsa
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const fileName = `akaryakit_raporu_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+      
+      setShowPdfPreview(false);
+    } catch (error) {
+      console.error('PDF oluşturma hatası:', error);
+      alert('PDF oluşturulurken bir hata oluştu: ' + error.message);
+      setShowPdfPreview(false);
+    }
   };
 
   if (loading) {
@@ -827,6 +709,102 @@ export default function AkaryakitTakip() {
           </div>
         )}
 
+        {/* PDF Preview Modal - Ekranda görünmez, sadece PDF'e çevirmek için */}
+        {showPdfPreview && (
+          <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+            <div ref={pdfPreviewRef} style={{ width: '210mm', padding: '20mm', backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }}>
+              {/* Header */}
+              <div style={{ background: 'linear-gradient(to right, #2563eb, #4f46e5)', padding: '30px', borderRadius: '8px 8px 0 0', textAlign: 'center' }}>
+                <h1 style={{ color: 'white', fontSize: '28px', fontWeight: 'bold', margin: '0 0 10px 0' }}>AKARYAKIT TAKİP RAPORU</h1>
+                <p style={{ color: 'white', fontSize: '14px', margin: 0 }}>
+                  Rapor Tarihi: {new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+                {aylikGoruntule && secilenAy && (
+                  <p style={{ color: 'white', fontSize: '14px', margin: '5px 0 0 0' }}>
+                    Dönem: {new Date(secilenAy + '-01').toLocaleDateString('tr-TR', { year: 'numeric', month: 'long' })}
+                  </p>
+                )}
+              </div>
+
+              {/* İstatistikler */}
+              <div style={{ display: 'flex', gap: '15px', margin: '30px 0', justifyContent: 'space-around' }}>
+                <div style={{ flex: 1, border: '2px solid #e5e7eb', borderRadius: '8px', padding: '20px', textAlign: 'center', backgroundColor: '#f9fafb' }}>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '5px' }}>Toplam Kayıt</div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.toplamKayit}</div>
+                </div>
+                <div style={{ flex: 1, border: '2px solid #e5e7eb', borderRadius: '8px', padding: '20px', textAlign: 'center', backgroundColor: '#f9fafb' }}>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '5px' }}>Toplam Litre</div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.toplamLitre.toFixed(2)} L</div>
+                </div>
+                <div style={{ flex: 1, border: '2px solid #e5e7eb', borderRadius: '8px', padding: '20px', textAlign: 'center', backgroundColor: '#f9fafb' }}>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '5px' }}>Toplam Tutar</div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2563eb' }}>
+                    {istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                  </div>
+                </div>
+                <div style={{ flex: 1, border: '2px solid #e5e7eb', borderRadius: '8px', padding: '20px', textAlign: 'center', backgroundColor: '#f9fafb' }}>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '5px' }}>Ort. Birim Fiyat</div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.ortalamaBirimFiyat.toFixed(2)} ₺/L</div>
+                </div>
+              </div>
+
+              {/* Tablo */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px', fontSize: '11px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#2563eb', color: 'white' }}>
+                    <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #ddd' }}>Tarih</th>
+                    <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #ddd' }}>Plaka</th>
+                    <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #ddd' }}>Sürücü</th>
+                    <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #ddd' }}>Litre</th>
+                    <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #ddd' }}>Birim Fiyat</th>
+                    <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #ddd' }}>Toplam Tutar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtreliKayitlar.map((kayit, index) => (
+                    <tr key={kayit.id} style={{ backgroundColor: index % 2 === 0 ? '#f9fafb' : 'white' }}>
+                      <td style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd' }}>
+                        {new Date(kayit.date).toLocaleDateString('tr-TR')}
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd', fontWeight: 'bold' }}>
+                        {kayit.vehicles?.plate || '-'}
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'left', border: '1px solid #ddd' }}>
+                        {kayit.drivers?.full_name || '-'}
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd' }}>
+                        {kayit.liters.toFixed(2)} L
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd' }}>
+                        {kayit.price_per_liter.toFixed(2)} ₺
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', fontWeight: 'bold', color: '#2563eb' }}>
+                        {kayit.total_amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ backgroundColor: '#e5e7eb', fontWeight: 'bold' }}>
+                    <td colSpan="3" style={{ padding: '12px', textAlign: 'center', border: '1px solid #ddd' }}>TOPLAM</td>
+                    <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #ddd' }}>
+                      {istatistikler.toplamLitre.toFixed(2)} L
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #ddd' }}></td>
+                    <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #ddd', color: '#2563eb' }}>
+                      {istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Footer */}
+              <div style={{ marginTop: '40px', textAlign: 'center', fontSize: '10px', color: '#6b7280' }}>
+                <p>© {new Date().getFullYear()} Akaryakıt Takip Sistemi - Tüm hakları saklıdır.</p>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
