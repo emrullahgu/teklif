@@ -7,12 +7,8 @@ import * as XLSX from 'xlsx';
 
 export default function AkaryakitTakip() {
   const [kayitlar, setKayitlar] = useState([]);
-  const [araclar, setAraclar] = useState([]);
-  const [suruculer, setSuruculer] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [showAracModal, setShowAracModal] = useState(false);
-  const [showSurucuModal, setShowSurucuModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   
   // Ay filtresi - Varsayılan olarak güncel ay
@@ -29,80 +25,41 @@ export default function AkaryakitTakip() {
   const [filtreBaslangic, setFiltreBaslangic] = useState('');
   const [filtreBitis, setFiltreBitis] = useState('');
 
-  // Form state'leri
+  // Form state'leri - Basitleştirilmiş
   const [formData, setFormData] = useState({
     tarih: new Date().toISOString().split('T')[0],
-    arac_id: '',
-    surucu_id: '',
+    plaka: '',
+    surucu: '',
     litre: '',
     litre_fiyat: '',
     toplam_tutar: '',
-    km: '',
-    istasyon: '',
-    yakit_tipi: 'Dizel',
-    odeme_sekli: 'Nakit',
     aciklama: ''
   });
 
-  const [aracForm, setAracForm] = useState({
-    plaka: '',
-    marka: '',
-    model: '',
-    yil: '',
-    renk: '',
-    aktif: true
-  });
 
-  const [surucuForm, setSurucuForm] = useState({
-    ad_soyad: '',
-    telefon: '',
-    tc_no: '',
-    ehliyet_no: '',
-    aktif: true
-  });
 
   // Verileri yükle
   useEffect(() => {
     loadData();
   }, []);
-
+  // Veri yükleme - Sadece yakıt kayıtları
   const loadData = async () => {
     try {
       setLoading(true);
       
-      // Kayıtları yükle
+      // Sadece kayıtları yükle - basit
       const { data: kayitlarData, error: kayitlarError } = await supabase
         .from('fuel_records')
         .select(`
           *,
-          vehicles:vehicle_id (id, plate, brand, model),
-          drivers:driver_id (id, full_name)
+          vehicles:vehicle_id (plate),
+          drivers:driver_id (full_name)
         `)
         .order('date', { ascending: false });
 
       if (kayitlarError) throw kayitlarError;
 
-      // Araçları yükle
-      const { data: araclarData, error: araclarError } = await supabase
-        .from('vehicles')
-        .select('*')
-        .eq('active', true)
-        .order('plate');
-
-      if (araclarError) throw araclarError;
-
-      // Sürücüleri yükle
-      const { data: suruculerData, error: suruculerError } = await supabase
-        .from('drivers')
-        .select('*')
-        .eq('active', true)
-        .order('full_name');
-
-      if (suruculerError) throw suruculerError;
-
       setKayitlar(kayitlarData || []);
-      setAraclar(araclarData || []);
-      setSuruculer(suruculerData || []);
     } catch (error) {
       console.error('Veri yükleme hatası:', error);
       alert('Veriler yüklenirken bir hata oluştu: ' + error.message);
@@ -110,31 +67,72 @@ export default function AkaryakitTakip() {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // Toplam tutarı otomatik hesapla
   useEffect(() => {
-    if (formData.litre && formData.litre_fiyat) {
-      const toplam = (parseFloat(formData.litre) * parseFloat(formData.litre_fiyat)).toFixed(2);
-      setFormData(prev => ({ ...prev, toplam_tutar: toplam }));
-    }
+    const litre = parseFloat(formData.litre) || 0;
+    const litreFiyat = parseFloat(formData.litre_fiyat) || 0;
+    setFormData(prev => ({ ...prev, toplam_tutar: (litre * litreFiyat).toFixed(2) }));
   }, [formData.litre, formData.litre_fiyat]);
 
-  // Kayıt ekle/güncelle
+  // Kayıt ekle/güncelle - Basitleştirilmiş
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
+      // 1. Plaka varsa araç bul, yoksa oluştur
+      let vehicleId;
+      const { data: existingVehicle } = await supabase
+        .from('vehicles')
+        .select('id')
+        .eq('plate', formData.plaka.toUpperCase())
+        .single();
+
+      if (existingVehicle) {
+        vehicleId = existingVehicle.id;
+      } else {
+        const { data: newVehicle, error: vehicleError } = await supabase
+          .from('vehicles')
+          .insert([{ plate: formData.plaka.toUpperCase(), brand: '-', model: '-' }])
+          .select()
+          .single();
+        
+        if (vehicleError) throw vehicleError;
+        vehicleId = newVehicle.id;
+      }
+
+      // 2. Sürücü varsa bul, yoksa oluştur
+      let driverId;
+      const { data: existingDriver } = await supabase
+        .from('drivers')
+        .select('id')
+        .eq('full_name', formData.surucu)
+        .single();
+
+      if (existingDriver) {
+        driverId = existingDriver.id;
+      } else {
+        const { data: newDriver, error: driverError } = await supabase
+          .from('drivers')
+          .insert([{ full_name: formData.surucu, active: true }])
+          .select()
+          .single();
+        
+        if (driverError) throw driverError;
+        driverId = newDriver.id;
+      }
+
+      // 3. Yakıt kaydını oluştur
       const kayitData = {
         date: formData.tarih,
-        vehicle_id: formData.arac_id,
-        driver_id: formData.surucu_id,
+        vehicle_id: vehicleId,
+        driver_id: driverId,
         liters: parseFloat(formData.litre),
         price_per_liter: parseFloat(formData.litre_fiyat),
         total_amount: parseFloat(formData.toplam_tutar),
-        km: formData.km ? parseInt(formData.km) : null,
-        station: formData.istasyon || null,
-        fuel_type: formData.yakit_tipi,
-        payment_method: formData.odeme_sekli,
         description: formData.aciklama || null
       };
 
@@ -156,67 +154,11 @@ export default function AkaryakitTakip() {
       }
 
       setShowModal(false);
-      setEditingId(null);
       resetForm();
       loadData();
     } catch (error) {
       console.error('Kayıt hatası:', error);
       alert('Kayıt işlemi sırasında bir hata oluştu: ' + error.message);
-    }
-  };
-
-  // Araç ekle
-  const handleAracSubmit = async (e) => {
-    e.preventDefault();
-    
-    try {
-      const { error } = await supabase
-        .from('vehicles')
-        .insert([{
-          plate: aracForm.plaka,
-          brand: aracForm.marka,
-          model: aracForm.model,
-          year: aracForm.yil ? parseInt(aracForm.yil) : null,
-          color: aracForm.renk || null,
-          active: true
-        }]);
-
-      if (error) throw error;
-      
-      alert('Araç eklendi!');
-      setShowAracModal(false);
-      setAracForm({ plaka: '', marka: '', model: '', yil: '', renk: '', aktif: true });
-      loadData();
-    } catch (error) {
-      console.error('Araç ekleme hatası:', error);
-      alert('Araç eklenirken bir hata oluştu: ' + error.message);
-    }
-  };
-
-  // Sürücü ekle
-  const handleSurucuSubmit = async (e) => {
-    e.preventDefault();
-    
-    try {
-      const { error } = await supabase
-        .from('drivers')
-        .insert([{
-          full_name: surucuForm.ad_soyad,
-          phone: surucuForm.telefon || null,
-          tc_no: surucuForm.tc_no || null,
-          license_no: surucuForm.ehliyet_no || null,
-          active: true
-        }]);
-
-      if (error) throw error;
-      
-      alert('Sürücü eklendi!');
-      setShowSurucuModal(false);
-      setSurucuForm({ ad_soyad: '', telefon: '', tc_no: '', ehliyet_no: '', aktif: true });
-      loadData();
-    } catch (error) {
-      console.error('Sürücü ekleme hatası:', error);
-      alert('Sürücü eklenirken bir hata oluştu: ' + error.message);
     }
   };
 
@@ -240,80 +182,76 @@ export default function AkaryakitTakip() {
     }
   };
 
-  // Düzenle
+  // Düzenle - Basitleştirilmiş
   const handleEdit = (kayit) => {
     setFormData({
       tarih: kayit.date,
-      arac_id: kayit.vehicle_id,
-      surucu_id: kayit.driver_id,
+      plaka: kayit.vehicles?.plate || '',
+      surucu: kayit.drivers?.full_name || '',
       litre: kayit.liters.toString(),
       litre_fiyat: kayit.price_per_liter.toString(),
       toplam_tutar: kayit.total_amount.toString(),
-      km: kayit.km ? kayit.km.toString() : '',
-      istasyon: kayit.station || '',
-      yakit_tipi: kayit.fuel_type || 'Dizel',
-      odeme_sekli: kayit.payment_method || 'Nakit',
       aciklama: kayit.description || ''
     });
     setEditingId(kayit.id);
     setShowModal(true);
   };
 
+  // Form sıfırlama - Basitleştirilmiş
   const resetForm = () => {
     setFormData({
       tarih: new Date().toISOString().split('T')[0],
-      arac_id: '',
-      surucu_id: '',
+      plaka: '',
+      surucu: '',
       litre: '',
       litre_fiyat: '',
       toplam_tutar: '',
-      km: '',
-      istasyon: '',
-      yakit_tipi: 'Dizel',
-      odeme_sekli: 'Nakit',
       aciklama: ''
     });
   };
 
-  // Filtreleme
+  // Filtreleme - Basitleştirilmiş
   const filtreliKayitlar = kayitlar.filter(kayit => {
     // Ay bazında filtreleme
     if (aylikGoruntule && secilenAy) {
-      const kayitAy = kayit.date.substring(0, 7); // YYYY-MM formatı
+      const kayitAy = kayit.date.substring(0, 7);
       if (kayitAy !== secilenAy) return false;
     }
     
-    // Diğer filtreler
-    if (filtreArac && kayit.vehicle_id !== filtreArac) return false;
-    if (filtreSurucu && kayit.driver_id !== filtreSurucu) return false;
-    if (filtreBaslangic && kayit.date < filtreBaslangic) return false;
-    if (filtreBitis && kayit.date > filtreBitis) return false;
+    // Tarih aralığı
+    if (!aylikGoruntule) {
+      if (filtreBaslangic && kayit.date < filtreBaslangic) return false;
+      if (filtreBitis && kayit.date > filtreBitis) return false;
+    }
+
+    // Plaka filtresi
+    if (filtreArac && !kayit.vehicles?.plate?.includes(filtreArac.toUpperCase())) return false;
+    
+    // Sürücü filtresi
+    if (filtreSurucu && !kayit.drivers?.full_name?.toLowerCase().includes(filtreSurucu.toLowerCase())) return false;
+    
     return true;
   });
 
-  // İstatistikler
+  // İstatistik hesaplama
   const istatistikler = {
     toplamKayit: filtreliKayitlar.length,
-    toplamLitre: filtreliKayitlar.reduce((sum, k) => sum + (k.liters || 0), 0),
-    toplamTutar: filtreliKayitlar.reduce((sum, k) => sum + (k.total_amount || 0), 0),
+    toplamLitre: filtreliKayitlar.reduce((sum, k) => sum + k.liters, 0),
+    toplamTutar: filtreliKayitlar.reduce((sum, k) => sum + k.total_amount, 0),
     ortalamaBirimFiyat: filtreliKayitlar.length > 0 
-      ? filtreliKayitlar.reduce((sum, k) => sum + (k.price_per_liter || 0), 0) / filtreliKayitlar.length 
+      ? filtreliKayitlar.reduce((sum, k) => sum + k.price_per_liter, 0) / filtreliKayitlar.length 
       : 0
   };
 
-  // Excel'e aktar
+  // Excel'e aktar - Basitleştirilmiş
   const exportToExcel = () => {
     const data = filtreliKayitlar.map(kayit => ({
-      'Tarih': kayit.date,
-      'Araç': kayit.vehicles?.plate || '-',
+      'Tarih': new Date(kayit.date).toLocaleDateString('tr-TR'),
+      'Plaka': kayit.vehicles?.plate || '-',
       'Sürücü': kayit.drivers?.full_name || '-',
-      'Yakıt Tipi': kayit.fuel_type,
       'Litre': kayit.liters,
       'Birim Fiyat': kayit.price_per_liter,
       'Toplam Tutar': kayit.total_amount,
-      'KM': kayit.km || '-',
-      'İstasyon': kayit.station || '-',
-      'Ödeme': kayit.payment_method,
       'Açıklama': kayit.description || '-'
     }));
 
@@ -323,7 +261,7 @@ export default function AkaryakitTakip() {
     XLSX.writeFile(wb, `akaryakıt_kayıtları_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  // PDF'e aktar
+  // PDF'e aktar - Basitleştirilmiş
   const exportToPDF = () => {
     const doc = new jsPDF();
     
@@ -334,27 +272,25 @@ export default function AkaryakitTakip() {
     doc.text(`Rapor Tarihi: ${new Date().toLocaleDateString('tr-TR')}`, 14, 22);
     
     const tableData = filtreliKayitlar.map(kayit => [
-      kayit.date,
+      new Date(kayit.date).toLocaleDateString('tr-TR'),
       kayit.vehicles?.plate || '-',
       kayit.drivers?.full_name || '-',
-      kayit.fuel_type,
-      kayit.liters,
+      kayit.liters.toFixed(2),
       kayit.price_per_liter.toFixed(2),
       kayit.total_amount.toFixed(2)
     ]);
 
     doc.autoTable({
       startY: 30,
-      head: [['Tarih', 'Araç', 'Sürücü', 'Yakıt', 'Litre', 'Birim', 'Tutar']],
+      head: [['Tarih', 'Plaka', 'Sürücü', 'Litre', 'Birim', 'Tutar']],
       body: tableData,
       foot: [[
         'TOPLAM',
         '',
         '',
-        '',
         istatistikler.toplamLitre.toFixed(2),
         '',
-        istatistikler.toplamTutar.toFixed(2)
+        istatistikler.toplamTutar.toFixed(2) + ' ₺'
       ]],
       theme: 'grid',
       headStyles: { fillColor: [59, 130, 246] },
@@ -378,36 +314,23 @@ export default function AkaryakitTakip() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* Header - Basitleştirilmiş */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <Fuel className="w-8 h-8 text-blue-600" />
-              <h1 className="text-3xl font-bold text-gray-800">Akaryakıt Takip Sistemi</h1>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800">Akaryakıt Takip</h1>
+                <p className="text-sm text-gray-500">Hangi plaka, hangi gün, kim, ne kadar</p>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setShowAracModal(true); }}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition"
-              >
-                <Car className="w-5 h-5" />
-                <span>Araç Ekle</span>
-              </button>
-              <button
-                onClick={() => { setShowSurucuModal(true); }}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Sürücü Ekle</span>
-              </button>
-              <button
-                onClick={() => { setShowModal(true); setEditingId(null); resetForm(); }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Yakıt Kaydı Ekle</span>
-              </button>
-            </div>
+            <button
+              onClick={() => { setShowModal(true); setEditingId(null); resetForm(); }}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition shadow-lg"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="font-semibold">Yakıt Kaydı Ekle</span>
+            </button>
           </div>
 
           {/* Ay Seçici ve Görüntüleme Modu */}
@@ -510,7 +433,7 @@ export default function AkaryakitTakip() {
           </div>
         </div>
 
-        {/* Filtreler */}
+        {/* Filtreler - Basitleştirilmiş */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Filter className="w-5 h-5 text-gray-600" />
@@ -523,30 +446,24 @@ export default function AkaryakitTakip() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Araç</label>
-              <select
+              <label className="block text-sm font-medium text-gray-700 mb-2">Plaka</label>
+              <input
+                type="text"
                 value={filtreArac}
                 onChange={(e) => setFiltreArac(e.target.value)}
+                placeholder="34 ABC 123"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Tüm Araçlar</option>
-                {araclar.map(arac => (
-                  <option key={arac.id} value={arac.id}>{arac.plate} - {arac.brand} {arac.model}</option>
-                ))}
-              </select>
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Sürücü</label>
-              <select
+              <input
+                type="text"
                 value={filtreSurucu}
                 onChange={(e) => setFiltreSurucu(e.target.value)}
+                placeholder="Ahmet Yılmaz"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Tüm Sürücüler</option>
-                {suruculer.map(surucu => (
-                  <option key={surucu.id} value={surucu.id}>{surucu.full_name}</option>
-                ))}
-              </select>
+              />
             </div>
             {!aylikGoruntule && (
               <>
@@ -607,14 +524,11 @@ export default function AkaryakitTakip() {
               <thead className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
                 <tr>
                   <th className="px-4 py-3 text-left">Tarih</th>
-                  <th className="px-4 py-3 text-left">Araç</th>
+                  <th className="px-4 py-3 text-left">Plaka</th>
                   <th className="px-4 py-3 text-left">Sürücü</th>
-                  <th className="px-4 py-3 text-left">Yakıt Tipi</th>
                   <th className="px-4 py-3 text-right">Litre</th>
                   <th className="px-4 py-3 text-right">Birim Fiyat</th>
                   <th className="px-4 py-3 text-right">Toplam</th>
-                  <th className="px-4 py-3 text-right">KM</th>
-                  <th className="px-4 py-3 text-left">İstasyon</th>
                   <th className="px-4 py-3 text-center">İşlemler</th>
                 </tr>
               </thead>
@@ -622,23 +536,11 @@ export default function AkaryakitTakip() {
                 {filtreliKayitlar.map((kayit, index) => (
                   <tr key={kayit.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                     <td className="px-4 py-3">{new Date(kayit.date).toLocaleDateString('tr-TR')}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{kayit.vehicles?.plate || '-'}</div>
-                      <div className="text-sm text-gray-500">{kayit.vehicles?.brand} {kayit.vehicles?.model}</div>
-                    </td>
+                    <td className="px-4 py-3 font-medium">{kayit.vehicles?.plate || '-'}</td>
                     <td className="px-4 py-3">{kayit.drivers?.full_name || '-'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        kayit.fuel_type === 'Dizel' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                      }`}>
-                        {kayit.fuel_type}
-                      </span>
-                    </td>
                     <td className="px-4 py-3 text-right font-medium">{kayit.liters} L</td>
                     <td className="px-4 py-3 text-right">{kayit.price_per_liter.toFixed(2)} ₺</td>
                     <td className="px-4 py-3 text-right font-bold text-blue-600">{kayit.total_amount.toFixed(2)} ₺</td>
-                    <td className="px-4 py-3 text-right">{kayit.km || '-'}</td>
-                    <td className="px-4 py-3">{kayit.station || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
                         <button
@@ -694,48 +596,26 @@ export default function AkaryakitTakip() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Araç *</label>
-                    <select
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Plaka *</label>
+                    <input
+                      type="text"
                       required
-                      value={formData.arac_id}
-                      onChange={(e) => setFormData({ ...formData, arac_id: e.target.value })}
+                      value={formData.plaka}
+                      onChange={(e) => setFormData({ ...formData, plaka: e.target.value.toUpperCase() })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Araç Seçin</option>
-                      {araclar.map(arac => (
-                        <option key={arac.id} value={arac.id}>
-                          {arac.plaka} - {arac.marka} {arac.model}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="34 ABC 123"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Sürücü *</label>
-                    <select
+                    <input
+                      type="text"
                       required
-                      value={formData.surucu_id}
-                      onChange={(e) => setFormData({ ...formData, surucu_id: e.target.value })}
+                      value={formData.surucu}
+                      onChange={(e) => setFormData({ ...formData, surucu: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Sürücü Seçin</option>
-                      {suruculer.map(surucu => (
-                        <option key={surucu.id} value={surucu.id}>{surucu.ad_soyad}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Yakıt Tipi *</label>
-                    <select
-                      required
-                      value={formData.yakit_tipi}
-                      onChange={(e) => setFormData({ ...formData, yakit_tipi: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="Dizel">Dizel</option>
-                      <option value="Benzin">Benzin</option>
-                      <option value="LPG">LPG</option>
-                      <option value="Elektrik">Elektrik</option>
-                    </select>
+                      placeholder="Ahmet Yılmaz"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Litre *</label>
@@ -772,39 +652,6 @@ export default function AkaryakitTakip() {
                       placeholder="Otomatik hesaplanır"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">KM</label>
-                    <input
-                      type="number"
-                      value={formData.km}
-                      onChange={(e) => setFormData({ ...formData, km: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Araç KM'si"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">İstasyon</label>
-                    <input
-                      type="text"
-                      value={formData.istasyon}
-                      onChange={(e) => setFormData({ ...formData, istasyon: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Petrol istasyonu adı"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Ödeme Şekli</label>
-                    <select
-                      value={formData.odeme_sekli}
-                      onChange={(e) => setFormData({ ...formData, odeme_sekli: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="Nakit">Nakit</option>
-                      <option value="Kredi Kartı">Kredi Kartı</option>
-                      <option value="Fuel Kart">Fuel Kart</option>
-                      <option value="Havale">Havale</option>
-                    </select>
-                  </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Açıklama</label>
                     <textarea
@@ -837,174 +684,7 @@ export default function AkaryakitTakip() {
           </div>
         )}
 
-        {/* Araç Modal */}
-        {showAracModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
-              <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-xl">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold">Yeni Araç Ekle</h2>
-                  <button
-                    onClick={() => { setShowAracModal(false); setAracForm({ plaka: '', marka: '', model: '', yil: '', renk: '', aktif: true }); }}
-                    className="p-2 hover:bg-white/20 rounded-lg transition"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-              </div>
-              <form onSubmit={handleAracSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Plaka *</label>
-                  <input
-                    type="text"
-                    required
-                    value={aracForm.plaka}
-                    onChange={(e) => setAracForm({ ...aracForm, plaka: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="34 ABC 123"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Marka *</label>
-                  <input
-                    type="text"
-                    required
-                    value={aracForm.marka}
-                    onChange={(e) => setAracForm({ ...aracForm, marka: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Ford"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Model *</label>
-                  <input
-                    type="text"
-                    required
-                    value={aracForm.model}
-                    onChange={(e) => setAracForm({ ...aracForm, model: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Transit"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Yıl</label>
-                  <input
-                    type="number"
-                    value={aracForm.yil}
-                    onChange={(e) => setAracForm({ ...aracForm, yil: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="2020"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Renk</label>
-                  <input
-                    type="text"
-                    value={aracForm.renk}
-                    onChange={(e) => setAracForm({ ...aracForm, renk: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Beyaz"
-                  />
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="submit"
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold rounded-lg transition"
-                  >
-                    <Save className="w-5 h-5" />
-                    <span>Kaydet</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowAracModal(false); setAracForm({ plaka: '', marka: '', model: '', yil: '', renk: '', aktif: true }); }}
-                    className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg transition"
-                  >
-                    İptal
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
 
-        {/* Sürücü Modal */}
-        {showSurucuModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
-              <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-t-xl">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold">Yeni Sürücü Ekle</h2>
-                  <button
-                    onClick={() => { setShowSurucuModal(false); setSurucuForm({ ad_soyad: '', telefon: '', tc_no: '', ehliyet_no: '', aktif: true }); }}
-                    className="p-2 hover:bg-white/20 rounded-lg transition"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-              </div>
-              <form onSubmit={handleSurucuSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Ad Soyad *</label>
-                  <input
-                    type="text"
-                    required
-                    value={surucuForm.ad_soyad}
-                    onChange={(e) => setSurucuForm({ ...surucuForm, ad_soyad: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Ahmet Yılmaz"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Telefon</label>
-                  <input
-                    type="tel"
-                    value={surucuForm.telefon}
-                    onChange={(e) => setSurucuForm({ ...surucuForm, telefon: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="0532 123 45 67"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">TC Kimlik No</label>
-                  <input
-                    type="text"
-                    maxLength="11"
-                    value={surucuForm.tc_no}
-                    onChange={(e) => setSurucuForm({ ...surucuForm, tc_no: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="12345678901"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Ehliyet No</label>
-                  <input
-                    type="text"
-                    value={surucuForm.ehliyet_no}
-                    onChange={(e) => setSurucuForm({ ...surucuForm, ehliyet_no: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="A12345"
-                  />
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="submit"
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold rounded-lg transition"
-                  >
-                    <Save className="w-5 h-5" />
-                    <span>Kaydet</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowSurucuModal(false); setSurucuForm({ ad_soyad: '', telefon: '', tc_no: '', ehliyet_no: '', aktif: true }); }}
-                    className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg transition"
-                  >
-                    İptal
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
