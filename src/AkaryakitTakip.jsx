@@ -78,18 +78,20 @@ export default function AkaryakitTakip() {
     setFormData(prev => ({ ...prev, toplam_tutar: (litre * litreFiyat).toFixed(2) }));
   }, [formData.litre, formData.litre_fiyat]);
 
-  // Kayıt ekle/güncelle - Basitleştirilmiş
+  // Kayıt ekle/güncelle - Basitleştirilmiş (406 hatası düzeltildi)
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
       // 1. Plaka varsa araç bul, yoksa oluştur
       let vehicleId;
-      const { data: existingVehicle } = await supabase
+      const { data: existingVehicle, error: vehicleSelectError } = await supabase
         .from('vehicles')
         .select('id')
         .eq('plate', formData.plaka.toUpperCase())
-        .single();
+        .maybeSingle(); // single() yerine maybeSingle() - 406 hatasını önler
+
+      if (vehicleSelectError) throw vehicleSelectError;
 
       if (existingVehicle) {
         vehicleId = existingVehicle.id;
@@ -106,11 +108,13 @@ export default function AkaryakitTakip() {
 
       // 2. Sürücü varsa bul, yoksa oluştur
       let driverId;
-      const { data: existingDriver } = await supabase
+      const { data: existingDriver, error: driverSelectError } = await supabase
         .from('drivers')
         .select('id')
         .eq('full_name', formData.surucu)
-        .single();
+        .maybeSingle(); // single() yerine maybeSingle() - 406 hatasını önler
+
+      if (driverSelectError) throw driverSelectError;
 
       if (existingDriver) {
         driverId = existingDriver.id;
