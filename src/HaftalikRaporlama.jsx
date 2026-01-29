@@ -31,9 +31,7 @@ export default function HaftalikRaporlama() {
     onceki_hafta_guc_faktoru: '',
     hedef_guc_faktoru: '0.95',
     notlar: '',
-    gorsel_url: '',
-    rapor_hazırlayan: '',
-    onaylayan: ''
+    gorsel_url: ''
   });
   
   const [uploadedImage, setUploadedImage] = useState(null);
@@ -92,8 +90,6 @@ export default function HaftalikRaporlama() {
         onceki_hafta_guc_faktoru: parseFloat(formData.onceki_hafta_guc_faktoru),
         hedef_guc_faktoru: parseFloat(formData.hedef_guc_faktoru),
         gorsel_url: uploadedImage || formData.gorsel_url || null,
-        rapor_hazırlayan: formData.rapor_hazırlayan || null,
-        onaylayan: formData.onaylayan || null,
         notlar: formData.notlar || null
       };
 
@@ -138,9 +134,7 @@ export default function HaftalikRaporlama() {
       onceki_hafta_guc_faktoru: rapor.onceki_hafta_guc_faktoru,
       hedef_guc_faktoru: rapor.hedef_guc_faktoru,
       notlar: rapor.notlar || '',
-      gorsel_url: rapor.gorsel_url || '',
-      rapor_hazırlayan: rapor.rapor_hazırlayan || '',
-      onaylayan: rapor.onaylayan || ''
+      gorsel_url: rapor.gorsel_url || ''
     });
     setUploadedImage(rapor.gorsel_url || null);
     setEditingId(rapor.id);
@@ -195,9 +189,7 @@ export default function HaftalikRaporlama() {
       onceki_hafta_guc_faktoru: '',
       hedef_guc_faktoru: '0.95',
       notlar: '',
-      gorsel_url: '',
-      rapor_hazırlayan: '',
-      onaylayan: ''
+      gorsel_url: ''
     });
     setUploadedImage(null);
   };
@@ -791,28 +783,6 @@ export default function HaftalikRaporlama() {
                     />
                   </div>
 
-                  {/* Rapor Hazırlayan ve Onaylayan */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Rapor Hazırlayan</label>
-                    <input
-                      type="text"
-                      value={formData.rapor_hazırlayan}
-                      onChange={(e) => setFormData({ ...formData, rapor_hazırlayan: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="Örn: Ahmet Yılmaz"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Onaylayan</label>
-                    <input
-                      type="text"
-                      value={formData.onaylayan}
-                      onChange={(e) => setFormData({ ...formData, onaylayan: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="Örn: Mehmet Demir - Genel Müdür"
-                    />
-                  </div>
-
                   {/* Görsel Yükleme */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -947,8 +917,8 @@ export default function HaftalikRaporlama() {
                           <div style={{ width: '48%' }}>
                             <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#2980b9', marginBottom: '5px' }}>ÖLÇÜM VE ANALİZ</h3>
                             <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Hedef Güç Faktörü:</strong> {selectedRapor.hedef_guc_faktoru}</p>
-                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Rapor Hazırlayan:</strong> {selectedRapor.rapor_hazırlayan || 'Kobinerji Mühendislik'}</p>
-                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Onaylayan:</strong> {selectedRapor.onaylayan || 'Teknik Müdür'}</p>
+                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Rapor Hazırlayan:</strong> Kobinerji Mühendislik</p>
+                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Onaylayan:</strong> Teknik Müdür</p>
                           </div>
                         </div>
 
