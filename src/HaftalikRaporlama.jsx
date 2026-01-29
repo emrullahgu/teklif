@@ -927,8 +927,8 @@ export default function HaftalikRaporlama() {
                               <img src="/fatura_logo.png" alt="Logo" style={{ width: '100%', height: 'auto', maxHeight: '20mm', objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none'; }} />
                             </div>
                             <div style={{ flex: 1, textAlign: 'right' }}>
-                              <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: 0 }}>Rapor No: HFT-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{selectedRapor.id}</p>
-                              <p style={{ fontSize: '10px', color: '#7f8c8d', margin: '2px 0 0 0' }}>{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                              <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: 0 }}>Rapor No: HFT-{String(selectedRapor.id).padStart(6, '0')}</p>
+                              <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: '2px 0 0 0' }}>{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                             </div>
                           </div>
                         </div>
@@ -942,10 +942,10 @@ export default function HaftalikRaporlama() {
                             <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Durum:</strong> <span style={{ color: durum.text === 'UYGUN' ? '#10b981' : durum.text === 'DİKKAT' ? '#f59e0b' : '#ef4444', fontWeight: 'bold' }}>{durum.text}</span></p>
                           </div>
                           <div style={{ width: '48%' }}>
-                            <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#2980b9', marginBottom: '5px' }}>RAPOR BİLGİLERİ</h3>
-                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Rapor No:</strong> HFT-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{selectedRapor.id}</p>
-                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Düzenleme Tarihi:</strong> {new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                            <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#2980b9', marginBottom: '5px' }}>ÖLÇÜM VE ANALİZ</h3>
                             <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Hedef Güç Faktörü:</strong> {selectedRapor.hedef_guc_faktoru}</p>
+                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Rapor Hazırlayan:</strong> {selectedRapor.rapor_hazırlayan || 'Kobinerji Mühendislik'}</p>
+                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Onaylayan:</strong> {selectedRapor.onaylayan || 'Teknik Müdür'}</p>
                           </div>
                         </div>
 
