@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit3, Trash2, Save, X, Download, FileText, Clock, MapPin, User, Wrench, Calendar, Filter, Users, Building, Package } from 'lucide-react';
+import { Plus, Edit3, Trash2, Save, X, Download, FileText, Clock, MapPin, User, Wrench, Calendar, Filter, Users, Building, Package, FileDown } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function IsTakip() {
   const [activeTab, setActiveTab] = useState('kayitlar'); // 'kayitlar', 'calisanlar', 'lokasyonlar', 'malzemeler'
@@ -381,6 +383,153 @@ export default function IsTakip() {
     XLSX.writeFile(wb, `is_takip_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const exportToPDF = async () => {
+    try {
+      const loadingDiv = document.createElement('div');
+      loadingDiv.innerHTML = '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 9999;">PDF oluşturuluyor...</div>';
+      document.body.appendChild(loadingDiv);
+
+      const SCALE_FACTOR = 2;
+      const A4_WIDTH_MM = 210;
+      const targetWidthPx = (A4_WIDTH_MM / 25.4) * 96;
+
+      const loadLogo = async () => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve({
+              data: canvas.toDataURL('image/png'),
+              width: img.width,
+              height: img.height
+            });
+          };
+          img.onerror = () => {
+            const altImg = new Image();
+            altImg.crossOrigin = 'anonymous';
+            altImg.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = altImg.width;
+              canvas.height = altImg.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(altImg, 0, 0);
+              resolve({
+                data: canvas.toDataURL('image/png'),
+                width: altImg.width,
+                height: altImg.height
+              });
+            };
+            altImg.onerror = () => {
+              resolve({ data: '', width: 0, height: 0 });
+            };
+            altImg.src = '/kobinerji_logo.png';
+          };
+          img.src = '/fatura_logo.png';
+        });
+      };
+
+      const logoInfo = await loadLogo();
+      
+      const maxLogoWidth = 60;
+      const maxLogoHeight = 24;
+      let logoWidth = 0;
+      let logoHeight = 0;
+      
+      if (logoInfo.width > 0 && logoInfo.height > 0) {
+        const logoAspectRatio = logoInfo.width / logoInfo.height;
+        logoWidth = maxLogoWidth;
+        logoHeight = logoWidth / logoAspectRatio;
+        
+        if (logoHeight > maxLogoHeight) {
+          logoHeight = maxLogoHeight;
+          logoWidth = logoHeight * logoAspectRatio;
+        }
+      }
+
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      });
+
+      const printArea = document.getElementById('is-takip-print-area');
+      if (!printArea) {
+        alert('Yazdırılacak alan bulunamadı!');
+        document.body.removeChild(loadingDiv);
+        return;
+      }
+
+      // Logoları gizle
+      const logos = printArea.querySelectorAll('img');
+      logos.forEach(logo => { logo.style.visibility = 'hidden'; });
+      
+      printArea.style.width = '210mm';
+      printArea.style.margin = '0 auto';
+      printArea.style.boxShadow = 'none';
+
+      const canvas = await html2canvas(printArea, {
+        scale: SCALE_FACTOR,
+        width: targetWidthPx,
+        windowWidth: targetWidthPx,
+        useCORS: true,
+        allowTaint: false,
+        letterRendering: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0
+      });
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageHeight = 297;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+      
+      if (logoInfo.data && logoWidth > 0 && logoHeight > 0) {
+        pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
+      }
+
+      // Sayfa taşması varsa yeni sayfalar ekle
+      if (imgHeight > pageHeight) {
+        let heightLeft = imgHeight - pageHeight;
+        let position = -pageHeight;
+
+        while (heightLeft > 0) {
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, '', 'FAST');
+          
+          if (logoInfo.data && logoWidth > 0 && logoHeight > 0) {
+            pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
+          }
+          
+          position -= pageHeight;
+          heightLeft -= pageHeight;
+        }
+      }
+
+      // Logoları tekrar göster
+      logos.forEach(logo => { logo.style.visibility = 'visible'; });
+      printArea.style.width = '';
+      printArea.style.margin = '';
+      printArea.style.boxShadow = '';
+
+      pdf.save(`is_takip_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.removeChild(loadingDiv);
+      
+    } catch (error) {
+      console.error('PDF oluşturma hatası:', error);
+      alert('PDF oluşturulurken hata oluştu: ' + error.message);
+    }
+  };
+
   // Filtreleme
   const filtreliKayitlar = kayitlar.filter(kayit => {
     if (filtreCalisan && kayit.calisan_id !== filtreCalisan) return false;
@@ -423,6 +572,13 @@ export default function IsTakip() {
               </div>
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={exportToPDF}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+              >
+                <FileDown className="w-5 h-5" />
+                <span>PDF İndir</span>
+              </button>
               <button
                 onClick={exportToExcel}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition"
@@ -497,6 +653,7 @@ export default function IsTakip() {
         {/* İş Kayıtları Tab */}
         {activeTab === 'kayitlar' && (
           <>
+          <div id="is-takip-print-area">
           {/* Filtreler */}
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
@@ -673,6 +830,7 @@ export default function IsTakip() {
               </tbody>
             </table>
           </div>
+        </div>
         </div>
         </>
         )}
