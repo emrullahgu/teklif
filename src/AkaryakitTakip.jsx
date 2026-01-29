@@ -265,7 +265,25 @@ export default function AkaryakitTakip() {
     XLSX.writeFile(wb, `akaryakıt_kayıtları_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  // PDF'e aktar - Profesyonel
+  // Türkçe karakterleri temizle (jsPDF uyumluluğu için)
+  const turkceKarakterTemizle = (text) => {
+    if (!text) return text;
+    return text.toString()
+      .replace(/ğ/g, 'g')
+      .replace(/Ğ/g, 'G')
+      .replace(/ü/g, 'u')
+      .replace(/Ü/g, 'U')
+      .replace(/ş/g, 's')
+      .replace(/Ş/g, 'S')
+      .replace(/ı/g, 'i')
+      .replace(/İ/g, 'I')
+      .replace(/ö/g, 'o')
+      .replace(/Ö/g, 'O')
+      .replace(/ç/g, 'c')
+      .replace(/Ç/g, 'C');
+  };
+
+  // PDF'e aktar - Profesyonel (Türkçe karakter desteği)
   const exportToPDF = () => {
     const doc = new jsPDF('p', 'mm', 'a4');
     
@@ -291,7 +309,7 @@ export default function AkaryakitTakip() {
       month: 'long', 
       day: 'numeric' 
     });
-    doc.text(`Rapor Tarihi: ${dateStr}`, pageWidth / 2, 28, { align: 'center' });
+    doc.text(`Rapor Tarihi: ${turkceKarakterTemizle(dateStr)}`, pageWidth / 2, 28, { align: 'center' });
     
     // Dönem bilgisi
     if (aylikGoruntule && secilenAy) {
@@ -299,7 +317,7 @@ export default function AkaryakitTakip() {
         year: 'numeric', 
         month: 'long' 
       });
-      doc.text(`Donem: ${monthYear}`, pageWidth / 2, 36, { align: 'center' });
+      doc.text(`Donem: ${turkceKarakterTemizle(monthYear)}`, pageWidth / 2, 36, { align: 'center' });
     }
     
     // İstatistik kutuları
@@ -334,21 +352,21 @@ export default function AkaryakitTakip() {
       // Label
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139); // Gray-500
-      doc.text(stat.label, x + boxWidth / 2, startY + 6, { align: 'center' });
+      doc.text(turkceKarakterTemizle(stat.label), x + boxWidth / 2, startY + 6, { align: 'center' });
       
       // Value
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'bold');
-      doc.text(stat.value, x + boxWidth / 2, startY + 14, { align: 'center' });
+      doc.text(turkceKarakterTemizle(stat.value), x + boxWidth / 2, startY + 14, { align: 'center' });
       doc.setFont('helvetica', 'normal');
     });
     
     // Tablo
     const tableData = filtreliKayitlar.map(kayit => [
       new Date(kayit.date).toLocaleDateString('tr-TR'),
-      kayit.vehicles?.plate || '-',
-      kayit.drivers?.full_name || '-',
+      turkceKarakterTemizle(kayit.vehicles?.plate) || '-',
+      turkceKarakterTemizle(kayit.drivers?.full_name) || '-',
       kayit.liters.toFixed(2) + ' L',
       kayit.price_per_liter.toFixed(2) + ' TL',
       kayit.total_amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL'
