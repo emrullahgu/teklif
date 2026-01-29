@@ -1,11 +1,12 @@
 ﻿import React, { useState, useMemo, useRef } from 'react';
-import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote, Menu, ExternalLink, Fuel } from 'lucide-react';
+import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote, Menu, ExternalLink, Fuel, Briefcase } from 'lucide-react';
 import { BordroWithPassword } from './bordro-main.jsx';
 import BeyazYakaBordro from './BeyazYakaBordro.tsx';
 import KesifMetraj from './KesifMetraj.jsx';
 import GorevTakip from './GorevTakip.jsx';
 import Osos from './Osos.jsx';
 import AkaryakitTakip from './AkaryakitTakip.jsx';
+import IsTakip from './IsTakip.jsx';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import jsPDF from 'jspdf';
@@ -176,7 +177,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState(() => {
     // Sayfa yenilendiğinde son aktif sekmeyi geri yükle
     return localStorage.getItem('activeTab') || 'dashboard';
-  }); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro', 'gorev', 'osos', 'akaryakıt'
+  }); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro', 'gorev', 'osos', 'akaryakıt', 'is-takip'
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -3396,6 +3397,19 @@ KURALLAR:
               </li>
               <li>
                 <button 
+                  onClick={() => { setActiveTab('is-takip'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'is-takip' 
+                      ? 'bg-purple-100 text-purple-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Briefcase className="w-5 h-5" />
+                  <span>İş Takip</span>
+                </button>
+              </li>
+              <li>
+                <button 
                   onClick={() => { setActiveTab('saved'); setIsSidebarOpen(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                     activeTab === 'saved' 
@@ -4588,6 +4602,13 @@ KURALLAR:
         {activeTab === 'akaryakıt' && (
           <div className="h-full">
             <AkaryakitTakip />
+          </div>
+        )}
+
+        {/* İş Takip Tab */}
+        {activeTab === 'is-takip' && (
+          <div className="h-full">
+            <IsTakip />
           </div>
         )}
 

@@ -1,0 +1,591 @@
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit3, Trash2, Save, X, Download, FileText, Clock, MapPin, User, Wrench, Calendar, Filter } from 'lucide-react';
+import { supabase } from './supabaseClient';
+import * as XLSX from 'xlsx';
+
+export default function IsTakip() {
+  const [kayitlar, setKayitlar] = useState([]);
+  const [calisanlar, setCalisanlar] = useState([]);
+  const [lokasyonlar, setLokasyonlar] = useState([]);
+  const [malzemeler, setMalzemeler] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({
+    tarih: new Date().toISOString().split('T')[0],
+    calisan_id: '',
+    lokasyon_id: '',
+    baslangic_saat: '',
+    bitis_saat: '',
+    toplam_sure: 0,
+    yapilan_is: '',
+    kullanilan_malzemeler: [],
+    notlar: ''
+  });
+
+  // Filtreleme için state'ler
+  const [filtreCalisan, setFiltreCalisan] = useState('');
+  const [filtreLokasyon, setFiltreLokasyon] = useState('');
+  const [filtreTarihBaslangic, setFiltreTarihBaslangic] = useState('');
+  const [filtreTarihBitis, setFiltreTarihBitis] = useState('');
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      // Çalışanları yükle
+      const { data: calisanData, error: calisanError } = await supabase
+        .from('is_takip_calisanlar')
+        .select('*')
+        .order('ad_soyad');
+      
+      if (calisanError) throw calisanError;
+      setCalisanlar(calisanData || []);
+
+      // Lokasyonları yükle
+      const { data: lokasyonData, error: lokasyonError } = await supabase
+        .from('is_takip_lokasyonlar')
+        .select('*')
+        .order('ad');
+      
+      if (lokasyonError) throw lokasyonError;
+      setLokasyonlar(lokasyonData || []);
+
+      // Malzemeleri yükle
+      const { data: malzemeData, error: malzemeError } = await supabase
+        .from('is_takip_malzemeler')
+        .select('*')
+        .order('ad');
+      
+      if (malzemeError) throw malzemeError;
+      setMalzemeler(malzemeData || []);
+
+      // İş kayıtlarını yükle
+      const { data: kayitData, error: kayitError } = await supabase
+        .from('is_takip_kayitlar')
+        .select(`
+          *,
+          calisan:is_takip_calisanlar(ad_soyad),
+          lokasyon:is_takip_lokasyonlar(ad, adres)
+        `)
+        .order('tarih', { ascending: false });
+      
+      if (kayitError) throw kayitError;
+      setKayitlar(kayitData || []);
+    } catch (error) {
+      console.error('Veri yükleme hatası:', error);
+      alert('Veri yüklenirken hata oluştu: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateTotalSure = (baslangic, bitis) => {
+    if (!baslangic || !bitis) return 0;
+    const [bH, bM] = baslangic.split(':').map(Number);
+    const [eH, eM] = bitis.split(':').map(Number);
+    const baslangicDk = bH * 60 + bM;
+    const bitisDk = eH * 60 + eM;
+    const fark = bitisDk - baslangicDk;
+    return fark > 0 ? (fark / 60).toFixed(2) : 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const toplam_sure = calculateTotalSure(formData.baslangic_saat, formData.bitis_saat);
+      
+      const kayit = {
+        ...formData,
+        toplam_sure: parseFloat(toplam_sure)
+      };
+
+      if (editingId) {
+        const { error } = await supabase
+          .from('is_takip_kayitlar')
+          .update(kayit)
+          .eq('id', editingId);
+        
+        if (error) throw error;
+        alert('Kayıt güncellendi!');
+      } else {
+        const { error } = await supabase
+          .from('is_takip_kayitlar')
+          .insert([kayit]);
+        
+        if (error) throw error;
+        alert('Kayıt eklendi!');
+      }
+
+      setShowModal(false);
+      setEditingId(null);
+      resetForm();
+      loadData();
+    } catch (error) {
+      console.error('Kaydetme hatası:', error);
+      alert('Kayıt sırasında hata oluştu: ' + error.message);
+    }
+  };
+
+  const handleEdit = (kayit) => {
+    setFormData({
+      tarih: kayit.tarih,
+      calisan_id: kayit.calisan_id,
+      lokasyon_id: kayit.lokasyon_id,
+      baslangic_saat: kayit.baslangic_saat,
+      bitis_saat: kayit.bitis_saat,
+      toplam_sure: kayit.toplam_sure,
+      yapilan_is: kayit.yapilan_is,
+      kullanilan_malzemeler: kayit.kullanilan_malzemeler || [],
+      notlar: kayit.notlar || ''
+    });
+    setEditingId(kayit.id);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Bu kaydı silmek istediğinize emin misiniz?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('is_takip_kayitlar')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      alert('Kayıt silindi!');
+      loadData();
+    } catch (error) {
+      console.error('Silme hatası:', error);
+      alert('Silme sırasında hata oluştu: ' + error.message);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      tarih: new Date().toISOString().split('T')[0],
+      calisan_id: '',
+      lokasyon_id: '',
+      baslangic_saat: '',
+      bitis_saat: '',
+      toplam_sure: 0,
+      yapilan_is: '',
+      kullanilan_malzemeler: [],
+      notlar: ''
+    });
+  };
+
+  const exportToExcel = () => {
+    const data = filtreliKayitlar.map(kayit => ({
+      'Tarih': new Date(kayit.tarih).toLocaleDateString('tr-TR'),
+      'Çalışan': kayit.calisan?.ad_soyad || '-',
+      'Lokasyon': kayit.lokasyon?.ad || '-',
+      'Başlangıç': kayit.baslangic_saat,
+      'Bitiş': kayit.bitis_saat,
+      'Süre (Saat)': kayit.toplam_sure,
+      'Yapılan İş': kayit.yapilan_is,
+      'Malzemeler': Array.isArray(kayit.kullanilan_malzemeler) 
+        ? kayit.kullanilan_malzemeler.map(m => malzemeler.find(mal => mal.id === m)?.ad || m).join(', ')
+        : '-',
+      'Notlar': kayit.notlar || '-'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'İş Takip');
+    XLSX.writeFile(wb, `is_takip_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  // Filtreleme
+  const filtreliKayitlar = kayitlar.filter(kayit => {
+    if (filtreCalisan && kayit.calisan_id !== filtreCalisan) return false;
+    if (filtreLokasyon && kayit.lokasyon_id !== filtreLokasyon) return false;
+    if (filtreTarihBaslangic && kayit.tarih < filtreTarihBaslangic) return false;
+    if (filtreTarihBitis && kayit.tarih > filtreTarihBitis) return false;
+    return true;
+  });
+
+  // İstatistikler
+  const istatistikler = {
+    toplamKayit: filtreliKayitlar.length,
+    toplamSure: filtreliKayitlar.reduce((sum, k) => sum + (k.toplam_sure || 0), 0).toFixed(2),
+    aktifCalisan: [...new Set(filtreliKayitlar.map(k => k.calisan_id))].length,
+    aktifLokasyon: [...new Set(filtreliKayitlar.map(k => k.lokasyon_id))].length
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Yükleniyor...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Clock className="w-8 h-8 text-purple-600" />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800">İş Takip Sistemi</h1>
+                <p className="text-sm text-gray-500">Kim, nerede, ne, ne kadar, ne kullanarak</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={exportToExcel}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition"
+              >
+                <Download className="w-5 h-5" />
+                <span>Excel İndir</span>
+              </button>
+              <button
+                onClick={() => { setShowModal(true); setEditingId(null); resetForm(); }}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition shadow-lg"
+              >
+                <Plus className="w-5 h-5" />
+                <span className="font-semibold">İş Kaydı Ekle</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filtreler */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Çalışan</label>
+              <select
+                value={filtreCalisan}
+                onChange={(e) => setFiltreCalisan(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="">Tümü</option>
+                {calisanlar.map(c => (
+                  <option key={c.id} value={c.id}>{c.ad_soyad}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Lokasyon</label>
+              <select
+                value={filtreLokasyon}
+                onChange={(e) => setFiltreLokasyon(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="">Tümü</option>
+                {lokasyonlar.map(l => (
+                  <option key={l.id} value={l.id}>{l.ad}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Başlangıç Tarihi</label>
+              <input
+                type="date"
+                value={filtreTarihBaslangic}
+                onChange={(e) => setFiltreTarihBaslangic(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Bitiş Tarihi</label>
+              <input
+                type="date"
+                value={filtreTarihBitis}
+                onChange={(e) => setFiltreTarihBitis(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+            {(filtreCalisan || filtreLokasyon || filtreTarihBaslangic || filtreTarihBitis) && (
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setFiltreCalisan('');
+                    setFiltreLokasyon('');
+                    setFiltreTarihBaslangic('');
+                    setFiltreTarihBitis('');
+                  }}
+                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition text-sm"
+                >
+                  Filtreleri Temizle
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* İstatistikler */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-4 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm opacity-90">Toplam Kayıt</p>
+                <p className="text-2xl font-bold">{istatistikler.toplamKayit}</p>
+              </div>
+              <FileText className="w-10 h-10 opacity-80" />
+            </div>
+          </div>
+          <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-4 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm opacity-90">Toplam Süre</p>
+                <p className="text-2xl font-bold">{istatistikler.toplamSure} saat</p>
+              </div>
+              <Clock className="w-10 h-10 opacity-80" />
+            </div>
+          </div>
+          <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-4 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm opacity-90">Aktif Çalışan</p>
+                <p className="text-2xl font-bold">{istatistikler.aktifCalisan}</p>
+              </div>
+              <User className="w-10 h-10 opacity-80" />
+            </div>
+          </div>
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg p-4 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm opacity-90">Aktif Lokasyon</p>
+                <p className="text-2xl font-bold">{istatistikler.aktifLokasyon}</p>
+              </div>
+              <MapPin className="w-10 h-10 opacity-80" />
+            </div>
+          </div>
+        </div>
+
+        {/* Tablo */}
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Tarih</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Çalışan</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Lokasyon</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold">Saat Aralığı</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold">Süre</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Yapılan İş</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold">İşlemler</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filtreliKayitlar.map((kayit, index) => (
+                  <tr key={kayit.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="px-4 py-3 text-sm">
+                      {new Date(kayit.tarih).toLocaleDateString('tr-TR')}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium">
+                      {kayit.calisan?.ad_soyad || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        {kayit.lokasyon?.ad || '-'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-center">
+                      {kayit.baslangic_saat} - {kayit.bitis_saat}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-center font-bold text-purple-600">
+                      {kayit.toplam_sure} saat
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="max-w-xs truncate" title={kayit.yapilan_is}>
+                        {kayit.yapilan_is}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleEdit(kayit)}
+                          className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
+                          title="Düzenle"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(kayit.id)}
+                          className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition"
+                          title="Sil"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filtreliKayitlar.length === 0 && (
+                  <tr>
+                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                      Kayıt bulunamadı
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-6 rounded-t-xl">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold">
+                    {editingId ? 'İş Kaydını Düzenle' : 'Yeni İş Kaydı'}
+                  </h2>
+                  <button
+                    onClick={() => { setShowModal(false); setEditingId(null); resetForm(); }}
+                    className="p-2 hover:bg-white/20 rounded-lg transition"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit} className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.tarih}
+                      onChange={(e) => setFormData({ ...formData, tarih: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Çalışan *</label>
+                    <select
+                      required
+                      value={formData.calisan_id}
+                      onChange={(e) => setFormData({ ...formData, calisan_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Seçiniz</option>
+                      {calisanlar.map(c => (
+                        <option key={c.id} value={c.id}>{c.ad_soyad}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Lokasyon *</label>
+                    <select
+                      required
+                      value={formData.lokasyon_id}
+                      onChange={(e) => setFormData({ ...formData, lokasyon_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Seçiniz</option>
+                      {lokasyonlar.map(l => (
+                        <option key={l.id} value={l.id}>{l.ad}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Başlangıç Saati *</label>
+                    <input
+                      type="time"
+                      required
+                      value={formData.baslangic_saat}
+                      onChange={(e) => setFormData({ ...formData, baslangic_saat: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Bitiş Saati *</label>
+                    <input
+                      type="time"
+                      required
+                      value={formData.bitis_saat}
+                      onChange={(e) => setFormData({ ...formData, bitis_saat: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Toplam Süre (Otomatik)</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={calculateTotalSure(formData.baslangic_saat, formData.bitis_saat) + ' saat'}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 font-bold"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Yapılan İş *</label>
+                    <textarea
+                      required
+                      value={formData.yapilan_is}
+                      onChange={(e) => setFormData({ ...formData, yapilan_is: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      rows="3"
+                      placeholder="Yapılan işi detaylı açıklayınız..."
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Kullanılan Malzemeler</label>
+                    <select
+                      multiple
+                      value={formData.kullanilan_malzemeler}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        kullanilan_malzemeler: Array.from(e.target.selectedOptions, option => option.value)
+                      })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      size="5"
+                    >
+                      {malzemeler.map(m => (
+                        <option key={m.id} value={m.id}>{m.ad}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">Ctrl/Cmd tuşu ile birden fazla seçim yapabilirsiniz</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Notlar</label>
+                    <textarea
+                      value={formData.notlar}
+                      onChange={(e) => setFormData({ ...formData, notlar: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      rows="2"
+                      placeholder="Ekstra notlar..."
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-6 mt-6 border-t border-gray-200">
+                  <button
+                    type="submit"
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg transition"
+                  >
+                    <Save className="w-5 h-5" />
+                    <span>{editingId ? 'Güncelle' : 'Kaydet'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowModal(false); setEditingId(null); resetForm(); }}
+                    className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg transition"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
