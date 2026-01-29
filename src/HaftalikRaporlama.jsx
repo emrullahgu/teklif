@@ -202,8 +202,11 @@ export default function HaftalikRaporlama() {
   };
 
   const exportToPDF = async (rapor) => {
+    const targetWidthPx = 793;
+    const SCALE_FACTOR = 2;
+    
     try {
-      // Logo yükle ve base64'e çevir
+      // Logo yükle ve base64'e çevir (boyutlarıyla birlikte)
       const loadLogo = async () => {
         return new Promise((resolve, reject) => {
           const img = new Image();
@@ -257,39 +260,54 @@ export default function HaftalikRaporlama() {
       const logos = element.querySelectorAll('.pdf-logo');
       logos.forEach(logo => { logo.style.visibility = 'hidden'; });
 
+      // Geçici stil ayarları
+      const originalWidth = element.style.width;
+      const originalMargin = element.style.margin;
+      const originalBoxShadow = element.style.boxShadow;
+      
+      element.style.width = '210mm';
+      element.style.margin = '0 auto';
+      element.style.boxShadow = 'none';
+      element.classList.add('pdf-exporting');
+
       // html2canvas ile component'i görüntüye çevir
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: SCALE_FACTOR,
+        width: targetWidthPx,
+        windowWidth: targetWidthPx,
         useCORS: true,
+        letterRendering: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      });
       
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      const imgWidth = 210; // A4 genişlik mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // İlk sayfa
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      // Logo ekle
-      pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
+      // Görseli PDF'e ekle
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+      
+      // Logo'yu yüksek kalitede ekle (sol üst köşe, aspect ratio korunarak)
+      pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
 
-      // Eğer içerik bir sayfadan fazlaysa, sadece o zaman ek sayfa ekle
-      if (imgHeight > pageHeight) {
-        let heightLeft = imgHeight - pageHeight;
-        let position = -pageHeight;
-
-        while (heightLeft > 0) {
+      // Eğer içerik bir sayfadan fazlaysa ek sayfa ekle
+      if (imgHeight > 297) {
+        let position = -297;
+        while (position > -imgHeight) {
           pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-          // Her sayfaya logo ekle
-          pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
-          position -= pageHeight;
-          heightLeft -= pageHeight;
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, '', 'FAST');
+          pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST'); // Her sayfada logo
+          position -= 297;
         }
       }
 
@@ -298,6 +316,12 @@ export default function HaftalikRaporlama() {
       
       // Logoları tekrar göster
       logos.forEach(logo => { logo.style.visibility = 'visible'; });
+
+      // Stil ayarlarını geri al
+      element.style.width = originalWidth;
+      element.style.margin = originalMargin;
+      element.style.boxShadow = originalBoxShadow;
+      element.classList.remove('pdf-exporting');
       
       setShowPdfPreview(false);
       setSelectedRapor(null);
