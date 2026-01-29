@@ -160,10 +160,31 @@ export default function HaftalikRaporlama() {
   };
 
   const resetForm = () => {
+    // Bu haftanın Pazartesi ve Pazar tarihlerini hesapla
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Pazar, 1 = Pazartesi, ...
+    const monday = new Date(today);
+    const sunday = new Date(today);
+    
+    // Pazartesi'ye git (dayOfWeek === 0 ise Pazar, -6 gün; dayOfWeek === 1 ise Pazartesi, 0 gün)
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    monday.setDate(today.getDate() + daysToMonday);
+    
+    // Pazar'a git (Pazartesiden +6 gün)
+    sunday.setDate(monday.getDate() + 6);
+    
+    // YYYY-MM-DD formatına çevir
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
     setFormData({
       fabrika_adi: '',
-      hafta_baslangic: '',
-      hafta_bitis: '',
+      hafta_baslangic: formatDate(monday),
+      hafta_bitis: formatDate(sunday),
       guc_faktoru: '',
       reaktif_guc: '',
       aktif_guc: '',
@@ -178,6 +199,23 @@ export default function HaftalikRaporlama() {
       onaylayan: ''
     });
     setUploadedImage(null);
+  };
+
+  const handleYeniRapor = async () => {
+    setEditingId(null);
+    resetForm();
+    
+    // Son rapordan önceki hafta güç faktörünü al
+    if (raporlar.length > 0) {
+      const sonRapor = raporlar[0]; // En son rapor (zaten tarihe göre sıralı)
+      setFormData(prev => ({
+        ...prev,
+        onceki_hafta_guc_faktoru: sonRapor.guc_faktoru,
+        fabrika_adi: sonRapor.fabrika_adi // Aynı fabrika için devam et
+      }));
+    }
+    
+    setShowModal(true);
   };
 
   const exportToExcel = () => {
@@ -449,11 +487,7 @@ export default function HaftalikRaporlama() {
                 <span>Excel</span>
               </button>
               <button
-                onClick={() => { 
-                  setShowModal(true); 
-                  setEditingId(null); 
-                  resetForm(); 
-                }}
+                onClick={handleYeniRapor}
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg transition shadow-lg"
               >
                 <Plus className="w-5 h-5" />
@@ -700,25 +734,61 @@ export default function HaftalikRaporlama() {
                   </div>
 
                   {/* Hafta Tarihleri */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Hafta Başlangıç *</label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.hafta_baslangic}
-                      onChange={(e) => setFormData({ ...formData, hafta_baslangic: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Hafta Bitiş *</label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.hafta_bitis}
-                      onChange={(e) => setFormData({ ...formData, hafta_bitis: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
+                  <div className="md:col-span-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Hafta Dönemi *</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const today = new Date();
+                          const dayOfWeek = today.getDay();
+                          const monday = new Date(today);
+                          const sunday = new Date(today);
+                          
+                          const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                          monday.setDate(today.getDate() + daysToMonday);
+                          sunday.setDate(monday.getDate() + 6);
+                          
+                          const formatDate = (date) => {
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            return `${year}-${month}-${day}`;
+                          };
+                          
+                          setFormData({
+                            ...formData,
+                            hafta_baslangic: formatDate(monday),
+                            hafta_bitis: formatDate(sunday)
+                          });
+                        }}
+                        className="text-xs px-3 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition"
+                      >
+                        Bu Hafta
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <input
+                          type="date"
+                          required
+                          value={formData.hafta_baslangic}
+                          onChange={(e) => setFormData({ ...formData, hafta_baslangic: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Pazartesi</p>
+                      </div>
+                      <div>
+                        <input
+                          type="date"
+                          required
+                          value={formData.hafta_bitis}
+                          onChange={(e) => setFormData({ ...formData, hafta_bitis: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Pazar</p>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Güç Faktörü */}
