@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Edit3, Trash2, Save, X, Download, FileDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Calendar, BarChart3, PieChart, Activity } from 'lucide-react';
+import { Plus, Edit3, Trash2, Save, X, Download, FileDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Calendar, BarChart3, PieChart, Activity, Upload, Image as ImageIcon, Zap, Building2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -26,8 +26,13 @@ export default function HaftalikRaporlama() {
     maliyet: '',
     onceki_hafta_guc_faktoru: '',
     hedef_guc_faktoru: '0.95',
-    notlar: ''
+    notlar: '',
+    gorsel_url: '',
+    rapor_hazırlayan: '',
+    onaylayan: ''
   });
+  const [uploadedImage, setUploadedImage] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Filtreleme
   const [filtreFabrika, setFiltreFabrika] = useState('');
@@ -57,6 +62,19 @@ export default function HaftalikRaporlama() {
     }
   };
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Base64'e çevir
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setUploadedImage(reader.result);
+      setFormData({ ...formData, gorsel_url: reader.result });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -69,7 +87,8 @@ export default function HaftalikRaporlama() {
         enerji_tuketimi: parseFloat(formData.enerji_tuketimi),
         maliyet: parseFloat(formData.maliyet),
         onceki_hafta_guc_faktoru: parseFloat(formData.onceki_hafta_guc_faktoru),
-        hedef_guc_faktoru: parseFloat(formData.hedef_guc_faktoru)
+        hedef_guc_faktoru: parseFloat(formData.hedef_guc_faktoru),
+        gorsel_url: uploadedImage || formData.gorsel_url || null
       };
 
       if (editingId) {
@@ -112,8 +131,12 @@ export default function HaftalikRaporlama() {
       maliyet: rapor.maliyet,
       onceki_hafta_guc_faktoru: rapor.onceki_hafta_guc_faktoru,
       hedef_guc_faktoru: rapor.hedef_guc_faktoru,
-      notlar: rapor.notlar || ''
+      notlar: rapor.notlar || '',
+      gorsel_url: rapor.gorsel_url || '',
+      rapor_hazırlayan: rapor.rapor_hazırlayan || '',
+      onaylayan: rapor.onaylayan || ''
     });
+    setUploadedImage(rapor.gorsel_url || null);
     setEditingId(rapor.id);
     setShowModal(true);
   };
@@ -149,8 +172,12 @@ export default function HaftalikRaporlama() {
       maliyet: '',
       onceki_hafta_guc_faktoru: '',
       hedef_guc_faktoru: '0.95',
-      notlar: ''
+      notlar: '',
+      gorsel_url: '',
+      rapor_hazırlayan: '',
+      onaylayan: ''
     });
+    setUploadedImage(null);
   };
 
   const exportToExcel = () => {
@@ -212,7 +239,7 @@ export default function HaftalikRaporlama() {
       setSelectedRapor(rapor);
       setShowPdfPreview(true);
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
       
       const element = pdfPreviewRef.current;
       if (!element) {
@@ -225,10 +252,13 @@ export default function HaftalikRaporlama() {
       logos.forEach(logo => { logo.style.visibility = 'hidden'; });
 
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: 2.5,
         useCORS: true,
+        allowTaint: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        windowWidth: 794,
+        windowHeight: 1123
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -748,6 +778,74 @@ export default function HaftalikRaporlama() {
                       placeholder="Ek açıklamalar..."
                     />
                   </div>
+
+                  {/* Rapor Hazırlayan ve Onaylayan */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Rapor Hazırlayan</label>
+                    <input
+                      type="text"
+                      value={formData.rapor_hazırlayan}
+                      onChange={(e) => setFormData({ ...formData, rapor_hazırlayan: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="Örn: Ahmet Yılmaz"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Onaylayan</label>
+                    <input
+                      type="text"
+                      value={formData.onaylayan}
+                      onChange={(e) => setFormData({ ...formData, onaylayan: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="Örn: Mehmet Demir - Genel Müdür"
+                    />
+                  </div>
+
+                  {/* Görsel Yükleme */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <div className="flex items-center gap-2">
+                        <ImageIcon className="w-4 h-4" />
+                        Görsel / Fotoğraf Ekle
+                      </div>
+                    </label>
+                    <div className="space-y-3">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition"
+                      >
+                        <Upload className="w-5 h-5 text-gray-500" />
+                        <span className="text-gray-600">Görsel Yükle (Kompanzasyon panosu, ölçüm cihazı vb.)</span>
+                      </button>
+                      {uploadedImage && (
+                        <div className="relative">
+                          <img 
+                            src={uploadedImage} 
+                            alt="Yüklenen görsel" 
+                            className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUploadedImage(null);
+                              setFormData({ ...formData, gorsel_url: '' });
+                            }}
+                            className="absolute top-2 right-2 p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex gap-3 pt-6 mt-6 border-t border-gray-200">
@@ -776,105 +874,176 @@ export default function HaftalikRaporlama() {
           <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
             <div ref={pdfPreviewRef} style={{ width: '210mm', backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }}>
               <div style={{ padding: '15mm' }}>
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: '20px', marginBottom: '30px' }}>
+                {/* Header with Logo and Report Info */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #4f46e5', paddingBottom: '20px', marginBottom: '25px' }}>
                   <div style={{ minWidth: '150px' }}>
-                    <img src="/fatura_logo.png" alt="Logo" style={{ height: '60px', maxWidth: '180px', objectFit: 'contain' }} />
+                    <img src="/fatura_logo.png" alt="Logo" className="pdf-logo" style={{ height: '70px', maxWidth: '200px', objectFit: 'contain' }} />
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 8px 0' }}>HAFTALIK ENERJİ VE KOMPANZASYON RAPORU</h1>
-                    <p style={{ fontSize: '11px', color: '#6b7280', margin: '3px 0' }}>
-                      Rapor No: HFT-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
-                    </p>
-                    <p style={{ fontSize: '11px', color: '#6b7280', margin: '3px 0' }}>
-                      Tarih: {new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
-                    </p>
+                    <div style={{ backgroundColor: '#4f46e5', color: 'white', padding: '8px 16px', borderRadius: '6px', marginBottom: '10px', display: 'inline-block' }}>
+                      <h1 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0' }}>HAFTALIK ENERJİ VE KOMPANZASYON RAPORU</h1>
+                    </div>
+                    <div style={{ backgroundColor: '#f3f4f6', padding: '10px', borderRadius: '6px', marginTop: '8px' }}>
+                      <p style={{ fontSize: '11px', color: '#374151', margin: '3px 0', fontWeight: 'bold' }}>
+                        📋 Rapor No: HFT-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
+                      </p>
+                      <p style={{ fontSize: '11px', color: '#374151', margin: '3px 0' }}>
+                        📅 Tarih: {new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                      <p style={{ fontSize: '11px', color: '#374151', margin: '3px 0' }}>
+                        🏭 Dönem: {new Date(selectedRapor.hafta_baslangic).toLocaleDateString('tr-TR')} - {new Date(selectedRapor.hafta_bitis).toLocaleDateString('tr-TR')}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Fabrika Bilgisi */}
-                <div style={{ backgroundColor: '#f3f4f6', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-                  <h2 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 10px 0' }}>{selectedRapor.fabrika_adi}</h2>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0' }}>
-                    Rapor Dönemi: {new Date(selectedRapor.hafta_baslangic).toLocaleDateString('tr-TR')} - {new Date(selectedRapor.hafta_bitis).toLocaleDateString('tr-TR')}
-                  </p>
+                {/* Fabrika Bilgisi - Prominent */}
+                <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '20px', borderRadius: '10px', marginBottom: '25px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                      🏢
+                    </div>
+                    <div>
+                      <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 5px 0' }}>{selectedRapor.fabrika_adi}</h2>
+                      <p style={{ fontSize: '12px', margin: '0', opacity: 0.9 }}>
+                        Haftalık Performans Değerlendirme Raporu
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Durum Badge */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '25px' }}>
+                {/* Durum Badge - Large and Clear */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
                   <div style={{ 
-                    padding: '15px 30px', 
-                    borderRadius: '8px', 
-                    fontSize: '18px', 
+                    padding: '20px 50px', 
+                    borderRadius: '12px', 
+                    fontSize: '22px', 
                     fontWeight: 'bold',
-                    backgroundColor: getDurum(selectedRapor).text === 'UYGUN' ? '#dcfce7' : getDurum(selectedRapor).text === 'DİKKAT' ? '#fef3c7' : '#fee2e2',
-                    color: getDurum(selectedRapor).text === 'UYGUN' ? '#15803d' : getDurum(selectedRapor).text === 'DİKKAT' ? '#a16207' : '#b91c1c'
+                    backgroundColor: getDurum(selectedRapor).text === 'UYGUN' ? '#10b981' : getDurum(selectedRapor).text === 'DİKKAT' ? '#f59e0b' : '#ef4444',
+                    color: 'white',
+                    textAlign: 'center',
+                    boxShadow: '0 6px 12px rgba(0,0,0,0.15)',
+                    border: '3px solid rgba(255,255,255,0.8)'
                   }}>
+                    {getDurum(selectedRapor).text === 'UYGUN' ? '✓ ' : getDurum(selectedRapor).text === 'DİKKAT' ? '⚠ ' : '✗ '}
                     {getDurum(selectedRapor).text}
                   </div>
                 </div>
 
-                {/* Özet Bilgiler */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '25px' }}>
-                  <div style={{ padding: '15px', backgroundColor: '#dbeafe', borderRadius: '8px', textAlign: 'center' }}>
-                    <p style={{ fontSize: '10px', color: '#1e40af', marginBottom: '5px', fontWeight: 'bold' }}>GÜÇ FAKTÖRÜ</p>
-                    <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e3a8a', margin: '0' }}>{selectedRapor.guc_faktoru}</p>
-                    <p style={{ fontSize: '9px', color: '#6b7280', marginTop: '5px' }}>Hedef: {selectedRapor.hedef_guc_faktoru}</p>
+                {/* Özet Bilgiler - Enhanced Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '30px' }}>
+                  <div style={{ padding: '20px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '10px', textAlign: 'center', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                    <div style={{ fontSize: '30px', marginBottom: '8px' }}>⚡</div>
+                    <p style={{ fontSize: '10px', marginBottom: '8px', fontWeight: 'bold', opacity: 0.9 }}>GÜÇ FAKTÖRÜ (cosφ)</p>
+                    <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '0' }}>{selectedRapor.guc_faktoru}</p>
+                    <p style={{ fontSize: '10px', marginTop: '8px', opacity: 0.8 }}>Hedef: {selectedRapor.hedef_guc_faktoru}</p>
                   </div>
-                  <div style={{ padding: '15px', backgroundColor: '#dcfce7', borderRadius: '8px', textAlign: 'center' }}>
-                    <p style={{ fontSize: '10px', color: '#15803d', marginBottom: '5px', fontWeight: 'bold' }}>AKTİF GÜÇ</p>
-                    <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#166534', margin: '0' }}>{selectedRapor.aktif_guc}</p>
-                    <p style={{ fontSize: '9px', color: '#6b7280', marginTop: '5px' }}>kW</p>
+                  <div style={{ padding: '20px', background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', borderRadius: '10px', textAlign: 'center', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                    <div style={{ fontSize: '30px', marginBottom: '8px' }}>🔋</div>
+                    <p style={{ fontSize: '10px', marginBottom: '8px', fontWeight: 'bold', opacity: 0.9 }}>AKTİF GÜÇ</p>
+                    <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '0' }}>{selectedRapor.aktif_guc}</p>
+                    <p style={{ fontSize: '10px', marginTop: '8px', opacity: 0.8 }}>kW</p>
                   </div>
-                  <div style={{ padding: '15px', backgroundColor: '#e9d5ff', borderRadius: '8px', textAlign: 'center' }}>
-                    <p style={{ fontSize: '10px', color: '#7e22ce', marginBottom: '5px', fontWeight: 'bold' }}>REAKTİF GÜÇ</p>
-                    <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#6b21a8', margin: '0' }}>{selectedRapor.reaktif_guc}</p>
-                    <p style={{ fontSize: '9px', color: '#6b7280', marginTop: '5px' }}>kVAr</p>
+                  <div style={{ padding: '20px', background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', borderRadius: '10px', textAlign: 'center', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                    <div style={{ fontSize: '30px', marginBottom: '8px' }}>⚙️</div>
+                    <p style={{ fontSize: '10px', marginBottom: '8px', fontWeight: 'bold', opacity: 0.9 }}>REAKTİF GÜÇ</p>
+                    <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '0' }}>{selectedRapor.reaktif_guc}</p>
+                    <p style={{ fontSize: '10px', marginTop: '8px', opacity: 0.8 }}>kVAr</p>
                   </div>
                 </div>
 
-                {/* Detaylı Bilgiler */}
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '25px' }}>
-                  <tbody>
-                    <tr>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb', backgroundColor: '#f9fafb', fontWeight: 'bold' }}>Kompanzasyon Durumu</td>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>{selectedRapor.kompanzasyon_durumu}</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb', backgroundColor: '#f9fafb', fontWeight: 'bold' }}>Enerji Tüketimi</td>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>{selectedRapor.enerji_tuketimi} kWh</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb', backgroundColor: '#f9fafb', fontWeight: 'bold' }}>Toplam Maliyet</td>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#ea580c' }}>
-                        {parseFloat(selectedRapor.maliyet).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb', backgroundColor: '#f9fafb', fontWeight: 'bold' }}>Önceki Hafta Güç Faktörü</td>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>{selectedRapor.onceki_hafta_guc_faktoru}</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb', backgroundColor: '#f9fafb', fontWeight: 'bold' }}>Trend</td>
-                      <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
-                        {getTrend(selectedRapor).text}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                {/* Notlar */}
-                {selectedRapor.notlar && (
-                  <div style={{ padding: '15px', backgroundColor: '#fef3c7', borderRadius: '8px', marginBottom: '25px' }}>
-                    <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#92400e', marginBottom: '8px' }}>NOTLAR VE AÇIKLAMALAR:</p>
-                    <p style={{ fontSize: '10px', color: '#78350f', margin: '0', lineHeight: '1.6' }}>{selectedRapor.notlar}</p>
+                {/* Uploaded Image Section */}
+                {selectedRapor.gorsel_url && (
+                  <div style={{ marginBottom: '30px', border: '2px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                    <div style={{ backgroundColor: '#4f46e5', color: 'white', padding: '10px 15px', fontSize: '12px', fontWeight: 'bold' }}>
+                      📸 SAHA GÖRSELİ / TEKNİK FOTOĞRAF
+                    </div>
+                    <div style={{ padding: '15px', backgroundColor: '#f9fafb' }}>
+                      <img 
+                        src={selectedRapor.gorsel_url} 
+                        alt="Saha görseli" 
+                        style={{ width: '100%', maxHeight: '300px', objectFit: 'contain', borderRadius: '6px', backgroundColor: 'white' }}
+                      />
+                    </div>
                   </div>
                 )}
 
-                {/* Alt bilgi */}
-                <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '2px solid #e5e7eb', fontSize: '10px', color: '#666' }}>
-                  <p><strong>KOBİNERJİ Teklif Sistemi</strong> - Haftalık Enerji ve Kompanzasyon Raporu</p>
-                  <p>www.kobinerji.com | info@kobinerji.com</p>
+                {/* Detaylı Bilgiler Table - Enhanced */}
+                <div style={{ marginBottom: '30px' }}>
+                  <div style={{ backgroundColor: '#1f2937', color: 'white', padding: '12px 15px', fontSize: '13px', fontWeight: 'bold', borderRadius: '8px 8px 0 0' }}>
+                    📊 DETAYLI PERFORMANS VERİLERİ
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                    <tbody>
+                      <tr style={{ backgroundColor: '#f9fafb' }}>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#374151' }}>
+                          <span style={{ marginRight: '8px' }}>🔧</span>Kompanzasyon Durumu
+                        </td>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', color: '#1f2937', fontWeight: '600' }}>{selectedRapor.kompanzasyon_durumu}</td>
+                      </tr>
+                      <tr style={{ backgroundColor: 'white' }}>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#374151' }}>
+                          <span style={{ marginRight: '8px' }}>⚡</span>Enerji Tüketimi
+                        </td>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', color: '#1f2937', fontWeight: '600' }}>{selectedRapor.enerji_tuketimi} kWh</td>
+                      </tr>
+                      <tr style={{ backgroundColor: '#fef3c7' }}>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#374151' }}>
+                          <span style={{ marginRight: '8px' }}>💰</span>Toplam Maliyet
+                        </td>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#dc2626', fontSize: '13px' }}>
+                          {parseFloat(selectedRapor.maliyet).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                        </td>
+                      </tr>
+                      <tr style={{ backgroundColor: 'white' }}>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#374151' }}>
+                          <span style={{ marginRight: '8px' }}>📈</span>Önceki Hafta Güç Faktörü
+                        </td>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', color: '#1f2937', fontWeight: '600' }}>{selectedRapor.onceki_hafta_guc_faktoru}</td>
+                      </tr>
+                      <tr style={{ backgroundColor: '#f9fafb' }}>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#374151' }}>
+                          <span style={{ marginRight: '8px' }}>📊</span>Trend Durumu
+                        </td>
+                        <td style={{ padding: '14px 15px', border: '1px solid #e5e7eb', color: '#1f2937', fontWeight: '600' }}>
+                          {getTrend(selectedRapor).text === 'Yükseliş' ? '📈 Yükseliş' : getTrend(selectedRapor).text === 'Düşüş' ? '📉 Düşüş' : '➡️ Sabit'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Notlar */}
+                {selectedRapor.notlar && (
+                  <div style={{ padding: '18px', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', borderRadius: '10px', marginBottom: '25px', border: '2px solid #fbbf24' }}>
+                    <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#92400e', marginBottom: '10px' }}>
+                      📝 NOTLAR VE AÇIKLAMALAR
+                    </p>
+                    <p style={{ fontSize: '11px', color: '#78350f', margin: '0', lineHeight: '1.7' }}>{selectedRapor.notlar}</p>
+                  </div>
+                )}
+
+                {/* Footer with Report Info */}
+                <div style={{ marginTop: '35px', paddingTop: '20px', borderTop: '3px solid #4f46e5' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '15px' }}>
+                    {selectedRapor.rapor_hazirlayan && (
+                      <div style={{ backgroundColor: '#f3f4f6', padding: '12px', borderRadius: '6px' }}>
+                        <p style={{ fontSize: '9px', color: '#6b7280', marginBottom: '4px', fontWeight: 'bold' }}>RAPOR HAZIRLAYAN</p>
+                        <p style={{ fontSize: '11px', color: '#1f2937', margin: '0', fontWeight: '600' }}>✍️ {selectedRapor.rapor_hazirlayan}</p>
+                      </div>
+                    )}
+                    {selectedRapor.onaylayan && (
+                      <div style={{ backgroundColor: '#f3f4f6', padding: '12px', borderRadius: '6px' }}>
+                        <p style={{ fontSize: '9px', color: '#6b7280', marginBottom: '4px', fontWeight: 'bold' }}>ONAYLAYAN</p>
+                        <p style={{ fontSize: '11px', color: '#1f2937', margin: '0', fontWeight: '600' }}>✓ {selectedRapor.onaylayan}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: '10px', color: '#6b7280', paddingTop: '15px', borderTop: '1px solid #e5e7eb' }}>
+                    <p style={{ margin: '3px 0', fontWeight: 'bold', color: '#1f2937' }}>KOBİNERJİ Teklif Sistemi</p>
+                    <p style={{ margin: '3px 0' }}>Haftalık Enerji ve Kompanzasyon Raporu</p>
+                    <p style={{ margin: '3px 0' }}>🌐 www.kobinerji.com | 📧 info@kobinerji.com | ☎️ +90 (XXX) XXX XX XX</p>
+                  </div>
                 </div>
               </div>
             </div>
