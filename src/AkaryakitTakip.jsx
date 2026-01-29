@@ -271,6 +271,42 @@ export default function AkaryakitTakip() {
   // PDF'e aktar - App.jsx mantığı ile (HTML to PDF)
   const exportToPDF = async () => {
     try {
+      // Logo yükle ve base64'e çevir
+      const loadLogo = async () => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve({
+              data: canvas.toDataURL('image/png'),
+              width: img.width,
+              height: img.height
+            });
+          };
+          img.onerror = reject;
+          img.src = '/fatura_logo.png';
+        });
+      };
+
+      const logoInfo = await loadLogo();
+      
+      // Logo boyutlarını hesapla (aspect ratio koruyarak)
+      const maxLogoWidth = 60; // mm
+      const maxLogoHeight = 24; // mm
+      const logoAspectRatio = logoInfo.width / logoInfo.height;
+      let logoWidth = maxLogoWidth;
+      let logoHeight = logoWidth / logoAspectRatio;
+      
+      if (logoHeight > maxLogoHeight) {
+        logoHeight = maxLogoHeight;
+        logoWidth = logoHeight * logoAspectRatio;
+      }
+
       setShowPdfPreview(true);
       
       // React component'in render olması için kısa bir bekleme
@@ -282,6 +318,10 @@ export default function AkaryakitTakip() {
         setShowPdfPreview(false);
         return;
       }
+
+      // Logoları gizle
+      const logos = element.querySelectorAll('img[alt="Logo"]');
+      logos.forEach(logo => { logo.style.visibility = 'hidden'; });
 
       // html2canvas ile component'i görüntüye çevir
       const canvas = await html2canvas(element, {
@@ -304,6 +344,8 @@ export default function AkaryakitTakip() {
 
       // İlk sayfa
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      // Logo ekle
+      pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
       heightLeft -= pageHeight;
 
       // Eğer içerik birden fazla sayfaya yayılıyorsa
@@ -311,11 +353,16 @@ export default function AkaryakitTakip() {
         position = heightLeft - imgHeight;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        // Her sayfaya logo ekle
+        pdf.addImage(logoInfo.data, 'PNG', 15, 15, logoWidth, logoHeight, '', 'FAST');
         heightLeft -= pageHeight;
       }
 
       const fileName = `akaryakit_raporu_${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
+      
+      // Logoları tekrar göster
+      logos.forEach(logo => { logo.style.visibility = 'visible'; });
       
       setShowPdfPreview(false);
     } catch (error) {
@@ -712,106 +759,109 @@ export default function AkaryakitTakip() {
         {/* PDF Preview Modal - Ekranda görünmez, sadece PDF'e çevirmek için */}
         {showPdfPreview && (
           <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-            <div ref={pdfPreviewRef} style={{ width: '210mm', padding: '15mm', backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }}>
+            <div ref={pdfPreviewRef} style={{ width: '210mm', minHeight: '297mm', backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif', position: 'relative' }}>
               
-              {/* Header - Logo solda, Bilgiler sağda */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: '20px', marginBottom: '30px' }}>
-                <div style={{ minWidth: '150px' }}>
-                  <img src="/fatura_logo.png" alt="Logo" style={{ height: '60px', maxWidth: '180px', objectFit: 'contain' }} />
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 8px 0' }}>AKARYAKIT TAKİP RAPORU</h1>
-                  <p style={{ fontSize: '11px', color: '#6b7280', margin: '3px 0' }}>
-                    Rapor No: AKY-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
-                  </p>
-                  <p style={{ fontSize: '11px', color: '#6b7280', margin: '3px 0' }}>
-                    Tarih: {new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
-                  </p>
-                  {aylikGoruntule && secilenAy && (
-                    <p style={{ fontSize: '11px', color: '#2563eb', margin: '3px 0', fontWeight: 'bold' }}>
-                      Dönem: {new Date(secilenAy + '-01').toLocaleDateString('tr-TR', { year: 'numeric', month: 'long' })}
+              {/* Content Area with padding for footer */}
+              <div style={{ padding: '15mm', paddingBottom: '35mm' }}>
+                {/* Header - Logo solda, Bilgiler sağda */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: '20px', marginBottom: '30px' }}>
+                  <div style={{ minWidth: '150px' }}>
+                    <img src="/fatura_logo.png" alt="Logo" style={{ height: '60px', maxWidth: '180px', objectFit: 'contain' }} />
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 8px 0' }}>AKARYAKIT TAKİP RAPORU</h1>
+                    <p style={{ fontSize: '11px', color: '#6b7280', margin: '3px 0' }}>
+                      Rapor No: AKY-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
                     </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Özet Bilgiler - Tek satırda */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Kayıt Sayısı</div>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.toplamKayit}</div>
-                </div>
-                <div style={{ width: '1px', backgroundColor: '#d1d5db' }}></div>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Toplam Litre</div>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.toplamLitre.toFixed(2)} L</div>
-                </div>
-                <div style={{ width: '1px', backgroundColor: '#d1d5db' }}></div>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Toplam Tutar</div>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#2563eb' }}>
-                    {istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                    <p style={{ fontSize: '11px', color: '#6b7280', margin: '3px 0' }}>
+                      Tarih: {new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </p>
+                    {aylikGoruntule && secilenAy && (
+                      <p style={{ fontSize: '11px', color: '#2563eb', margin: '3px 0', fontWeight: 'bold' }}>
+                        Dönem: {new Date(secilenAy + '-01').toLocaleDateString('tr-TR', { year: 'numeric', month: 'long' })}
+                      </p>
+                    )}
                   </div>
                 </div>
-                <div style={{ width: '1px', backgroundColor: '#d1d5db' }}></div>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Ort. Birim Fiyat</div>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.ortalamaBirimFiyat.toFixed(2)} ₺/L</div>
-                </div>
-              </div>
 
-              {/* Tablo */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6' }}>
-                    <th style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Tarih</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Plaka</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'left', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Sürücü</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Litre</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Birim Fiyat</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Toplam Tutar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtreliKayitlar.map((kayit, index) => (
-                    <tr key={kayit.id} style={{ backgroundColor: index % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
-                      <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
-                        {new Date(kayit.date).toLocaleDateString('tr-TR')}
+                {/* Özet Bilgiler - Tek satırda */}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Kayıt Sayısı</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.toplamKayit}</div>
+                  </div>
+                  <div style={{ width: '1px', backgroundColor: '#d1d5db' }}></div>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Toplam Litre</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.toplamLitre.toFixed(2)} L</div>
+                  </div>
+                  <div style={{ width: '1px', backgroundColor: '#d1d5db' }}></div>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Toplam Tutar</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#2563eb' }}>
+                      {istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                    </div>
+                  </div>
+                  <div style={{ width: '1px', backgroundColor: '#d1d5db' }}></div>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>Ort. Birim Fiyat</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>{istatistikler.ortalamaBirimFiyat.toFixed(2)} ₺/L</div>
+                  </div>
+                </div>
+
+                {/* Tablo */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f3f4f6' }}>
+                      <th style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Tarih</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Plaka</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Sürücü</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Litre</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Birim Fiyat</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Toplam Tutar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtreliKayitlar.map((kayit, index) => (
+                      <tr key={kayit.id} style={{ backgroundColor: index % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                        <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                          {new Date(kayit.date).toLocaleDateString('tr-TR')}
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #e5e7eb', fontWeight: 'bold' }}>
+                          {kayit.vehicles?.plate || '-'}
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'left', border: '1px solid #e5e7eb' }}>
+                          {kayit.drivers?.full_name || '-'}
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #e5e7eb' }}>
+                          {kayit.liters.toFixed(2)} L
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #e5e7eb' }}>
+                          {kayit.price_per_liter.toFixed(2)} ₺
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold' }}>
+                          {kayit.total_amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 'bold' }}>
+                      <td colSpan="3" style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#1f2937' }}>TOPLAM</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#1f2937' }}>
+                        {istatistikler.toplamLitre.toFixed(2)} L
                       </td>
-                      <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #e5e7eb', fontWeight: 'bold' }}>
-                        {kayit.vehicles?.plate || '-'}
-                      </td>
-                      <td style={{ padding: '8px', textAlign: 'left', border: '1px solid #e5e7eb' }}>
-                        {kayit.drivers?.full_name || '-'}
-                      </td>
-                      <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #e5e7eb' }}>
-                        {kayit.liters.toFixed(2)} L
-                      </td>
-                      <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #e5e7eb' }}>
-                        {kayit.price_per_liter.toFixed(2)} ₺
-                      </td>
-                      <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold' }}>
-                        {kayit.total_amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                      <td style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db' }}></td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#2563eb' }}>
+                        {istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 'bold' }}>
-                    <td colSpan="3" style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#1f2937' }}>TOPLAM</td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#1f2937' }}>
-                      {istatistikler.toplamLitre.toFixed(2)} L
-                    </td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db' }}></td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#2563eb' }}>
-                      {istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </tfoot>
+                </table>
+              </div>
 
-              {/* Footer - Şirket Bilgileri */}
-              <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '2px solid #e5e7eb' }}>
+              {/* Footer - Şirket Bilgileri (Sayfanın altına sabitlenmiş) */}
+              <div style={{ position: 'absolute', bottom: '10mm', left: '15mm', right: '15mm', paddingTop: '15px', borderTop: '2px solid #e5e7eb' }}>
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 8px 0' }}>KOBİNERJİ MÜHENDİSLİK</p>
                   <p style={{ fontSize: '10px', color: '#6b7280', margin: '3px 0' }}>
