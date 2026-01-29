@@ -83,75 +83,83 @@ CREATE TRIGGER update_fuel_records_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Row Level Security (RLS) Politikaları
-ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.drivers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_records ENABLE ROW LEVEL SECURITY;
+-- NOT: Geliştirme aşamasında RLS devre dışı bırakıldı
+-- Üretim ortamında gerekirse tekrar aktif edilebilir
+ALTER TABLE public.vehicles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.drivers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.fuel_records DISABLE ROW LEVEL SECURITY;
 
+-- Alternatif: RLS açık kalsın ama herkese izin ver (yorum satırı olarak bırakıldı)
+-- ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.drivers ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_records ENABLE ROW LEVEL SECURITY;
+
+-- Eski RLS politikaları (devre dışı)
 -- Vehicles için RLS politikaları
-DROP POLICY IF EXISTS "Herkes araçları görebilir" ON public.vehicles;
-DROP POLICY IF EXISTS "Authenticated kullanıcılar araç ekleyebilir" ON public.vehicles;
-DROP POLICY IF EXISTS "Authenticated kullanıcılar araç güncelleyebilir" ON public.vehicles;
-DROP POLICY IF EXISTS "Authenticated kullanıcılar araç silebilir" ON public.vehicles;
+-- DROP POLICY IF EXISTS "Herkes araçları görebilir" ON public.vehicles;
+-- DROP POLICY IF EXISTS "Authenticated kullanıcılar araç ekleyebilir" ON public.vehicles;
+-- DROP POLICY IF EXISTS "Authenticated kullanıcılar araç güncelleyebilir" ON public.vehicles;
+-- DROP POLICY IF EXISTS "Authenticated kullanıcılar araç silebilir" ON public.vehicles;
 
-CREATE POLICY "Herkes araçları görebilir" ON public.vehicles
-    FOR SELECT
-    USING (true);
+-- CREATE POLICY "Herkes araçları görebilir" ON public.vehicles
+--     FOR SELECT
+--     USING (true);
 
-CREATE POLICY "Giriş yapmış kullanıcılar araç ekleyebilir" ON public.vehicles
-    FOR INSERT
-    WITH CHECK (auth.uid() IS NOT NULL);
+-- CREATE POLICY "Giriş yapmış kullanıcılar araç ekleyebilir" ON public.vehicles
+--     FOR INSERT
+--     WITH CHECK (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Giriş yapmış kullanıcılar araç güncelleyebilir" ON public.vehicles
-    FOR UPDATE
-    USING (auth.uid() IS NOT NULL);
+-- CREATE POLICY "Giriş yapmış kullanıcılar araç güncelleyebilir" ON public.vehicles
+--     FOR UPDATE
+--     USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Giriş yapmış kullanıcılar araç silebilir" ON public.vehicles
-    FOR DELETE
-    USING (auth.uid() IS NOT NULL);
+-- CREATE POLICY "Giriş yapmış kullanıcılar araç silebilir" ON public.vehicles
+--     FOR DELETE
+--     USING (auth.uid() IS NOT NULL);
 
 -- Drivers için RLS politikaları
-DROP POLICY IF EXISTS "Herkes sürücüleri görebilir" ON public.drivers;
-DROP POLICY IF EXISTS "Authenticated kullanıcılar sürücü ekleyebilir" ON public.drivers;
-DROP POLICY IF EXISTS "Authenticated kullanıcılar sürücü güncelleyebilir" ON public.drivers;
-DROP POLICY IF EXISTS "Authenticated kullanıcılar sürücü silebilir" ON public.drivers;
+-- DROP POLICY IF EXISTS "Herkes sürücüleri görebilir" ON public.drivers;
+-- DROP POLICY IF EXISTS "Authenticated kullanıcılar sürücü ekleyebilir" ON public.drivers;
+-- DROP POLICY IF EXISTS "Authenticated kullanıcılar sürücü güncelleyebilir" ON public.drivers;
+-- DROP POLICY IF EXISTS "Authenticated kullanıcılar sürücü silebilir" ON public.drivers;
 
-CREATE POLICY "Herkes sürücüleri görebilir" ON public.drivers
-    FOR SELECT
-    USING (true);
+-- CREATE POLICY "Herkes sürücüleri görebilir" ON public.drivers
+--     FOR SELECT
+--     USING (true);
 
-CREATE POLICY "Giriş yapmış kullanıcılar sürücü ekleyebilir" ON public.drivers
-    FOR INSERT
-    WITH CHECK (auth.uid() IS NOT NULL);
+-- CREATE POLICY "Giriş yapmış kullanıcılar sürücü ekleyebilir" ON public.drivers
+--     FOR INSERT
+--     WITH CHECK (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Giriş yapmış kullanıcılar sürücü güncelleyebilir" ON public.drivers
-    FOR UPDATE
-    USING (auth.uid() IS NOT NULL);
+-- CREATE POLICY "Giriş yapmış kullanıcılar sürücü güncelleyebilir" ON public.drivers
+--     FOR UPDATE
+--     USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Giriş yapmış kullanıcılar sürücü silebilir" ON public.drivers
-    FOR DELETE
-    USING (auth.uid() IS NOT NULL);
+-- CREATE POLICY "Giriş yapmış kullanıcılar sürücü silebilir" ON public.drivers
+--     FOR DELETE
+--     USING (auth.uid() IS NOT NULL);
 
 -- Fuel Records için RLS politikaları
-DROP POLICY IF EXISTS "Herkes akaryakıt kayıtlarını görebilir" ON public.fuel_records;
-DROP POLICY IF EXISTS "Authenticated kullanıcılar kayıt ekleyebilir" ON public.fuel_records;
-DROP POLICY IF EXISTS "Authenticated kullanıcılar kayıt güncelleyebilir" ON public.fuel_records;
-DROP POLICY IF EXISTS "Authenticated kullanıcılar kayıt silebilir" ON public.fuel_records;
+-- DROP POLICY IF EXISTS "Herkes akaryakıt kayıtlarını görebilir" ON public.fuel_records;
+-- DROP POLICY IF EXISTS "Authenticated kullanıcılar kayıt ekleyebilir" ON public.fuel_records;
+-- DROP POLICY IF EXISTS "Authenticated kullanıcılar kayıt güncelleyebilir" ON public.fuel_records;
+-- DROP POLICY IF EXISTS "Authenticated kullanıcılar kayıt silebilir" ON public.fuel_records;
 
-CREATE POLICY "Herkes akaryakıt kayıtlarını görebilir" ON public.fuel_records
-    FOR SELECT
-    USING (true);
+-- CREATE POLICY "Herkes akaryakıt kayıtlarını görebilir" ON public.fuel_records
+--     FOR SELECT
+--     USING (true);
 
-CREATE POLICY "Giriş yapmış kullanıcılar kayıt ekleyebilir" ON public.fuel_records
-    FOR INSERT
-    WITH CHECK (auth.uid() IS NOT NULL);
+-- CREATE POLICY "Giriş yapmış kullanıcılar kayıt ekleyebilir" ON public.fuel_records
+--     FOR INSERT
+--     WITH CHECK (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Giriş yapmış kullanıcılar kayıt güncelleyebilir" ON public.fuel_records
-    FOR UPDATE
-    USING (auth.uid() IS NOT NULL);
+-- CREATE POLICY "Giriş yapmış kullanıcılar kayıt güncelleyebilir" ON public.fuel_records
+--     FOR UPDATE
+--     USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Giriş yapmış kullanıcılar kayıt silebilir" ON public.fuel_records
-    FOR DELETE
-    USING (auth.uid() IS NOT NULL);
+-- CREATE POLICY "Giriş yapmış kullanıcılar kayıt silebilir" ON public.fuel_records
+--     FOR DELETE
+--     USING (auth.uid() IS NOT NULL);
 
 -- Örnek Veriler (İsteğe bağlı)
 -- Araç örnekleri
