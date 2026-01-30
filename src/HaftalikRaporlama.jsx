@@ -53,6 +53,10 @@ export default function HaftalikRaporlama() {
   const [showOsosTableInput, setShowOsosTableInput] = useState(false);
   const [ososTableText, setOsosTableText] = useState('');
 
+  // İlk Kayıt ve Hesaplama State'leri
+  const [ilkKayit, setIlkKayit] = useState(false);
+  const [autoCalculateCosPhi, setAutoCalculateCosPhi] = useState(false);
+
   // Filtreleme State'leri
   const [filtreFabrika, setFiltreFabrika] = useState('');
   const [filtreTarihBaslangic, setFiltreTarihBaslangic] = useState('');
@@ -91,6 +95,31 @@ export default function HaftalikRaporlama() {
     };
     reader.readAsDataURL(file);
   };
+
+  // Güç faktörü hesaplama fonksiyonu (P ve Q'dan cos φ hesapla)
+  const calculateCosPhi = (aktifEnerji, reaktifEnerji) => {
+    const P = parseFloat(aktifEnerji);
+    const Q = parseFloat(reaktifEnerji);
+    if (!P || !Q || P <= 0) return null;
+    const S = Math.sqrt(P * P + Q * Q);
+    const cosPhi = P / S;
+    return Math.min(Math.max(cosPhi, 0), 1).toFixed(3);
+  };
+
+  // Aktif/Reaktif enerji değiştiğinde güç faktörünü otomatik hesapla
+  useEffect(() => {
+    if (autoCalculateCosPhi && formData.enerji_tuketimi && ososOzetTablosu.length > 0) {
+      const aktifRow = ososOzetTablosu.find(r => r.endeks_kodu === '1.8.0');
+      const enduktifRow = ososOzetTablosu.find(r => r.endeks_kodu === '5.8.0');
+      
+      if (aktifRow && enduktifRow && aktifRow.tuketim > 0 && enduktifRow.tuketim > 0) {
+        const calculated = calculateCosPhi(aktifRow.tuketim, enduktifRow.tuketim);
+        if (calculated) {
+          setFormData(prev => ({ ...prev, guc_faktoru: calculated }));
+        }
+      }
+    }
+  }, [autoCalculateCosPhi, formData.enerji_tuketimi, ososOzetTablosu]);
 
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
@@ -829,6 +858,27 @@ export default function HaftalikRaporlama() {
               </div>
 
               <form onSubmit={handleSubmit} className="p-6">
+                {/* Fatura Verisi Bilgilendirmesi */}
+                <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-blue-900 mb-2">💡 Fatura/Okuma Endeks Tablosundan Veri Girişi</h4>
+                      <p className="text-xs text-blue-800 mb-2">Fatura tablonuzda şu bilgiler mevcut:</p>
+                      <ul className="text-xs text-blue-800 space-y-1">
+                        <li>✅ <strong>Aktif Enerji Tüketimi (kWh)</strong> → "Enerji Tüketimi" alanına girin</li>
+                        <li>✅ <strong>Demand / Maksimum Talep (kW)</strong> → "Aktif Güç" alanına girin</li>
+                        <li>✅ <strong>Endüktif Reaktif (kVArh)</strong> → OSOS özet tablosuna yapıştırın</li>
+                        <li>✅ <strong>Kapasitif Reaktif (kVArh)</strong> → OSOS özet tablosuna yapıştırın</li>
+                        <li>✅ <strong>Reaktif Oranları (%)</strong> → Raporda otomatik gösterilecek</li>
+                        <li>⚠️ <strong>Güç Faktörü (Cosφ)</strong> → Manuel girin veya otomatik hesaplat</li>
+                        <li>⚠️ <strong>Önceki Hafta Cosφ</strong> → İlk kayıtta "İlk kayıt" seçeneğini işaretleyin</li>
+                      </ul>
+                      <p className="text-xs text-blue-700 mt-2 font-medium">💡 İpucu: OSOS özet tablosunu yapıştırın, Cosφ otomatik hesaplanacak!</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Fabrika Adı */}
                   <div className="md:col-span-2">
@@ -904,30 +954,65 @@ export default function HaftalikRaporlama() {
                   {/* Güç Faktörü */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Güç Faktörü (cosφ) *</label>
+                    <div className="flex items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        id="autoCalculate"
+                        checked={autoCalculateCosPhi}
+                        onChange={(e) => setAutoCalculateCosPhi(e.target.checked)}
+                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      />
+                      <label htmlFor="autoCalculate" className="text-sm text-gray-600">
+                        OSOS verilerinden otomatik hesapla (Aktif/Reaktif enerjiden)
+                      </label>
+                    </div>
                     <input
                       type="number"
                       step="0.001"
                       min="0"
                       max="1"
                       required
+                      disabled={autoCalculateCosPhi}
                       value={formData.guc_faktoru}
                       onChange={(e) => setFormData({ ...formData, guc_faktoru: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-green-50 disabled:cursor-not-allowed"
                       placeholder="0.920"
                     />
+                    {autoCalculateCosPhi && formData.guc_faktoru && (
+                      <p className="mt-1 text-xs text-green-600">✓ Otomatik hesaplandı</p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Önceki Hafta Güç Faktörü *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Önceki Hafta Güç Faktörü
+                      {ilkKayit && <span className="ml-2 text-xs text-blue-600">(İlk kayıtta boş bırakılabilir)</span>}
+                    </label>
+                    <div className="flex items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        id="ilkKayit"
+                        checked={ilkKayit}
+                        onChange={(e) => {
+                          setIlkKayit(e.target.checked);
+                          if (e.target.checked) {
+                            setFormData({ ...formData, onceki_hafta_guc_faktoru: '' });
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="ilkKayit" className="text-sm text-gray-600">Bu fabrikanın ilk kaydı</label>
+                    </div>
                     <input
                       type="number"
                       step="0.001"
                       min="0"
                       max="1"
-                      required
+                      required={!ilkKayit}
+                      disabled={ilkKayit}
                       value={formData.onceki_hafta_guc_faktoru}
                       onChange={(e) => setFormData({ ...formData, onceki_hafta_guc_faktoru: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="0.910"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      placeholder={ilkKayit ? "İlk kayıt - veri yok" : "0.910"}
                     />
                   </div>
 
@@ -949,7 +1034,10 @@ export default function HaftalikRaporlama() {
 
                   {/* Güç Bilgileri */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Aktif Güç (kW) *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Aktif Güç (kW) *
+                      <span className="ml-2 text-xs text-gray-500">(Faturadaki Demand değeri)</span>
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -958,11 +1046,15 @@ export default function HaftalikRaporlama() {
                       value={formData.aktif_guc}
                       onChange={(e) => setFormData({ ...formData, aktif_guc: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="1500"
+                      placeholder="327.06"
                     />
+                    <p className="mt-1 text-xs text-gray-500">Fatura tablosunda "Demand / Tüketim" satırındaki değer</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Reaktif Güç (kVAr) *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Reaktif Güç (kVAr) *
+                      <span className="ml-2 text-xs text-gray-500">(Manuel hesap veya OSOS'tan)</span>
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -973,6 +1065,7 @@ export default function HaftalikRaporlama() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       placeholder="350"
                     />
+                    <p className="mt-1 text-xs text-gray-500">Anlık reaktif güç - genelde faturada yoktur, OSOS verilerinden çıkarılabilir</p>
                   </div>
 
                   {/* Kompanzasyon */}
@@ -990,7 +1083,10 @@ export default function HaftalikRaporlama() {
 
                   {/* Enerji ve Maliyet */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Enerji Tüketimi (kWh) *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Enerji Tüketimi (kWh) *
+                      <span className="ml-2 text-xs text-gray-500">(Faturadaki aktif enerji)</span>
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -999,8 +1095,9 @@ export default function HaftalikRaporlama() {
                       value={formData.enerji_tuketimi}
                       onChange={(e) => setFormData({ ...formData, enerji_tuketimi: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="25000"
+                      placeholder="70044.66"
                     />
+                    <p className="mt-1 text-xs text-gray-500">Fatura tablosunda "1.8.0 - Aktif enerji" tüketim değeri</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Maliyet (₺) *</label>
@@ -1034,8 +1131,22 @@ export default function HaftalikRaporlama() {
                       <div className="flex items-center gap-2">
                         <BarChart3 className="w-4 h-4" />
                         OSOS Özet Tablosu (Manuel Yapıştır)
+                        <span className="text-xs font-normal text-green-600">⭐ Önerilen</span>
                       </div>
                     </label>
+                    <div className="mb-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-xs text-green-800">
+                        <strong>💡 Fatura tablosundan bu bilgiler buraya yapıştırılmalı:</strong>
+                      </p>
+                      <ul className="text-xs text-green-700 mt-1 space-y-0.5 ml-4">
+                        <li>• <strong>1.8.0</strong> - Aktif enerji tüketimi (70.044,66 kWh)</li>
+                        <li>• <strong>5.8.0</strong> - Endüktif reaktif enerji (4.134,48 kVArh - %5,90)</li>
+                        <li>• <strong>8.8.0</strong> - Kapasitif reaktif enerji (1.298,58 kVArh - %1,85)</li>
+                      </ul>
+                      <p className="text-xs text-green-800 mt-2">
+                        ✅ Bu tabloyu yapıştırdığınızda <strong>Cosφ otomatik hesaplanacak!</strong>
+                      </p>
+                    </div>
                     <div className="space-y-3">
                       <button
                         type="button"
