@@ -57,6 +57,10 @@ export default function HaftalikRaporlama() {
   const [ilkKayit, setIlkKayit] = useState(false);
   const [autoCalculateCosPhi, setAutoCalculateCosPhi] = useState(false);
 
+  // PDF Düzenleme Modu
+  const [pdfEditMode, setPdfEditMode] = useState(false);
+  const [editedPdfData, setEditedPdfData] = useState(null);
+
   // Filtreleme State'leri
   const [filtreFabrika, setFiltreFabrika] = useState('');
   const [filtreTarihBaslangic, setFiltreTarihBaslangic] = useState('');
@@ -1848,24 +1852,51 @@ export default function HaftalikRaporlama() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => {
-                      setShowPdfPreview(false);
-                      handleEdit(selectedRapor);
+                      setPdfEditMode(!pdfEditMode);
+                      if (!pdfEditMode) {
+                        setEditedPdfData({...selectedRapor});
+                      }
                     }}
-                    className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium flex items-center gap-2 transition-colors"
+                    className={`px-3 py-2 ${pdfEditMode ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} rounded-lg font-medium flex items-center gap-2 transition-colors`}
                   >
                     <Edit3 className="w-5 h-5" />
-                    Düzenle
+                    {pdfEditMode ? 'Düzenleme Modu' : 'Düzenle'}
                   </button>
+                  {pdfEditMode && (
+                    <button
+                      onClick={async () => {
+                        // Düzenlenmiş veriyi veritabanına kaydet
+                        const { error } = await supabase
+                          .from('haftalik_raporlar')
+                          .update(editedPdfData)
+                          .eq('id', selectedRapor.id);
+                        
+                        if (error) {
+                          alert('Kaydetme hatası: ' + error.message);
+                        } else {
+                          alert('Değişiklikler kaydedildi!');
+                          setSelectedRapor(editedPdfData);
+                          setPdfEditMode(false);
+                          fetchRaporlar(); // Listeyi güncelle
+                        }
+                      }}
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium flex items-center gap-2 transition-colors"
+                    >
+                      <Download className="w-5 h-5" />
+                      Kaydet
+                    </button>
+                  )}
                   <button
                     onClick={handlePDFDownload}
                     className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium flex items-center gap-2 transition-colors"
                   >
                     <Download className="w-5 h-5" />
-                    İndir
+                    PDF İndir
                   </button>
                   <button onClick={() => {
                     setShowPdfPreview(false);
                     setSelectedRapor(null);
+                    setPdfEditMode(false);
                   }} className="hover:bg-white/20 p-1 rounded">
                     <X className="w-6 h-6" />
                   </button>
@@ -1904,7 +1935,17 @@ export default function HaftalikRaporlama() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10mm', fontSize: '11px' }}>
                           <div style={{ width: '48%' }}>
                             <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#2980b9', marginBottom: '5px' }}>TESİS BİLGİLERİ</h3>
-                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Tesis Adı:</strong> {selectedRapor.fabrika_adi}</p>
+                            <p style={{ margin: '3px 0', lineHeight: '1.6' }}>
+                              <strong>Tesis Adı:</strong> 
+                              <span 
+                                contentEditable={pdfEditMode}
+                                suppressContentEditableWarning={true}
+                                onBlur={(e) => pdfEditMode && setEditedPdfData({...editedPdfData, fabrika_adi: e.target.textContent})}
+                                style={{ outline: pdfEditMode ? '1px dashed #2980b9' : 'none', padding: pdfEditMode ? '2px' : '0', display: 'inline-block', minWidth: '100px' }}
+                              >
+                                {pdfEditMode ? (editedPdfData?.fabrika_adi || selectedRapor.fabrika_adi) : selectedRapor.fabrika_adi}
+                              </span>
+                            </p>
                             <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Rapor Dönemi:</strong> {new Date(selectedRapor.hafta_baslangic).toLocaleDateString('tr-TR')} - {new Date(selectedRapor.hafta_bitis).toLocaleDateString('tr-TR')}</p>
                             <p style={{ margin: '3px 0', lineHeight: '1.6' }}><strong>Durum:</strong> <span style={{ color: durum.text === 'UYGUN' ? '#10b981' : durum.text === 'DİKKAT' ? '#f59e0b' : '#ef4444', fontWeight: 'bold' }}>{durum.text}</span></p>
                           </div>
@@ -1986,7 +2027,16 @@ export default function HaftalikRaporlama() {
                               </tr>
                               <tr style={{ background: '#f8fafc' }}>
                                 <td style={{ padding: '10px', fontSize: '11px', fontWeight: 'bold', color: '#334155', border: '1px solid #e2e8f0', width: '30%' }}>Kompanzasyon Durumu</td>
-                                <td colSpan="2" style={{ padding: '10px', fontSize: '11px', color: '#1e293b', border: '1px solid #e2e8f0', width: '70%', wordWrap: 'break-word' }}>{selectedRapor.kompanzasyon_durumu}</td>
+                                <td colSpan="2" style={{ padding: '10px', fontSize: '11px', color: '#1e293b', border: '1px solid #e2e8f0', width: '70%', wordWrap: 'break-word' }}>
+                                  <span 
+                                    contentEditable={pdfEditMode}
+                                    suppressContentEditableWarning={true}
+                                    onBlur={(e) => pdfEditMode && setEditedPdfData({...editedPdfData, kompanzasyon_durumu: e.target.textContent})}
+                                    style={{ outline: pdfEditMode ? '1px dashed #2980b9' : 'none', padding: pdfEditMode ? '2px' : '0', display: 'block', minHeight: '20px' }}
+                                  >
+                                    {pdfEditMode ? (editedPdfData?.kompanzasyon_durumu || selectedRapor.kompanzasyon_durumu) : selectedRapor.kompanzasyon_durumu}
+                                  </span>
+                                </td>
                               </tr>
                               <tr style={{ background: 'white' }}>
                                 <td style={{ padding: '10px', fontSize: '11px', fontWeight: 'bold', color: '#334155', border: '1px solid #e2e8f0' }}>Önceki Hafta Güç Faktörü</td>
