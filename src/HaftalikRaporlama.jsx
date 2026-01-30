@@ -1931,11 +1931,11 @@ export default function HaftalikRaporlama() {
                           </p>
                         </div>
 
-                        {(selectedRapor.guc_faktoru || selectedRapor.aktif_guc || selectedRapor.reaktif_guc) && (
+                        {!!(selectedRapor.guc_faktoru || selectedRapor.aktif_guc || selectedRapor.reaktif_guc) && (
                         <div style={{ marginBottom: '8mm' }}>
                           <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: '0 0 5mm 0', borderBottom: '1px solid #2980b9', paddingBottom: '2mm' }}>ANA PERFORMANS GÖSTERGELERİ</h3>
                           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${[selectedRapor.guc_faktoru, selectedRapor.aktif_guc, selectedRapor.reaktif_guc].filter(v => v).length}, 1fr)`, gap: '10px' }}>
-                            {selectedRapor.guc_faktoru && (
+                            {!!selectedRapor.guc_faktoru && (
                             <div style={{ background: '#f0f9ff', border: '2px solid #2980b9', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                               <p style={{ fontSize: '10px', color: '#555', margin: '0 0 8px 0', fontWeight: '600' }}>GÜÇ FAKTÖRÜ</p>
                               <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#2980b9' }}>{selectedRapor.guc_faktoru}</p>
@@ -1943,7 +1943,7 @@ export default function HaftalikRaporlama() {
                               <p style={{ fontSize: '9px', color: '#777', margin: '3px 0 0 0' }}>Hedef: {selectedRapor.hedef_guc_faktoru}</p>
                             </div>
                             )}
-                            {selectedRapor.aktif_guc && (
+                            {!!selectedRapor.aktif_guc && (
                             <div style={{ background: '#f0fdf4', border: '2px solid #10b981', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                               <p style={{ fontSize: '10px', color: '#555', margin: '0 0 8px 0', fontWeight: '600' }}>AKTİF GÜÇ</p>
                               <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#10b981' }}>{selectedRapor.aktif_guc}</p>
@@ -1951,7 +1951,7 @@ export default function HaftalikRaporlama() {
                               <p style={{ fontSize: '9px', color: '#777', margin: '3px 0 0 0' }}>Ortalama</p>
                             </div>
                             )}
-                            {selectedRapor.reaktif_guc && (
+                            {!!selectedRapor.reaktif_guc && (
                             <div style={{ background: '#fffbeb', border: '2px solid #f59e0b', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                               <p style={{ fontSize: '10px', color: '#555', margin: '0 0 8px 0', fontWeight: '600' }}>REAKTİF GÜÇ</p>
                               <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#f59e0b' }}>{selectedRapor.reaktif_guc}</p>
