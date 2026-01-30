@@ -158,9 +158,13 @@ export default function HaftalikRaporlama() {
             }
           }
 
+          const gun = jsDate.getDate().toString().padStart(2, '0');
+          const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
+          const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
           return {
             tarih: jsDate.toISOString().split('T')[0],
-            saat: jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            saat: `${gun}.${ay} ${saatDk}`,
             okunan_endeks: row['Okunan Endeks Değeri'] || 0,
             carpan: row['Çarpan'] || 1380,
             hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
@@ -212,9 +216,13 @@ export default function HaftalikRaporlama() {
             }
           }
 
+          const gun = jsDate.getDate().toString().padStart(2, '0');
+          const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
+          const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
           return {
             tarih: jsDate.toISOString().split('T')[0],
-            saat: jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            saat: `${gun}.${ay} ${saatDk}`,
             okunan_endeks: row['Okunan Endeks Değeri'] || 0,
             carpan: row['Çarpan'] || 1380,
             hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
@@ -266,9 +274,13 @@ export default function HaftalikRaporlama() {
             }
           }
 
+          const gun = jsDate.getDate().toString().padStart(2, '0');
+          const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
+          const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
           return {
             tarih: jsDate.toISOString().split('T')[0],
-            saat: jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            saat: `${gun}.${ay} ${saatDk}`,
             okunan_endeks: row['Okunan Endeks Değeri'] || 0,
             carpan: row['Çarpan'] || 1380,
             hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
@@ -2212,6 +2224,7 @@ export default function HaftalikRaporlama() {
                               </div>
                               <div style={{ flex: 1, textAlign: 'right', paddingLeft: '10mm' }}>
                                 <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#2c3e50' }}>OSOS ÖZET TABLO - DETAYLI ANALİZ</h2>
+                                <p style={{ fontSize: '10px', color: '#e74c3c', margin: '0 0 3px 0', fontStyle: 'italic' }}>* Bu tablo ayın ilk gününden itibaren kümülatif (toplam) verileri göstermektedir</p>
                                 <p style={{ fontSize: '11px', color: '#555', margin: '0' }}>{selectedRapor.fabrika_adi} - Hafta: {new Date(selectedRapor.hafta_baslangic).toLocaleDateString('tr-TR')} - {new Date(selectedRapor.hafta_bitis).toLocaleDateString('tr-TR')}</p>
                               </div>
                             </div>
