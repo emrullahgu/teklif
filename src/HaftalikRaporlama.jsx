@@ -1899,36 +1899,44 @@ export default function HaftalikRaporlama() {
                             Bu değer hedef <strong>{selectedRapor.hedef_guc_faktoru}</strong> değerinin <strong>%{gucFaktoruYuzde}</strong>'sine karşılık gelmektedir. 
                             Önceki haftaya göre {gucFaktoruFark >= 0 ? <strong style={{ color: '#10b981' }}>artış</strong> : <strong style={{ color: '#ef4444' }}>düşüş</strong>} göstermiştir ({Math.abs(gucFaktoruFark).toFixed(1)}%). 
                             {durum.text === 'UYGUN' ? 
-                              <><strong style={{ color: '#10b981' }}> ✓ Performans hedeflerimize uygundur.</strong> Mevcut kompanzasyon sistemi etkin çalışmaktadır.</> : 
+                              <><strong style={{ color: '#10b981', fontSize: '12px' }}> ✓ Performans hedeflerimize uygundur.</strong> Mevcut kompanzasyon sistemi etkin çalışmaktadır.</> : 
                               durum.text === 'DİKKAT' ? 
-                              <><strong style={{ color: '#f59e0b' }}> ⚠ Dikkat gerektirir.</strong> Kompanzasyon sistemi gözden geçirilmeli, reaktif enerji cezası riski mevcuttur.</> : 
-                              <><strong style={{ color: '#ef4444' }}> ✗ ACİL: Hedefin altındadır.</strong> Kompanzasyon sistemi yetersiz, reaktif enerji cezası alınmaktadır. Hemen iyileştirme gereklidir.</>}
+                              <><strong style={{ color: '#f59e0b', fontSize: '12px' }}> ⚠ Dikkat gerektirir.</strong> Kompanzasyon sistemi gözden geçirilmeli, reaktif enerji cezası riski mevcuttur.</> : 
+                              <><strong style={{ color: '#ef4444', fontSize: '12px' }}> ✗ ACİL: Hedefin altındadır.</strong> Kompanzasyon sistemi yetersiz, reaktif enerji cezası alınmaktadır. Hemen iyileştirme gereklidir.</>}
                           </p>
                         </div>
 
+                        {(selectedRapor.guc_faktoru || selectedRapor.aktif_guc || selectedRapor.reaktif_guc) && (
                         <div style={{ marginBottom: '8mm' }}>
                           <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: '0 0 5mm 0', borderBottom: '1px solid #2980b9', paddingBottom: '2mm' }}>ANA PERFORMANS GÖSTERGELERİ</h3>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${[selectedRapor.guc_faktoru, selectedRapor.aktif_guc, selectedRapor.reaktif_guc].filter(v => v).length}, 1fr)`, gap: '10px' }}>
+                            {selectedRapor.guc_faktoru && (
                             <div style={{ background: '#f0f9ff', border: '2px solid #2980b9', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                               <p style={{ fontSize: '10px', color: '#555', margin: '0 0 8px 0', fontWeight: '600' }}>GÜÇ FAKTÖRÜ</p>
                               <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#2980b9' }}>{selectedRapor.guc_faktoru}</p>
                               <p style={{ fontSize: '9px', color: '#777', margin: '8px 0 0 0', paddingTop: '6px', borderTop: '1px solid #ddd' }}>cosφ</p>
                               <p style={{ fontSize: '9px', color: '#777', margin: '3px 0 0 0' }}>Hedef: {selectedRapor.hedef_guc_faktoru}</p>
                             </div>
+                            )}
+                            {selectedRapor.aktif_guc && (
                             <div style={{ background: '#f0fdf4', border: '2px solid #10b981', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                               <p style={{ fontSize: '10px', color: '#555', margin: '0 0 8px 0', fontWeight: '600' }}>AKTİF GÜÇ</p>
                               <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#10b981' }}>{selectedRapor.aktif_guc}</p>
                               <p style={{ fontSize: '9px', color: '#777', margin: '8px 0 0 0', paddingTop: '6px', borderTop: '1px solid #ddd' }}>kW</p>
                               <p style={{ fontSize: '9px', color: '#777', margin: '3px 0 0 0' }}>Ortalama</p>
                             </div>
+                            )}
+                            {selectedRapor.reaktif_guc && (
                             <div style={{ background: '#fffbeb', border: '2px solid #f59e0b', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                               <p style={{ fontSize: '10px', color: '#555', margin: '0 0 8px 0', fontWeight: '600' }}>REAKTİF GÜÇ</p>
                               <p style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#f59e0b' }}>{selectedRapor.reaktif_guc}</p>
                               <p style={{ fontSize: '9px', color: '#777', margin: '8px 0 0 0', paddingTop: '6px', borderTop: '1px solid #ddd' }}>kVAr</p>
                               <p style={{ fontSize: '9px', color: '#777', margin: '3px 0 0 0' }}>Ortalama</p>
                             </div>
+                            )}
                           </div>
                         </div>
+                        )}
 
                         <div style={{ marginBottom: '8mm' }}>
                           <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#2980b9', margin: '0 0 5mm 0', borderBottom: '1px solid #2980b9', paddingBottom: '2mm' }}>DETAYLI PERFORMANS ANALİZİ</h3>
@@ -2170,45 +2178,45 @@ export default function HaftalikRaporlama() {
                                   </ResponsiveContainer>
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5mm', marginTop: '5mm' }}>
-                                  <div>
-                                    <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: excelSet.color, margin: '0 0 3mm 0' }}>İstatistikler</h3>
-                                    <div style={{ background: '#f8fafc', border: `1px solid ${excelSet.color}`, borderRadius: '4px', padding: '8px', fontSize: '9px' }}>
-                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                        <strong>Toplam Tüketim:</strong>
-                                        <span>{excelData.reduce((sum, d) => sum + (d.tuketim || 0), 0).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</span>
-                                      </p>
-                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                        <strong>Ortalama Tüketim:</strong>
-                                        <span>{(excelData.reduce((sum, d) => sum + (d.tuketim || 0), 0) / excelData.length).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</span>
-                                      </p>
-                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                        <strong>Maksimum:</strong>
-                                        <span>{Math.max(...excelData.map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</span>
-                                      </p>
-                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                        <strong>Minimum:</strong>
-                                        <span>{Math.min(...excelData.map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</span>
-                                      </p>
-                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                        <strong>Veri Noktası:</strong>
-                                        <span>{excelData.length} ölçüm</span>
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: excelSet.color, margin: '0 0 3mm 0' }}>Yorum ve Öneriler</h3>
-                                    <div style={{ background: '#f0f9ff', border: `1px solid ${excelSet.color}`, borderRadius: '4px', padding: '8px', fontSize: '9px', lineHeight: '1.5' }}>
-                                      {excelSet.type === 'aktif' ? (
-                                        <p style={{ margin: 0 }}>Aktif enerji tüketimi grafiği, tesisinizdeki yük profilini göstermektedir. Zirve tüketim saatlerini analiz ederek, üretim planlaması ve enerji yönetimi optimize edilebilir.</p>
-                                      ) : excelSet.type === 'enduktif' ? (
-                                        <p style={{ margin: 0 }}>Endüktif reaktif enerji tüketimi, indüktif yüklerinizden (motorlar, transformatörler) kaynaklanmaktadır. Kompanzasyon sisteminizin bu saatlerde daha aktif çalışması gerekebilir.</p>
-                                      ) : (
-                                        <p style={{ margin: 0 }}>Kapasitif reaktif enerji tüketimi, kapasitif yüklerinizden veya aşırı kompanzasyondan kaynaklanabilir. Reaktör kullanımını gözden geçiriniz.</p>
-                                      )}
-                                    </div>
-                                  </div>
+                                {/* 5 Satırlık Özet Tablo */}
+                                <div style={{ marginTop: '8mm' }}>
+                                  <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: excelSet.color, margin: '0 0 3mm 0' }}>Detaylı İstatistik Tablosu</h3>
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', border: `2px solid ${excelSet.color}` }}>
+                                    <thead>
+                                      <tr style={{ backgroundColor: excelSet.color, color: 'white' }}>
+                                        <th style={{ padding: '6px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 'bold' }}>Parametre</th>
+                                        <th style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd', fontWeight: 'bold' }}>Değer</th>
+                                        <th style={{ padding: '6px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 'bold' }}>Açıklama</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <tr style={{ backgroundColor: '#f8fafc' }}>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Toplam Tüketim</td>
+                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd' }}>{excelData.reduce((sum, d) => sum + (d.tuketim || 0), 0).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>Haftalık toplam {excelSet.title.toLowerCase()}</td>
+                                      </tr>
+                                      <tr style={{ backgroundColor: 'white' }}>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Ortalama Tüketim</td>
+                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd' }}>{(excelData.reduce((sum, d) => sum + (d.tuketim || 0), 0) / excelData.length).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>Saatlik ortalama değer</td>
+                                      </tr>
+                                      <tr style={{ backgroundColor: '#f8fafc' }}>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Maksimum Tüketim</td>
+                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd', color: '#dc2626', fontWeight: 'bold' }}>{Math.max(...excelData.map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>En yüksek saatlik tüketim (zirve)</td>
+                                      </tr>
+                                      <tr style={{ backgroundColor: 'white' }}>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Minimum Tüketim</td>
+                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd', color: '#16a34a' }}>{Math.min(...excelData.map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>En düşük saatlik tüketim (baz yük)</td>
+                                      </tr>
+                                      <tr style={{ backgroundColor: '#f8fafc' }}>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Veri Noktası</td>
+                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd' }}>{excelData.length} ölçüm</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>Toplam kayıt sayısı (1 hafta = 168 saat)</td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
                                 </div>
                               </div>
 
@@ -2230,11 +2238,102 @@ export default function HaftalikRaporlama() {
                       }
                     });
 
+                    // OSOS DETAY TABLOSU SAYFASI (varsa)
+                    if (selectedRapor.osos_ozet_tablo) {
+                      try {
+                        const ososData = JSON.parse(selectedRapor.osos_ozet_tablo);
+                        const excelPageCount = excelDataSets.filter(s => s.data).length;
+                        const currentPageNum = 2 + excelPageCount + 1;
+                        const hasImage = selectedRapor.gorsel_url;
+                        const totalPages = 2 + excelPageCount + 1 + (hasImage ? 1 : 0);
+                        
+                        pages.push(
+                          <div key="page-osos-table" className="haftalik-pdf-page shadow-xl" style={{ width: '210mm', height: '297mm', background: 'white', padding: '15mm 20mm 30mm 20mm', fontFamily: 'Arial, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8mm', paddingBottom: '5mm', borderBottom: '2px solid #2980b9' }}>
+                              <div style={{ width: '40mm', maxHeight: '20mm', display: 'flex', alignItems: 'center' }}>
+                                <img src="/fatura_logo.png" alt="Logo" style={{ maxWidth: '100%', maxHeight: '20mm', objectFit: 'contain' }} />
+                              </div>
+                              <div style={{ flex: 1, textAlign: 'right', paddingLeft: '10mm' }}>
+                                <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#2c3e50' }}>OSOS ÖZET TABLO - DETAYLI ANALİZ</h2>
+                                <p style={{ fontSize: '11px', color: '#555', margin: '0' }}>{selectedRapor.fabrika_adi} - Hafta: {new Date(selectedRapor.hafta_baslangic).toLocaleDateString('tr-TR')} - {new Date(selectedRapor.hafta_bitis).toLocaleDateString('tr-TR')}</p>
+                              </div>
+                            </div>
+
+                            <div style={{ height: '240mm', overflow: 'hidden' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginTop: '5mm' }}>
+                                <thead>
+                                  <tr style={{ backgroundColor: '#2980b9', color: 'white' }}>
+                                    <th style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'left', fontWeight: 'bold' }}>Endeks Kodu</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'left', fontWeight: 'bold' }}>Açıklama</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>İlk Endeks</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>Son Endeks</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>Endeks Farkı</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>Çarpan</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>Tüketim</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>Yasal Sınır</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>Durum</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {ososData.map((row, index) => {
+                                    // Önemli satırları vurgula
+                                    const isImportant = ['1.8.0', '5.8.0', '8.8.0', '2.8.0'].includes(row.endeks_kodu);
+                                    const bgColor = isImportant ? '#e8f4f8' : 'white';
+                                    const fontWeight = isImportant ? 'bold' : 'normal';
+                                    
+                                    return (
+                                      <tr key={index} style={{ backgroundColor: bgColor }}>
+                                        <td style={{ border: '1px solid #ddd', padding: '5px', fontWeight }}>{row.endeks_kodu}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '5px', fontSize: '7px' }}>{row.aciklama}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '5px', textAlign: 'right' }}>{row.ilk_endeks?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '5px', textAlign: 'right' }}>{row.son_endeks?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '5px', textAlign: 'right' }}>{row.endeks_farki?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '5px', textAlign: 'right' }}>{row.carpan?.toLocaleString('tr-TR')}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '5px', textAlign: 'right', fontWeight }}>{row.tuketim?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '5px', textAlign: 'center', fontSize: '7px' }}>{row.yasal_sinir || '-'}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '5px', textAlign: 'center', fontSize: '7px', color: row.durum?.includes('AŞILDI') ? '#c0392b' : '#27ae60', fontWeight: row.durum?.includes('AŞILDI') ? 'bold' : 'normal' }}>{row.durum || '-'}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+
+                              <div style={{ marginTop: '8mm', padding: '8px', background: '#f0f9ff', border: '1px solid #2980b9', borderRadius: '4px' }}>
+                                <h3 style={{ fontSize: '11px', fontWeight: 'bold', color: '#2980b9', margin: '0 0 5px 0' }}>Tablo Açıklamaları</h3>
+                                <div style={{ fontSize: '8px', lineHeight: '1.6', color: '#2c3e50' }}>
+                                  <p style={{ margin: '3px 0' }}><strong>1.8.0 (Aktif Çekilen):</strong> Tesiste tüketilen toplam aktif enerji (kWh)</p>
+                                  <p style={{ margin: '3px 0' }}><strong>5.8.0 (Endüktif Reaktif Çekilen):</strong> İndüktif yüklerden kaynaklanan reaktif enerji (kVArh) - Kompanzasyon gerektirir</p>
+                                  <p style={{ margin: '3px 0' }}><strong>8.8.0 (Kapasitif Reaktif Çekilen):</strong> Kapasitif yüklerden veya aşırı kompanzasyondan kaynaklanan reaktif enerji (kVArh)</p>
+                                  <p style={{ margin: '3px 0' }}><strong>2.8.0 (Aktif Verilen):</strong> Şebekeye verilen enerji (varsa)</p>
+                                  <p style={{ margin: '3px 0' }}><strong>Yasal Sınır:</strong> Reaktif enerjinin aktif enerjiye oranı için %20 yasal limit (EPDK)</p>
+                                  <p style={{ margin: '3px 0' }}><strong>Durum:</strong> "AŞILDI" ise ceza riski var, kompanzasyon güçlendirilmeli</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div style={{ position: 'absolute', bottom: '8mm', left: '20mm', right: '20mm', paddingTop: '3mm', borderTop: '2px solid #2980b9' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '8px', color: '#555' }}>
+                                <div style={{ flex: 1 }}>
+                                  <p style={{ margin: '0', fontWeight: 'bold', fontSize: '9px' }}>KOBİNERJİ MÜHENDİSLİK</p>
+                                  <p style={{ margin: '2px 0 0 0', lineHeight: '1.4' }}>Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                                  <p style={{ margin: '2px 0 0 0' }}>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                                </div>
+                                <p style={{ margin: '0', fontWeight: 'bold', color: '#2980b9', fontSize: '9px' }}>Sayfa {currentPageNum}/{totalPages}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      } catch (e) {
+                        console.error('OSOS tablo parse hatası:', e);
+                      }
+                    }
+
                     // SON SAYFA: Görsel (varsa)
                     if (selectedRapor.gorsel_url) {
                       const excelPageCount = excelDataSets.filter(s => s.data).length;
-                      const currentPageNum = 2 + excelPageCount + 1;
-                      const totalPages = 2 + excelPageCount + 1;
+                      const hasOsosTable = selectedRapor.osos_ozet_tablo ? 1 : 0;
+                      const currentPageNum = 2 + excelPageCount + hasOsosTable + 1;
+                      const totalPages = 2 + excelPageCount + hasOsosTable + 1;
                       
                       pages.push(
                         <div key="page-image" className="haftalik-pdf-page shadow-xl" style={{ width: '210mm', height: '297mm', background: 'white', padding: '15mm 20mm 30mm 20mm', fontFamily: 'Arial, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }}>
