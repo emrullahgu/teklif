@@ -1977,50 +1977,7 @@ export default function HaftalikRaporlama() {
                           </table>
                         </div>
 
-                        {/* OSOS Özet Tablosu - Kompakt */}
-                        {selectedRapor.osos_ozet_tablo && (() => {
-                          try {
-                            const ososData = JSON.parse(selectedRapor.osos_ozet_tablo);
-                            // Sadece önemli satırları göster
-                            const mainRows = ososData.filter(row => ['1.8.0', '5.8.0', '8.8.0', '2.8.0'].includes(row.endeks_kodu));
-                            return (
-                              <div style={{ marginBottom: '6mm' }}>
-                                <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#2980b9', margin: '0 0 4mm 0', borderBottom: '1px solid #2980b9', paddingBottom: '2mm' }}>OSOS ENERJİ ÖZET TABLOSU</h3>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ddd', fontSize: '8px' }}>
-                                  <thead>
-                                    <tr style={{ background: '#2980b9', color: 'white' }}>
-                                      <th style={{ padding: '5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', border: '1px solid #ddd' }}>Kod</th>
-                                      <th style={{ padding: '5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', border: '1px solid #ddd' }}>Açıklama</th>
-                                      <th style={{ padding: '5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', border: '1px solid #ddd' }}>Tüketim</th>
-                                      <th style={{ padding: '5px', fontSize: '9px', fontWeight: 'bold', textAlign: 'center', border: '1px solid #ddd' }}>Oran / Durum</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {mainRows.map((row, idx) => {
-                                      const bgColor = row.endeks_kodu === '1.8.0' ? '#e0f2fe' : row.endeks_kodu === '5.8.0' ? '#fef3c7' : row.endeks_kodu === '8.8.0' ? '#fce7f3' : '#f3f4f6';
-                                      return (
-                                        <tr key={idx} style={{ background: bgColor }}>
-                                          <td style={{ padding: '7px 5px', fontSize: '9px', fontWeight: 'bold', color: '#1e293b', border: '1px solid #e2e8f0' }}>{row.endeks_kodu}</td>
-                                          <td style={{ padding: '7px 5px', fontSize: '9px', fontWeight: 'bold', color: '#1e293b', border: '1px solid #e2e8f0' }}>{row.aciklama}</td>
-                                          <td style={{ padding: '7px 5px', fontSize: '10px', fontWeight: 'bold', color: '#d97706', border: '1px solid #e2e8f0', textAlign: 'right' }}>{row.tuketim.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} {row.endeks_kodu.startsWith('1.8') || row.endeks_kodu.startsWith('2.8') ? 'kWh' : 'kVArh'}</td>
-                                          <td style={{ padding: '7px 5px', fontSize: '9px', color: row.durum && row.durum.includes('%') ? (parseFloat(row.durum.replace('%', '').trim()) > 15 ? '#dc2626' : '#16a34a') : '#1e293b', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: row.durum && row.durum.includes('%') ? 'bold' : 'normal' }}>{row.durum || '-'}</td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                                <div style={{ marginTop: '2mm', padding: '4px', background: '#f0f9ff', border: '1px solid #2980b9', borderRadius: '4px', fontSize: '7px' }}>
-                                  <p style={{ margin: '0', lineHeight: '1.3' }}>
-                                    <strong>Açıklama:</strong> 
-                                    1.8.0: Aktif enerji | 5.8.0: Endüktif reaktif (Sınır: %20) | 8.8.0: Kapasitif reaktif (Sınır: %15) | 2.8.0: Ters yön (veriş)
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          } catch (e) {
-                            return null;
-                          }
-                        })()}
+                        {/* OSOS Özet Tablosu ilk sayfadan kaldırıldı - Detaylı tablo son sayfada */}
 
                         <div style={{ position: 'absolute', bottom: '8mm', left: '20mm', right: '20mm', paddingTop: '3mm', borderTop: '2px solid #2980b9' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '8px', color: '#555' }}>
@@ -2306,7 +2263,6 @@ export default function HaftalikRaporlama() {
                                   <p style={{ margin: '3px 0' }}><strong>8.8.0 (Kapasitif Reaktif Çekilen):</strong> Kapasitif yüklerden veya aşırı kompanzasyondan kaynaklanan reaktif enerji (kVArh)</p>
                                   <p style={{ margin: '3px 0' }}><strong>2.8.0 (Aktif Verilen):</strong> Şebekeye verilen enerji (varsa)</p>
                                   <p style={{ margin: '3px 0' }}><strong>Yasal Sınır:</strong> Reaktif enerjinin aktif enerjiye oranı için %20 yasal limit (EPDK)</p>
-                                  <p style={{ margin: '3px 0' }}><strong>Durum:</strong> "AŞILDI" ise ceza riski var, kompanzasyon güçlendirilmeli</p>
                                 </div>
                               </div>
                             </div>
