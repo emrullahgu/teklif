@@ -1847,6 +1847,16 @@ export default function HaftalikRaporlama() {
                 </div>
                 <div className="flex items-center gap-3">
                   <button
+                    onClick={() => {
+                      setShowPdfPreview(false);
+                      handleEdit(selectedRapor);
+                    }}
+                    className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium flex items-center gap-2 transition-colors"
+                  >
+                    <Edit3 className="w-5 h-5" />
+                    Düzenle
+                  </button>
+                  <button
                     onClick={handlePDFDownload}
                     className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium flex items-center gap-2 transition-colors"
                   >
