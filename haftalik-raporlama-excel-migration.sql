@@ -47,7 +47,10 @@ ON haftalik_raporlar (excel_enerji_turu);
 CREATE INDEX IF NOT EXISTS idx_haftalik_raporlar_osos_tablo 
 ON haftalik_raporlar USING GIN (osos_ozet_tablo);
 
--- Enerji türü için check constraint
+-- Enerji türü için check constraint (önce varsa kaldır, sonra ekle)
+ALTER TABLE haftalik_raporlar
+DROP CONSTRAINT IF EXISTS chk_enerji_turu;
+
 ALTER TABLE haftalik_raporlar
 ADD CONSTRAINT chk_enerji_turu 
 CHECK (excel_enerji_turu IS NULL OR excel_enerji_turu IN ('aktif', 'enduktif', 'kapasitif'));
