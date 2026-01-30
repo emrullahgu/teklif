@@ -158,13 +158,14 @@ export default function HaftalikRaporlama() {
             }
           }
 
+          const gunAdi = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][jsDate.getDay()];
           const gun = jsDate.getDate().toString().padStart(2, '0');
           const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
           const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
           return {
             tarih: jsDate.toISOString().split('T')[0],
-            saat: `${gun}.${ay} ${saatDk}`,
+            saat: `${gunAdi} ${gun}.${ay} ${saatDk}`,
             okunan_endeks: row['Okunan Endeks Değeri'] || 0,
             carpan: row['Çarpan'] || 1380,
             hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
@@ -216,13 +217,14 @@ export default function HaftalikRaporlama() {
             }
           }
 
+          const gunAdi = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][jsDate.getDay()];
           const gun = jsDate.getDate().toString().padStart(2, '0');
           const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
           const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
           return {
             tarih: jsDate.toISOString().split('T')[0],
-            saat: `${gun}.${ay} ${saatDk}`,
+            saat: `${gunAdi} ${gun}.${ay} ${saatDk}`,
             okunan_endeks: row['Okunan Endeks Değeri'] || 0,
             carpan: row['Çarpan'] || 1380,
             hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
@@ -274,13 +276,14 @@ export default function HaftalikRaporlama() {
             }
           }
 
+          const gunAdi = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][jsDate.getDay()];
           const gun = jsDate.getDate().toString().padStart(2, '0');
           const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
           const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
           return {
             tarih: jsDate.toISOString().split('T')[0],
-            saat: `${gun}.${ay} ${saatDk}`,
+            saat: `${gunAdi} ${gun}.${ay} ${saatDk}`,
             okunan_endeks: row['Okunan Endeks Değeri'] || 0,
             carpan: row['Çarpan'] || 1380,
             hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
