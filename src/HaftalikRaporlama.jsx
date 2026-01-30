@@ -38,15 +38,15 @@ export default function HaftalikRaporlama() {
   
   const [uploadedImage, setUploadedImage] = useState(null);
   const fileInputRef = useRef(null);
-  const excelInputRef = useRef(null);
+  const excelInputRefAktif = useRef(null);
+  const excelInputRefEnduktif = useRef(null);
+  const excelInputRefKapasitif = useRef(null);
 
-  // Excel Import State'leri
-  const [excelData, setExcelData] = useState(null);
+  // 3 Ayrı Excel Import State'leri
+  const [excelDataAktif, setExcelDataAktif] = useState([]);
+  const [excelDataEnduktif, setExcelDataEnduktif] = useState([]);
+  const [excelDataKapasitif, setExcelDataKapasitif] = useState([]);
   const [showExcelPreview, setShowExcelPreview] = useState(false);
-  const [parsedExcelData, setParsedExcelData] = useState([]);
-  const [excelColumns, setExcelColumns] = useState([]);
-  const [selectedDataColumn, setSelectedDataColumn] = useState('');
-  const [selectedEnergyType, setSelectedEnergyType] = useState('aktif');
 
   // OSOS Özet Tablosu State'leri
   const [ososOzetTablosu, setOsosOzetTablosu] = useState([]);
@@ -121,7 +121,11 @@ export default function HaftalikRaporlama() {
     }
   }, [autoCalculateCosPhi, formData.enerji_tuketimi, ososOzetTablosu]);
 
-  const handleExcelUpload = async (e) => {
+  // Eski tek Excel upload fonksiyonu - Artık kullanılmıyor
+  // 3 ayrı Excel upload fonksiyonları: handleExcelUploadAktif, handleExcelUploadEnduktif, handleExcelUploadKapasitif
+  
+  // 3 Ayrı Excel Upload Handler'ları
+  const handleExcelUploadAktif = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -133,53 +137,148 @@ export default function HaftalikRaporlama() {
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
-        // Excel kolonlarını al
-        const columns = jsonData.length > 0 ? Object.keys(jsonData[0]) : [];
-        setExcelColumns(columns);
-        
-        // Otomatik kolon algılama
-        let dataColumn = '';
-        let energyType = 'aktif';
-        
-        // Kolonları analiz et
-        for (const col of columns) {
-          const colLower = col.toLowerCase();
-          if (colLower.includes('tüketim') || colLower.includes('tuketim')) {
-            dataColumn = col;
-            if (colLower.includes('endüktif') || colLower.includes('enduktif') || colLower.includes('induktif')) {
-              energyType = 'enduktif';
-            } else if (colLower.includes('kapasitif') || colLower.includes('capacitive')) {
-              energyType = 'kapasitif';
-            } else {
-              energyType = 'aktif';
-            }
-            break;
-          }
-        }
-        
-        setSelectedDataColumn(dataColumn);
-        setSelectedEnergyType(energyType);
-        
+
         // Excel serial date'i JS Date'e çevir
         const parsedData = jsonData.map(row => {
           const excelDate = row['Tarih'];
-          const jsDate = new Date((excelDate - 25569) * 86400 * 1000);
+          let jsDate;
+          
+          if (typeof excelDate === 'number') {
+            jsDate = new Date((excelDate - 25569) * 86400 * 1000);
+          } else {
+            jsDate = new Date(excelDate);
+          }
+
+          // Tüketim kolonunu bul
+          let tuketim = 0;
+          for (const key in row) {
+            if (key.toLowerCase().includes('tüketim') || key.toLowerCase().includes('tuketim')) {
+              tuketim = row[key] || 0;
+              break;
+            }
+          }
+
           return {
             tarih: jsDate.toISOString().split('T')[0],
             saat: jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
             okunan_endeks: row['Okunan Endeks Değeri'] || 0,
             carpan: row['Çarpan'] || 1380,
             hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
-            tuketim: row[dataColumn] || 0,
-            enerji_turu: energyType,
-            raw_data: row // Tüm kolon verisini sakla
+            tuketim: tuketim,
+            raw_data: row
           };
         });
 
-        setExcelData(jsonData);
-        setParsedExcelData(parsedData);
-        setShowExcelPreview(true);
+        setExcelDataAktif(parsedData);
+        alert(`AKTİF Enerji Excel verisi yüklendi! (${parsedData.length} satır)`);
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      console.error('Excel okuma hatası:', error);
+      alert('Excel dosyası okunurken hata oluştu: ' + error.message);
+    }
+  };
+
+  const handleExcelUploadEnduktif = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        // Excel serial date'i JS Date'e çevir
+        const parsedData = jsonData.map(row => {
+          const excelDate = row['Tarih'];
+          let jsDate;
+          
+          if (typeof excelDate === 'number') {
+            jsDate = new Date((excelDate - 25569) * 86400 * 1000);
+          } else {
+            jsDate = new Date(excelDate);
+          }
+
+          // Tüketim kolonunu bul
+          let tuketim = 0;
+          for (const key in row) {
+            if (key.toLowerCase().includes('tüketim') || key.toLowerCase().includes('tuketim')) {
+              tuketim = row[key] || 0;
+              break;
+            }
+          }
+
+          return {
+            tarih: jsDate.toISOString().split('T')[0],
+            saat: jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            okunan_endeks: row['Okunan Endeks Değeri'] || 0,
+            carpan: row['Çarpan'] || 1380,
+            hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
+            tuketim: tuketim,
+            raw_data: row
+          };
+        });
+
+        setExcelDataEnduktif(parsedData);
+        alert(`ENDÜKTİF Reaktif Excel verisi yüklendi! (${parsedData.length} satır)`);
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      console.error('Excel okuma hatası:', error);
+      alert('Excel dosyası okunurken hata oluştu: ' + error.message);
+    }
+  };
+
+  const handleExcelUploadKapasitif = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        // Excel serial date'i JS Date'e çevir
+        const parsedData = jsonData.map(row => {
+          const excelDate = row['Tarih'];
+          let jsDate;
+          
+          if (typeof excelDate === 'number') {
+            jsDate = new Date((excelDate - 25569) * 86400 * 1000);
+          } else {
+            jsDate = new Date(excelDate);
+          }
+
+          // Tüketim kolonunu bul
+          let tuketim = 0;
+          for (const key in row) {
+            if (key.toLowerCase().includes('tüketim') || key.toLowerCase().includes('tuketim')) {
+              tuketim = row[key] || 0;
+              break;
+            }
+          }
+
+          return {
+            tarih: jsDate.toISOString().split('T')[0],
+            saat: jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            okunan_endeks: row['Okunan Endeks Değeri'] || 0,
+            carpan: row['Çarpan'] || 1380,
+            hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
+            tuketim: tuketim,
+            raw_data: row
+          };
+        });
+
+        setExcelDataKapasitif(parsedData);
+        alert(`KAPASİTİF Reaktif Excel verisi yüklendi! (${parsedData.length} satır)`);
       };
       reader.readAsArrayBuffer(file);
     } catch (error) {
@@ -251,36 +350,8 @@ export default function HaftalikRaporlama() {
   };
 
   const applyExcelDataToForm = () => {
-    if (parsedExcelData.length === 0) return;
-
-    // İlk ve son tarih
-    const firstDate = parsedExcelData[0].tarih;
-    const lastDate = parsedExcelData[parsedExcelData.length - 1].tarih;
-
-    // Toplam tüketim
-    const totalConsumption = parsedExcelData.reduce((sum, row) => sum + parseFloat(row.tuketim || 0), 0);
-
-    // Ortalama güç (Excel'den hesaplama yapılacak)
-    const avgPower = (totalConsumption / parsedExcelData.length).toFixed(2);
-
-    // Enerji türü bilgisini ekle
-    const energyTypeText = selectedEnergyType === 'aktif' ? 'Aktif Enerji' : 
-                           selectedEnergyType === 'enduktif' ? 'Reaktif Endüktif Enerji' : 
-                           'Reaktif Kapasitif Enerji';
-
-    // Form'a verileri aktar
-    setFormData(prev => ({
-      ...prev,
-      hafta_baslangic: firstDate,
-      hafta_bitis: lastDate,
-      enerji_tuketimi: totalConsumption.toFixed(2),
-      aktif_guc: avgPower,
-      notlar: `${energyTypeText} verisi Excel'den aktarıldı (${selectedDataColumn})\n${prev.notlar || ''}`,
-      // Diğer alanlar mevcut değerlerini korur
-    }));
-
-    setShowExcelPreview(false);
-    alert(`Excel verileri forma aktarıldı!\nEnerji Türü: ${energyTypeText}\nKolon: ${selectedDataColumn}\n\nLütfen diğer alanları doldurun.`);
+    // Artık kullanılmıyor - 3 ayrı Excel yüklenecek
+    console.warn('applyExcelDataToForm artık kullanılmamaktadır.');
   };
 
   const handleSubmit = async (e) => {
@@ -290,17 +361,17 @@ export default function HaftalikRaporlama() {
       const rapor = {
         ...formData,
         guc_faktoru: parseFloat(formData.guc_faktoru),
-        reaktif_guc: parseFloat(formData.reaktif_guc),
+        reaktif_guc: formData.reaktif_guc ? parseFloat(formData.reaktif_guc) : null,
         aktif_guc: parseFloat(formData.aktif_guc),
         enerji_tuketimi: parseFloat(formData.enerji_tuketimi),
-        maliyet: parseFloat(formData.maliyet),
-        onceki_hafta_guc_faktoru: parseFloat(formData.onceki_hafta_guc_faktoru),
+        maliyet: formData.maliyet ? parseFloat(formData.maliyet) : null,
+        onceki_hafta_guc_faktoru: formData.onceki_hafta_guc_faktoru ? parseFloat(formData.onceki_hafta_guc_faktoru) : null,
         hedef_guc_faktoru: parseFloat(formData.hedef_guc_faktoru),
         gorsel_url: uploadedImage || formData.gorsel_url || null,
         notlar: formData.notlar || null,
-        excel_data: parsedExcelData.length > 0 ? JSON.stringify(parsedExcelData) : null,
-        excel_enerji_turu: selectedEnergyType,
-        excel_kolon: selectedDataColumn,
+        excel_data_aktif: excelDataAktif.length > 0 ? JSON.stringify(excelDataAktif) : null,
+        excel_data_enduktif: excelDataEnduktif.length > 0 ? JSON.stringify(excelDataEnduktif) : null,
+        excel_data_kapasitif: excelDataKapasitif.length > 0 ? JSON.stringify(excelDataKapasitif) : null,
         osos_ozet_tablo: ososOzetTablosu.length > 0 ? JSON.stringify(ososOzetTablosu) : null
       };
 
@@ -349,21 +420,31 @@ export default function HaftalikRaporlama() {
     });
     setUploadedImage(rapor.gorsel_url || null);
     
-    // Excel verisini yükle
-    if (rapor.excel_data) {
+    // 3 ayrı Excel verisini yükle
+    if (rapor.excel_data_aktif) {
       try {
-        const parsedData = JSON.parse(rapor.excel_data);
-        setParsedExcelData(parsedData);
-        
-        // Enerji türünü ve kolonu yükle
-        if (rapor.excel_enerji_turu) {
-          setSelectedEnergyType(rapor.excel_enerji_turu);
-        }
-        if (rapor.excel_kolon) {
-          setSelectedDataColumn(rapor.excel_kolon);
-        }
+        const parsedData = JSON.parse(rapor.excel_data_aktif);
+        setExcelDataAktif(parsedData);
       } catch (e) {
-        console.error('Excel verisi parse edilemedi:', e);
+        console.error('Aktif Excel verisi parse edilemedi:', e);
+      }
+    }
+
+    if (rapor.excel_data_enduktif) {
+      try {
+        const parsedData = JSON.parse(rapor.excel_data_enduktif);
+        setExcelDataEnduktif(parsedData);
+      } catch (e) {
+        console.error('Endüktif Excel verisi parse edilemedi:', e);
+      }
+    }
+
+    if (rapor.excel_data_kapasitif) {
+      try {
+        const parsedData = JSON.parse(rapor.excel_data_kapasitif);
+        setExcelDataKapasitif(parsedData);
+      } catch (e) {
+        console.error('Kapasitif Excel verisi parse edilemedi:', e);
       }
     }
 
@@ -432,6 +513,12 @@ export default function HaftalikRaporlama() {
       gorsel_url: ''
     });
     setUploadedImage(null);
+    setExcelDataAktif([]);
+    setExcelDataEnduktif([]);
+    setExcelDataKapasitif([]);
+    setOsosOzetTablosu([]);
+    setIlkKayit(false);
+    setAutoCalculateCosPhi(false);
   };
 
   const handleYeniRapor = () => {
@@ -1229,49 +1316,77 @@ export default function HaftalikRaporlama() {
                     </div>
                   </div>
 
-                  {/* Excel Veri Yükleme */}
+                  {/* Excel Veri Yükleme - 3 Ayrı Dosya */}
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
                       <div className="flex items-center gap-2">
                         <FileSpreadsheet className="w-4 h-4" />
-                        Excel Verileri Yükle (OSOS Detay Raporu)
+                        Excel Verileri Yükle (OSOS Detay Raporları)
                       </div>
                     </label>
                     <div className="space-y-3">
-                      <input
-                        ref={excelInputRef}
-                        type="file"
-                        accept=".xls,.xlsx"
-                        onChange={handleExcelUpload}
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => excelInputRef.current?.click()}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-green-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition"
-                      >
-                        <Upload className="w-5 h-5 text-green-500" />
-                        <span className="text-gray-600">Excel Dosyası Yükle (grdResult.xls formatı)</span>
-                      </button>
-                      {parsedExcelData.length > 0 && (
-                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className="w-5 h-5 text-green-600" />
-                              <span className="text-sm font-medium text-green-700">
-                                {parsedExcelData.length} satır veri yüklendi
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={applyExcelDataToForm}
-                              className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition"
-                            >
-                              Forma Aktar
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      {/* Aktif Enerji Excel */}
+                      <div>
+                        <input
+                          ref={excelInputRefAktif}
+                          type="file"
+                          accept=".xls,.xlsx"
+                          onChange={handleExcelUploadAktif}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => excelInputRefAktif.current?.click()}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-green-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition"
+                        >
+                          <Upload className="w-5 h-5 text-green-500" />
+                          <span className="text-gray-600">
+                            {excelDataAktif.length > 0 ? `✓ Aktif Enerji (1.8.0) - ${excelDataAktif.length} satır` : 'Aktif Enerji Excel Yükle (1.8.0)'}
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Endüktif Reaktif Excel */}
+                      <div>
+                        <input
+                          ref={excelInputRefEnduktif}
+                          type="file"
+                          accept=".xls,.xlsx"
+                          onChange={handleExcelUploadEnduktif}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => excelInputRefEnduktif.current?.click()}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-yellow-300 rounded-lg hover:border-yellow-500 hover:bg-yellow-50 transition"
+                        >
+                          <Upload className="w-5 h-5 text-yellow-500" />
+                          <span className="text-gray-600">
+                            {excelDataEnduktif.length > 0 ? `✓ Endüktif Reaktif (5.8.0) - ${excelDataEnduktif.length} satır` : 'Endüktif Reaktif Excel Yükle (5.8.0)'}
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Kapasitif Reaktif Excel */}
+                      <div>
+                        <input
+                          ref={excelInputRefKapasitif}
+                          type="file"
+                          accept=".xls,.xlsx"
+                          onChange={handleExcelUploadKapasitif}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => excelInputRefKapasitif.current?.click()}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-pink-300 rounded-lg hover:border-pink-500 hover:bg-pink-50 transition"
+                        >
+                          <Upload className="w-5 h-5 text-pink-500" />
+                          <span className="text-gray-600">
+                            {excelDataKapasitif.length > 0 ? `✓ Kapasitif Reaktif (8.8.0) - ${excelDataKapasitif.length} satır` : 'Kapasitif Reaktif Excel Yükle (8.8.0)'}
+                          </span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -1999,114 +2114,127 @@ export default function HaftalikRaporlama() {
                       </div>
                     );
 
-                    // SAYFA 3: Excel Grafikleri (varsa)
-                    if (selectedRapor.excel_data) {
-                      try {
-                        const excelData = JSON.parse(selectedRapor.excel_data);
-                        const currentPageNum = 3;
-                        const hasImage = selectedRapor.gorsel_url;
-                        const totalPages = 2 + 1 + (hasImage ? 1 : 0);
-                        
-                        pages.push(
-                          <div key="page-excel" className="haftalik-pdf-page shadow-xl" style={{ width: '210mm', height: '297mm', background: 'white', padding: '15mm 20mm 30mm 20mm', fontFamily: 'Arial, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8mm', paddingBottom: '5mm', borderBottom: '2px solid #2980b9' }}>
-                              <div style={{ width: '40mm', maxHeight: '20mm', display: 'flex', alignItems: 'center' }}>
-                                <img src="/fatura_logo.png" alt="Logo" style={{ maxWidth: '100%', maxHeight: '20mm', objectFit: 'contain' }} />
-                              </div>
-                              <div style={{ flex: 1, textAlign: 'right', paddingLeft: '10mm' }}>
-                                <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#2c3e50' }}>OSOS DETAY ANALİZ GRAFİKLERİ</h2>
-                                <p style={{ fontSize: '11px', color: '#555', margin: '0' }}>{selectedRapor.fabrika_adi} - {selectedRapor.excel_enerji_turu?.toUpperCase()} ENERJİ</p>
-                              </div>
-                            </div>
+                    // SAYFA 3-5: 3 Ayrı Excel Grafikleri (varsa)
+                    const excelDataSets = [
+                      { data: selectedRapor.excel_data_aktif, type: 'aktif', title: 'Aktif Enerji', code: '1.8.0', color: '#10b981' },
+                      { data: selectedRapor.excel_data_enduktif, type: 'enduktif', title: 'Reaktif Endüktif Enerji', code: '5.8.0', color: '#f59e0b' },
+                      { data: selectedRapor.excel_data_kapasitif, type: 'kapasitif', title: 'Reaktif Kapasitif Enerji', code: '8.8.0', color: '#ec4899' }
+                    ];
 
-                            {/* Excel Grafiği - Recharts ile render edilecek */}
-                            <div style={{ height: '240mm' }}>
-                              <div style={{ marginBottom: '5mm' }}>
-                                <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#2980b9', margin: '0 0 3mm 0' }}>Saatlik {selectedRapor.excel_enerji_turu === 'aktif' ? 'Aktif Enerji' : selectedRapor.excel_enerji_turu === 'enduktif' ? 'Reaktif Endüktif Enerji' : 'Reaktif Kapasitif Enerji'} Tüketimi</h3>
-                                <ResponsiveContainer width="100%" height={300}>
-                                  <RechartsLine data={excelData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                    <XAxis 
-                                      dataKey="saat" 
-                                      angle={-45} 
-                                      textAnchor="end" 
-                                      height={60} 
-                                      tick={{ fontSize: 8 }}
-                                    />
-                                    <YAxis tick={{ fontSize: 10 }} label={{ value: 'Tüketim (kWh)', angle: -90, position: 'insideLeft', style: { fontSize: 10 } }} />
-                                    <Tooltip 
-                                      contentStyle={{ fontSize: '10px', backgroundColor: '#fff', border: '1px solid #ccc' }}
-                                      formatter={(value) => [value.toFixed(2) + ' kWh', 'Tüketim']}
-                                    />
-                                    <Legend wrapperStyle={{ fontSize: '10px' }} />
-                                    <Line type="monotone" dataKey="tuketim" stroke="#2980b9" strokeWidth={2} dot={{ r: 2 }} name="Saatlik Tüketim" />
-                                  </RechartsLine>
-                                </ResponsiveContainer>
+                    let excelPageCount = 0;
+                    excelDataSets.forEach((excelSet, setIndex) => {
+                      if (excelSet.data) {
+                        try {
+                          const excelData = JSON.parse(excelSet.data);
+                          if (excelData.length === 0) return;
+                          
+                          excelPageCount++;
+                          const currentPageNum = 2 + excelPageCount;
+                          const hasImage = selectedRapor.gorsel_url;
+                          const totalPages = 2 + excelDataSets.filter(s => s.data).length + (hasImage ? 1 : 0);
+                          
+                          pages.push(
+                            <div key={`page-excel-${setIndex}`} className="haftalik-pdf-page shadow-xl" style={{ width: '210mm', height: '297mm', background: 'white', padding: '15mm 20mm 30mm 20mm', fontFamily: 'Arial, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8mm', paddingBottom: '5mm', borderBottom: `2px solid ${excelSet.color}` }}>
+                                <div style={{ width: '40mm', maxHeight: '20mm', display: 'flex', alignItems: 'center' }}>
+                                  <img src="/fatura_logo.png" alt="Logo" style={{ maxWidth: '100%', maxHeight: '20mm', objectFit: 'contain' }} />
+                                </div>
+                                <div style={{ flex: 1, textAlign: 'right', paddingLeft: '10mm' }}>
+                                  <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#2c3e50' }}>{excelSet.title.toUpperCase()} ANALİZ GRAFİĞİ</h2>
+                                  <p style={{ fontSize: '11px', color: '#555', margin: '0' }}>{selectedRapor.fabrika_adi} - OBIS Kodu: {excelSet.code}</p>
+                                </div>
                               </div>
 
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5mm', marginTop: '8mm' }}>
-                                <div>
-                                  <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#2980b9', margin: '0 0 3mm 0' }}>İstatistikler</h3>
-                                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '8px', fontSize: '9px' }}>
-                                    <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                      <strong>Toplam Tüketim:</strong>
-                                      <span>{excelData.reduce((sum, d) => sum + (d.tuketim || 0), 0).toFixed(2)} kWh</span>
-                                    </p>
-                                    <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                      <strong>Ortalama Tüketim:</strong>
-                                      <span>{(excelData.reduce((sum, d) => sum + (d.tuketim || 0), 0) / excelData.length).toFixed(2)} kWh</span>
-                                    </p>
-                                    <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                      <strong>Maksimum:</strong>
-                                      <span>{Math.max(...excelData.map(d => d.tuketim || 0)).toFixed(2)} kWh</span>
-                                    </p>
-                                    <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                      <strong>Minimum:</strong>
-                                      <span>{Math.min(...excelData.map(d => d.tuketim || 0)).toFixed(2)} kWh</span>
-                                    </p>
-                                    <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                                      <strong>Veri Noktası:</strong>
-                                      <span>{excelData.length} ölçüm</span>
-                                    </p>
+                              {/* Excel Grafiği - Recharts ile render edilecek */}
+                              <div style={{ height: '235mm' }}>
+                                <div style={{ marginBottom: '5mm' }}>
+                                  <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: excelSet.color, margin: '0 0 3mm 0' }}>Saatlik {excelSet.title} Tüketimi</h3>
+                                  <ResponsiveContainer width="100%" height={280}>
+                                    <RechartsLine data={excelData}>
+                                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                      <XAxis 
+                                        dataKey="saat" 
+                                        angle={-45} 
+                                        textAnchor="end" 
+                                        height={60} 
+                                        tick={{ fontSize: 8 }}
+                                      />
+                                      <YAxis tick={{ fontSize: 10 }} label={{ value: `Tüketim (${excelSet.type === 'aktif' ? 'kWh' : 'kVArh'})`, angle: -90, position: 'insideLeft', style: { fontSize: 10 } }} />
+                                      <Tooltip 
+                                        contentStyle={{ fontSize: '10px', backgroundColor: '#fff', border: '1px solid #ccc' }}
+                                        formatter={(value) => [value.toFixed(2) + ` ${excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}`, 'Tüketim']}
+                                      />
+                                      <Legend wrapperStyle={{ fontSize: '10px' }} />
+                                      <Line type="monotone" dataKey="tuketim" stroke={excelSet.color} strokeWidth={2} dot={{ r: 2 }} name="Saatlik Tüketim" />
+                                    </RechartsLine>
+                                  </ResponsiveContainer>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5mm', marginTop: '5mm' }}>
+                                  <div>
+                                    <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: excelSet.color, margin: '0 0 3mm 0' }}>İstatistikler</h3>
+                                    <div style={{ background: '#f8fafc', border: `1px solid ${excelSet.color}`, borderRadius: '4px', padding: '8px', fontSize: '9px' }}>
+                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                                        <strong>Toplam Tüketim:</strong>
+                                        <span>{excelData.reduce((sum, d) => sum + (d.tuketim || 0), 0).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</span>
+                                      </p>
+                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                                        <strong>Ortalama Tüketim:</strong>
+                                        <span>{(excelData.reduce((sum, d) => sum + (d.tuketim || 0), 0) / excelData.length).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</span>
+                                      </p>
+                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                                        <strong>Maksimum:</strong>
+                                        <span>{Math.max(...excelData.map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</span>
+                                      </p>
+                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                                        <strong>Minimum:</strong>
+                                        <span>{Math.min(...excelData.map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</span>
+                                      </p>
+                                      <p style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                                        <strong>Veri Noktası:</strong>
+                                        <span>{excelData.length} ölçüm</span>
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: excelSet.color, margin: '0 0 3mm 0' }}>Yorum ve Öneriler</h3>
+                                    <div style={{ background: '#f0f9ff', border: `1px solid ${excelSet.color}`, borderRadius: '4px', padding: '8px', fontSize: '9px', lineHeight: '1.5' }}>
+                                      {excelSet.type === 'aktif' ? (
+                                        <p style={{ margin: 0 }}>Aktif enerji tüketimi grafiği, tesisinizdeki yük profilini göstermektedir. Zirve tüketim saatlerini analiz ederek, üretim planlaması ve enerji yönetimi optimize edilebilir.</p>
+                                      ) : excelSet.type === 'enduktif' ? (
+                                        <p style={{ margin: 0 }}>Endüktif reaktif enerji tüketimi, indüktif yüklerinizden (motorlar, transformatörler) kaynaklanmaktadır. Kompanzasyon sisteminizin bu saatlerde daha aktif çalışması gerekebilir.</p>
+                                      ) : (
+                                        <p style={{ margin: 0 }}>Kapasitif reaktif enerji tüketimi, kapasitif yüklerinizden veya aşırı kompanzasyondan kaynaklanabilir. Reaktör kullanımını gözden geçiriniz.</p>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
+                              </div>
 
-                                <div>
-                                  <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#2980b9', margin: '0 0 3mm 0' }}>Yorum ve Öneriler</h3>
-                                  <div style={{ background: '#f0f9ff', border: '1px solid #2980b9', borderRadius: '4px', padding: '8px', fontSize: '9px', lineHeight: '1.5' }}>
-                                    {selectedRapor.excel_enerji_turu === 'aktif' ? (
-                                      <p style={{ margin: 0 }}>Aktif enerji tüketimi grafiği, tesisinizdeki yük profilini göstermektedir. Zirve tüketim saatlerini analiz ederek, üretim planlaması ve enerji yönetimi optimize edilebilir.</p>
-                                    ) : selectedRapor.excel_enerji_turu === 'enduktif' ? (
-                                      <p style={{ margin: 0 }}>Endüktif reaktif enerji tüketimi, indüktif yüklerinizden (motorlar, transformatörler) kaynaklanmaktadır. Kompanzasyon sisteminizin bu saatlerde daha aktif çalışması gerekebilir.</p>
-                                    ) : (
-                                      <p style={{ margin: 0 }}>Kapasitif reaktif enerji tüketimi, kapasitif yüklerinizden veya aşırı kompanzasyondan kaynaklanabilir. Reaktör kullanımını gözden geçiriniz.</p>
-                                    )}
+                              <div style={{ position: 'absolute', bottom: '8mm', left: '20mm', right: '20mm', paddingTop: '3mm', borderTop: `2px solid ${excelSet.color}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '8px', color: '#555' }}>
+                                  <div style={{ flex: 1 }}>
+                                    <p style={{ margin: '0', fontWeight: 'bold', fontSize: '9px' }}>KOBİNERJİ MÜHENDİSLİK</p>
+                                    <p style={{ margin: '2px 0 0 0', lineHeight: '1.4' }}>Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                                    <p style={{ margin: '2px 0 0 0' }}>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
                                   </div>
+                                  <p style={{ margin: '0', fontWeight: 'bold', color: excelSet.color, fontSize: '9px' }}>Sayfa {currentPageNum}/{totalPages}</p>
                                 </div>
                               </div>
                             </div>
-
-                            <div style={{ position: 'absolute', bottom: '8mm', left: '20mm', right: '20mm', paddingTop: '3mm', borderTop: '2px solid #2980b9' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '8px', color: '#555' }}>
-                                <div style={{ flex: 1 }}>
-                                  <p style={{ margin: '0', fontWeight: 'bold', fontSize: '9px' }}>KOBİNERJİ MÜHENDİSLİK</p>
-                                  <p style={{ margin: '2px 0 0 0', lineHeight: '1.4' }}>Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
-                                  <p style={{ margin: '2px 0 0 0' }}>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
-                                </div>
-                                <p style={{ margin: '0', fontWeight: 'bold', color: '#2980b9', fontSize: '9px' }}>Sayfa {currentPageNum}/{totalPages}</p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      } catch (e) {
-                        console.error('Excel data parse error:', e);
+                          );
+                        } catch (e) {
+                          console.error(`${excelSet.type} Excel data parse error:`, e);
+                        }
                       }
-                    }
+                    });
 
-                    // SAYFA 4: Görsel (varsa)
+                    // SON SAYFA: Görsel (varsa)
                     if (selectedRapor.gorsel_url) {
-                      const currentPageNum = 3 + (selectedRapor.excel_data ? 1 : 0);
-                      const totalPages = 2 + (selectedRapor.excel_data ? 1 : 0) + 1;
+                      const excelPageCount = excelDataSets.filter(s => s.data).length;
+                      const currentPageNum = 2 + excelPageCount + 1;
+                      const totalPages = 2 + excelPageCount + 1;
                       
                       pages.push(
                         <div key="page-image" className="haftalik-pdf-page shadow-xl" style={{ width: '210mm', height: '297mm', background: 'white', padding: '15mm 20mm 30mm 20mm', fontFamily: 'Arial, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }}>
