@@ -1018,13 +1018,15 @@ export default function HaftalikRaporlama() {
 
                   {/* Hedef Güç Faktörü */}
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Hedef Güç Faktörü *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Hedef Güç Faktörü
+                      <span className="ml-2 text-xs text-gray-500">(Varsayılan: 0.95 - Türkiye için ideal)</span>
+                    </label>
                     <input
                       type="number"
                       step="0.001"
                       min="0"
                       max="1"
-                      required
                       value={formData.hedef_guc_faktoru}
                       onChange={(e) => setFormData({ ...formData, hedef_guc_faktoru: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
@@ -1052,20 +1054,19 @@ export default function HaftalikRaporlama() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Reaktif Güç (kVAr) *
-                      <span className="ml-2 text-xs text-gray-500">(Manuel hesap veya OSOS'tan)</span>
+                      Reaktif Güç (kVAr)
+                      <span className="ml-2 text-xs text-gray-500">(Opsiyonel - genelde faturada yoktur)</span>
                     </label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      required
                       value={formData.reaktif_guc}
                       onChange={(e) => setFormData({ ...formData, reaktif_guc: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       placeholder="350"
                     />
-                    <p className="mt-1 text-xs text-gray-500">Anlık reaktif güç - genelde faturada yoktur, OSOS verilerinden çıkarılabilir</p>
+                    <p className="mt-1 text-xs text-gray-500">Anlık reaktif güç - manuel hesap veya OSOS verilerinden çıkarılabilir</p>
                   </div>
 
                   {/* Kompanzasyon */}
@@ -1100,16 +1101,18 @@ export default function HaftalikRaporlama() {
                     <p className="mt-1 text-xs text-gray-500">Fatura tablosunda "1.8.0 - Aktif enerji" tüketim değeri</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Maliyet (₺) *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Maliyet (₺)
+                      <span className="ml-2 text-xs text-gray-500">(Opsiyonel)</span>
+                    </label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      required
                       value={formData.maliyet}
                       onChange={(e) => setFormData({ ...formData, maliyet: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="75000"
+                      placeholder="245156"
                     />
                   </div>
 
