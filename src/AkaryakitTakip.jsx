@@ -33,8 +33,6 @@ export default function AkaryakitTakip() {
     tarih: new Date().toISOString().split('T')[0],
     plaka: '',
     surucu: '',
-    litre: '',
-    litre_fiyat: '',
     toplam_tutar: '',
     aciklama: ''
   });
@@ -74,12 +72,7 @@ export default function AkaryakitTakip() {
     loadData();
   }, []);
 
-  // Toplam tutarı otomatik hesapla
-  useEffect(() => {
-    const litre = parseFloat(formData.litre) || 0;
-    const litreFiyat = parseFloat(formData.litre_fiyat) || 0;
-    setFormData(prev => ({ ...prev, toplam_tutar: (litre * litreFiyat).toFixed(2) }));
-  }, [formData.litre, formData.litre_fiyat]);
+
 
   // Kayıt ekle/güncelle - Basitleştirilmiş (406 hatası düzeltildi)
   const handleSubmit = async (e) => {
@@ -137,8 +130,8 @@ export default function AkaryakitTakip() {
         date: formData.tarih,
         vehicle_id: vehicleId,
         driver_id: driverId,
-        liters: parseFloat(formData.litre),
-        price_per_liter: parseFloat(formData.litre_fiyat),
+        liters: 0,
+        price_per_liter: 0,
         total_amount: parseFloat(formData.toplam_tutar),
         description: formData.aciklama || null
       };
@@ -195,8 +188,6 @@ export default function AkaryakitTakip() {
       tarih: kayit.date,
       plaka: kayit.vehicles?.plate || '',
       surucu: kayit.drivers?.full_name || '',
-      litre: kayit.liters.toString(),
-      litre_fiyat: kayit.price_per_liter.toString(),
       toplam_tutar: kayit.total_amount.toString(),
       aciklama: kayit.description || ''
     });
@@ -210,8 +201,6 @@ export default function AkaryakitTakip() {
       tarih: new Date().toISOString().split('T')[0],
       plaka: '',
       surucu: '',
-      litre: '',
-      litre_fiyat: '',
       toplam_tutar: '',
       aciklama: ''
     });
@@ -256,8 +245,6 @@ export default function AkaryakitTakip() {
       'Tarih': new Date(kayit.date).toLocaleDateString('tr-TR'),
       'Plaka': kayit.vehicles?.plate || '-',
       'Sürücü': kayit.drivers?.full_name || '-',
-      'Litre': kayit.liters,
-      'Birim Fiyat': kayit.price_per_liter,
       'Toplam Tutar': kayit.total_amount,
       'Açıklama': kayit.description || '-'
     }));
@@ -599,8 +586,6 @@ export default function AkaryakitTakip() {
                   <th className="px-4 py-3 text-left">Tarih</th>
                   <th className="px-4 py-3 text-left">Plaka</th>
                   <th className="px-4 py-3 text-left">Sürücü</th>
-                  <th className="px-4 py-3 text-right">Litre</th>
-                  <th className="px-4 py-3 text-right">Birim Fiyat</th>
                   <th className="px-4 py-3 text-right">Toplam</th>
                   <th className="px-4 py-3 text-center">İşlemler</th>
                 </tr>
@@ -611,8 +596,6 @@ export default function AkaryakitTakip() {
                     <td className="px-4 py-3">{new Date(kayit.date).toLocaleDateString('tr-TR')}</td>
                     <td className="px-4 py-3 font-medium">{kayit.vehicles?.plate || '-'}</td>
                     <td className="px-4 py-3">{kayit.drivers?.full_name || '-'}</td>
-                    <td className="px-4 py-3 text-right font-medium">{kayit.liters} L</td>
-                    <td className="px-4 py-3 text-right">{kayit.price_per_liter.toFixed(2)} ₺</td>
                     <td className="px-4 py-3 text-right font-bold text-blue-600">{kayit.total_amount.toFixed(2)} ₺</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
@@ -691,38 +674,15 @@ export default function AkaryakitTakip() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Litre *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Toplam Tutar *</label>
                     <input
                       type="number"
                       step="0.01"
                       required
-                      value={formData.litre}
-                      onChange={(e) => setFormData({ ...formData, litre: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Litre Fiyat *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={formData.litre_fiyat}
-                      onChange={(e) => setFormData({ ...formData, litre_fiyat: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Toplam Tutar</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      readOnly
                       value={formData.toplam_tutar}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 font-bold"
-                      placeholder="Otomatik hesaplanır"
+                      onChange={(e) => setFormData({ ...formData, toplam_tutar: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0.00"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -817,8 +777,6 @@ export default function AkaryakitTakip() {
                       <th style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Tarih</th>
                       <th style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Plaka</th>
                       <th style={{ padding: '10px 8px', textAlign: 'left', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Sürücü</th>
-                      <th style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Litre</th>
-                      <th style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Birim Fiyat</th>
                       <th style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#374151', fontWeight: 'bold' }}>Toplam Tutar</th>
                     </tr>
                   </thead>
@@ -834,12 +792,6 @@ export default function AkaryakitTakip() {
                         <td style={{ padding: '8px', textAlign: 'left', border: '1px solid #e5e7eb' }}>
                           {kayit.drivers?.full_name || '-'}
                         </td>
-                        <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #e5e7eb' }}>
-                          {kayit.liters.toFixed(2)} L
-                        </td>
-                        <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #e5e7eb' }}>
-                          {kayit.price_per_liter.toFixed(2)} ₺
-                        </td>
                         <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold' }}>
                           {kayit.total_amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
                         </td>
@@ -849,10 +801,6 @@ export default function AkaryakitTakip() {
                   <tfoot>
                     <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 'bold' }}>
                       <td colSpan="3" style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #d1d5db', color: '#1f2937' }}>TOPLAM</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#1f2937' }}>
-                        {istatistikler.toplamLitre.toFixed(2)} L
-                      </td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db' }}></td>
                       <td style={{ padding: '10px 8px', textAlign: 'right', border: '1px solid #d1d5db', color: '#2563eb' }}>
                         {istatistikler.toplamTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
                       </td>

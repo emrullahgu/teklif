@@ -36,7 +36,7 @@ import * as XLSX from 'xlsx';
 const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
 // --- TİP TANIMLAMALARI ---
-type DayType = 'Normal' | 'Pazar' | 'Resmi Tatil' | 'Raporlu' | 'İzinli';
+type DayType = 'Normal' | 'Pazar' | 'Resmi Tatil' | 'Raporlu' | 'İzinli' | 'Gelmedi';
 
 interface DailyLog {
   day: number;

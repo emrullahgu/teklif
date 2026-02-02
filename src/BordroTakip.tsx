@@ -39,7 +39,7 @@ const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz'
 
 // --- TİP TANIMLAMALARI ---
 
-type DayType = 'Normal' | 'Pazar' | 'Resmi Tatil' | 'Raporlu' | 'İzinli';
+type DayType = 'Normal' | 'Pazar' | 'Resmi Tatil' | 'Raporlu' | 'İzinli' | 'Gelmedi';
 type TabType = 'detail' | 'summary';
 
 interface DailyLog {
@@ -941,7 +941,7 @@ export default function BordroTakip() {
   // Bu fonksiyon artık ASLA çağrılmayacak
   const deleteDailyLog = async (day: number) => {
     console.error('🚫 SİLME İŞLEMİ ENGELLENDİ! Bu fonksiyon güvenlik nedeniyle devre dışı bırakılmıştır.');
-    alert('🚫 KAYIT SİLİNEMEZ!\n\n🔒 Güvenlik politikası gereği puantaj kayıtları silinemez.\n\n💡 Çözüm: Çalışmadığı günleri "İzinli" veya "Raporlu" olarak işaretleyin.');
+    alert('🚫 KAYIT SİLİNEMEZ!\n\n🔒 Güvenlik politikası gereği puantaj kayıtları silinemez.\n\n💡 Çözüm: Çalışmadığı günleri "Gelmedi", "İzinli" veya "Raporlu" olarak işaretleyin.');
     return; // Hiçbir şey yapma
     
     /* SİLME KODU DEVRE DIŞI
@@ -1246,7 +1246,7 @@ export default function BordroTakip() {
       // 🚫 SİLME İŞLEMİ TAMAMEN DEVRE DIŞI!
       // Kullanıcı type'ı boş yapmaya çalışırsa, "İzinli" olarak işaretle
       if (field === 'type' && (!value || value === '')) {
-        alert('⚠️ KAYIT SİLİNEMEZ!\n\n📋 Bir günü silmek yerine "İzinli" veya "Raporlu" olarak işaretleyebilirsiniz.\n\n🔒 Tüm kayıtlar güvenlik nedeniyle korunmaktadır.');
+        alert('⚠️ KAYIT SİLİNEMEZ!\n\n📋 Bir günü silmek yerine "Gelmedi", "İzinli" veya "Raporlu" olarak işaretleyebilirsiniz.\n\n🔒 Tüm kayıtlar güvenlik nedeniyle korunmaktadır.');
         
         // Değişikliği iptal et, önceki değeri koru
         console.log('🛑 Silme işlemi engellendi - kayıt korundu');
@@ -2868,6 +2868,7 @@ export default function BordroTakip() {
                                                         <option value="Normal">Normal</option>
                                                         <option value="Pazar">Pazar (x2)</option>
                                                         <option value="Resmi Tatil">Tatil (x2)</option>
+                                                        <option value="Gelmedi">Gelmedi</option>
                                                         <option value="İzinli">İzinli</option>
                                                         <option value="Raporlu">Raporlu</option>
                                                     </select>
