@@ -167,8 +167,11 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
                 totalSundayPay += dailyRateFixed; // Ek fark: 90,000/30 = 3,000 TL
             } else if (log.type === 'İzinli' || log.type === 'Raporlu') {
                 // İzinli ve Raporlu günler çalışılan güne sayılmaz, kesinti de yapılmaz
+            } else if (log.type === 'Gelmedi') {
+                // Gelmedi: Maaştan kesinti yapılır (Anlaşılan Maaş / 30)
+                totalAbsentDays += 1;
             }
-            // Boş günler (gelmedi) için kesinti yapılacak
+            // Boş günler (gelmedi) için de kesinti yapılacak
 
             if (log.overtimeHours > 0) {
                 totalOvertimeHours += log.overtimeHours;
