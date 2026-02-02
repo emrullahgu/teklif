@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS bordro_daily_logs (
   day INTEGER NOT NULL,
   month INTEGER NOT NULL,
   year INTEGER NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('Normal', 'Pazar', 'Resmi Tatil', 'Raporlu', 'İzinli')),
+  type TEXT NOT NULL CHECK (type IN ('Normal', 'Pazar', 'Resmi Tatil', 'Raporlu', 'İzinli', 'Gelmedi')),
   start_time TEXT,
   end_time TEXT,
   overtime_hours DECIMAL(5,2) DEFAULT 0,
