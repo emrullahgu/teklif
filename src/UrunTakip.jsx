@@ -29,9 +29,30 @@ const UrunTakip = () => {
     tarih: new Date().toISOString().split('T')[0]
   });
 
-  // Ürünleri yükle
+  // Ürünleri yükle - session dinleyicisi ile
   useEffect(() => {
+    // Session dinleyicisi
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth durumu değişti:', event, session?.user?.id);
+        if (session?.user) {
+          // Kullanıcı giriş yaptı veya session kuruldu
+          loadUrunler();
+        } else {
+          // Kullanıcı çıkış yaptı
+          setUrunler([]);
+          setDbError(null);
+        }
+      }
+    );
+
+    // İlk yük
     loadUrunler();
+
+    // Cleanup
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   // Arama ve filtreleme
@@ -71,13 +92,16 @@ const UrunTakip = () => {
       setLoading(true);
       setDbError(null);
       
-      // Kullanıcı oturum kontrolü
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('Kullanıcı oturumu bulunamadı');
+      // Session'dan user al (getUser yerine)
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
+        console.warn('Oturum bulunamadı, ürünler yüklenmedi');
         setUrunler([]);
         return;
       }
+
+      console.log('✅ Oturum var, ürünler yükleniyor:', session.user.id);
 
       const { data, error } = await supabase
         .from('urun_takip')
@@ -98,6 +122,7 @@ const UrunTakip = () => {
         throw error;
       }
       
+      console.log('✅ Ürünler yüklendi:', data?.length || 0);
       setUrunler(data || []);
     } catch (error) {
       console.error('Ürünler yüklenirken hata:', error);
@@ -115,21 +140,21 @@ const UrunTakip = () => {
     try {
       setLoading(true);
 
-      // Kullanıcı oturum kontrolü
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      // Session'dan user al
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      if (authError) {
-        console.error('Auth hatası:', authError);
-        alert('Kimlik doğrulama hatası. Lütfen tekrar giriş yapın.');
+      if (sessionError) {
+        console.error('Session hatası:', sessionError);
+        alert('Oturum hatası. Lütfen yeniden giriş yapın.');
         return;
       }
       
-      if (!user) {
+      if (!session?.user) {
         alert('Lütfen önce giriş yapın.');
         return;
       }
 
-      console.log('Giriş yapan kullanıcı:', user.id);
+      console.log('✅ Kullanıcı oturumu var:', session.user.id);
 
       if (editingUrun) {
         // Güncelleme
@@ -144,16 +169,16 @@ const UrunTakip = () => {
           throw error;
         }
         
-        console.log('Güncelleme başarılı:', data);
+        console.log('✅ Güncelleme başarılı:', data);
         alert('Ürün başarıyla güncellendi');
       } else {
         // Yeni ekleme - user_id ekle
         const dataToInsert = {
           ...formData,
-          user_id: user.id
+          user_id: session.user.id
         };
         
-        console.log('Eklenecek veri:', dataToInsert);
+        console.log('📝 Eklenecek veri:', dataToInsert);
         
         const { data, error } = await supabase
           .from('urun_takip')
@@ -171,7 +196,7 @@ const UrunTakip = () => {
           throw error;
         }
         
-        console.log('Ekleme başarılı:', data);
+        console.log('✅ Ekleme başarılı:', data);
         alert('Ürün başarıyla eklendi');
       }
 
@@ -181,7 +206,7 @@ const UrunTakip = () => {
       console.error('Ürün kaydedilirken hata:', error);
       
       if (error.code === '42501') {
-        alert('Yetki hatası: Bu işlemi yapmaya yetkiniz yok. Lütfen giriş yapın veya yöneticinizle iletişime geçin.');
+        alert('Yetki hatası: Bu işlemi yapmaya yetkiniz yok. Lütfen yöneticinizle iletişime geçin.');
       } else if (error.code === 'PGRST116') {
         alert('Tablo bulunamadı. Lütfen migration dosyasını Supabase\'de çalıştırın.');
       } else if (error.message?.includes('JWT')) {
