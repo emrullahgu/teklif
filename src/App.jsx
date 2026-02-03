@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useRef } from 'react';
-import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote, Menu, ExternalLink, Fuel, Briefcase, BarChart3 } from 'lucide-react';
+import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote, Menu, ExternalLink, Fuel, Briefcase, BarChart3, Package } from 'lucide-react';
 import { BordroWithPassword } from './bordro-main.jsx';
 import BeyazYakaBordro from './BeyazYakaBordro.tsx';
 import KesifMetraj from './KesifMetraj.jsx';
@@ -8,6 +8,7 @@ import Osos from './Osos.jsx';
 import AkaryakitTakip from './AkaryakitTakip.jsx';
 import IsTakip from './IsTakip.jsx';
 import HaftalikRaporlama from './HaftalikRaporlama.jsx';
+import UrunTakip from './UrunTakip.jsx';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import jsPDF from 'jspdf';
@@ -3424,6 +3425,19 @@ KURALLAR:
               </li>
               <li>
                 <button 
+                  onClick={() => { setActiveTab('urun-takip'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'urun-takip' 
+                      ? 'bg-purple-100 text-purple-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Package className="w-5 h-5" />
+                  <span>Ürün Takip</span>
+                </button>
+              </li>
+              <li>
+                <button 
                   onClick={() => { setActiveTab('saved'); setIsSidebarOpen(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                     activeTab === 'saved' 
@@ -4630,6 +4644,13 @@ KURALLAR:
         {activeTab === 'haftalik-raporlama' && (
           <div className="h-full">
             <HaftalikRaporlama />
+          </div>
+        )}
+
+        {/* Ürün Takip Tab */}
+        {activeTab === 'urun-takip' && (
+          <div className="h-full">
+            <UrunTakip />
           </div>
         )}
 
