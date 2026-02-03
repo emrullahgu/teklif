@@ -5,6 +5,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
+import faturaLogo from '../public/fatura_logo.png';
 
 export default function AkaryakitTakip() {
   const [kayitlar, setKayitlar] = useState([]);
@@ -276,7 +277,7 @@ export default function AkaryakitTakip() {
             });
           };
           img.onerror = reject;
-          img.src = '/fatura_logo.png';
+          img.src = faturaLogo;
         });
       };
 

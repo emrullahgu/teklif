@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import faturaLogo from '../public/fatura_logo.png';
 
 export default function IsTakip() {
   const [activeTab, setActiveTab] = useState('kayitlar'); // 'kayitlar', 'calisanlar', 'lokasyonlar', 'malzemeler'
@@ -407,7 +408,7 @@ export default function IsTakip() {
             });
           };
           img.onerror = reject;
-          img.src = '/fatura_logo.png';
+          img.src = faturaLogo;
         });
       };
 

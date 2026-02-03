@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Printer, FileText, Zap, ShieldCheck, AlertTriangle, CheckCircle, Save, RotateCcw, Sparkles, MessageSquare, X, Mail, ArrowUpCircle } from 'lucide-react';
+import faturaLogo from '../public/fatura_logo.png';
 
 // --- Gemini API Yapılandırması ---
 const apiKey = ""; // API anahtarı çalışma zamanında ortamdan sağlanır
@@ -188,7 +189,7 @@ export default function PeriyodikKontrol() {
           };
           altImg.src = '/kobinerji_logo.png';
         };
-        img.src = '/fatura_logo.png';
+        img.src = faturaLogo;
       });
     };
 

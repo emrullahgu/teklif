@@ -90,11 +90,18 @@ const GorevTakip = () => {
         return;
       }
 
+      // Boş string tarih alanlarını null'a çevir
+      const gorevData = {
+        ...gorevForm,
+        baslangic_tarihi: gorevForm.baslangic_tarihi || null,
+        bitis_tarihi: gorevForm.bitis_tarihi || null
+      };
+
       if (editingGorev) {
         // Güncelleme
         const { error } = await supabase
           .from('gorevler')
-          .update(gorevForm)
+          .update(gorevData)
           .eq('id', editingGorev.id);
 
         if (error) throw error;
@@ -102,7 +109,7 @@ const GorevTakip = () => {
         // Yeni kayıt
         const { error } = await supabase
           .from('gorevler')
-          .insert([gorevForm]);
+          .insert([gorevData]);
 
         if (error) throw error;
       }

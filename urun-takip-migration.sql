@@ -1,6 +1,9 @@
 -- Ürün Takip Tablosu Migration
 -- Bu dosya Supabase SQL Editor'de çalıştırılmalıdır
 
+-- Eski tabloyu sil (varsa)
+DROP TABLE IF EXISTS urun_takip CASCADE;
+
 -- Ürün takip tablosunu oluştur
 CREATE TABLE IF NOT EXISTS urun_takip (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

@@ -24,6 +24,7 @@ import FaturaData from '../fatura/Fatura.json';
 import FaturaData2 from '../fatura/Fatura2.json';
 import KabloFiyatData from './serer-kablo-fiyat.json';
 import HazirPaketler from './hazir-paketler.json';
+import faturaLogo from '../public/fatura_logo.png';
 
 // Fatura verilerini birleştir ve normalize et
 const normalizedFatura1 = FaturaData.map(item => ({
@@ -980,7 +981,7 @@ const App = () => {
             };
             altImg.src = '/kobinerji_logo.png';
           };
-          img.src = '/fatura_logo.png';
+          img.src = faturaLogo;
         });
       };
 
@@ -2231,7 +2232,7 @@ KURALLAR:
             });
           };
           img.onerror = reject;
-          img.src = '/fatura_logo.png';
+          img.src = faturaLogo;
         });
       };
 
@@ -2840,7 +2841,7 @@ KURALLAR:
             });
           };
           img.onerror = reject;
-          img.src = '/fatura_logo.png';
+          img.src = faturaLogo;
         });
       };
 
