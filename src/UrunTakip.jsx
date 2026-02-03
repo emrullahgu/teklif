@@ -35,19 +35,27 @@ const UrunTakip = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth durumu değişti:', event, session?.user?.id);
-        if (session?.user) {
-          // Kullanıcı giriş yaptı veya session kuruldu
-          loadUrunler();
-        } else {
+        
+        // Sadece giriş yapıldığında veya token yenilendiğinde yükle
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          if (session?.user) {
+            console.log('✅ Kullanıcı oturum kuruldu, ürünler yükleniyor');
+            loadUrunler();
+          }
+        } else if (event === 'SIGNED_OUT') {
           // Kullanıcı çıkış yaptı
+          console.log('🚪 Kullanıcı çıkış yaptı, ürünler temizleniyor');
           setUrunler([]);
           setDbError(null);
+        } else if (event === 'INITIAL_SESSION') {
+          // İlk yüklemede session varsa yükle
+          if (session?.user) {
+            console.log('✅ İlk session bulundu, ürünler yükleniyor');
+            loadUrunler();
+          }
         }
       }
     );
-
-    // İlk yük
-    loadUrunler();
 
     // Cleanup
     return () => {
