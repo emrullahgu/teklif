@@ -47,20 +47,27 @@ CREATE TRIGGER update_urun_takip_updated_at
 -- Row Level Security (RLS) Politikaları
 ALTER TABLE urun_takip ENABLE ROW LEVEL SECURITY;
 
+-- Önce mevcut politikaları temizle (varsa)
+DROP POLICY IF EXISTS "Kullanıcılar kendi ürünlerini görebilir" ON urun_takip;
+DROP POLICY IF EXISTS "Kullanıcılar ürün ekleyebilir" ON urun_takip;
+DROP POLICY IF EXISTS "Kullanıcılar kendi ürünlerini güncelleyebilir" ON urun_takip;
+DROP POLICY IF EXISTS "Kullanıcılar kendi ürünlerini silebilir" ON urun_takip;
+
 -- Kullanıcılar sadece kendi kayıtlarını görebilir
 CREATE POLICY "Kullanıcılar kendi ürünlerini görebilir"
     ON urun_takip FOR SELECT
     USING (auth.uid() = user_id);
 
--- Kullanıcılar kendi kayıtlarını ekleyebilir
+-- Kullanıcılar kendi kayıtlarını ekleyebilir - user_id otomatik atanacak
 CREATE POLICY "Kullanıcılar ürün ekleyebilir"
     ON urun_takip FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
+    WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
 
 -- Kullanıcılar kendi kayıtlarını güncelleyebilir
 CREATE POLICY "Kullanıcılar kendi ürünlerini güncelleyebilir"
     ON urun_takip FOR UPDATE
-    USING (auth.uid() = user_id);
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- Kullanıcılar kendi kayıtlarını silebilir
 CREATE POLICY "Kullanıcılar kendi ürünlerini silebilir"

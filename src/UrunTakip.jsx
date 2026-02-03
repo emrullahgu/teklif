@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Search, Plus, Edit2, Trash2, Save, X, MapPin, Tag, Hash, Calendar, Building2, Filter, Download, Upload, RefreshCw } from 'lucide-react';
+import { Package, Search, Plus, Edit2, Trash2, Save, X, MapPin, Tag, Hash, Calendar, Building2, Filter, Download, Upload, RefreshCw, AlertCircle, Database } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -14,6 +14,7 @@ const UrunTakip = () => {
   const [filterMarka, setFilterMarka] = useState('');
   const [filterLokasyon, setFilterLokasyon] = useState('');
   const [loading, setLoading] = useState(false);
+  const [dbError, setDbError] = useState(null);
 
   const [formData, setFormData] = useState({
     urun_adi: '',
@@ -68,16 +69,38 @@ const UrunTakip = () => {
   const loadUrunler = async () => {
     try {
       setLoading(true);
+      setDbError(null);
+      
+      // Kullanıcı oturum kontrolü
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('Kullanıcı oturumu bulunamadı');
+        setUrunler([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('urun_takip')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase hatası:', error);
+        
+        // Tablo yoksa özel hata mesajı
+        if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
+          setDbError('table_not_found');
+        } else if (error.message?.includes('permission')) {
+          setDbError('permission_denied');
+        } else {
+          setDbError('general_error');
+        }
+        throw error;
+      }
+      
       setUrunler(data || []);
     } catch (error) {
       console.error('Ürünler yüklenirken hata:', error);
-      alert('Ürünler yüklenirken hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -92,22 +115,63 @@ const UrunTakip = () => {
     try {
       setLoading(true);
 
+      // Kullanıcı oturum kontrolü
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error('Auth hatası:', authError);
+        alert('Kimlik doğrulama hatası. Lütfen tekrar giriş yapın.');
+        return;
+      }
+      
+      if (!user) {
+        alert('Lütfen önce giriş yapın.');
+        return;
+      }
+
+      console.log('Giriş yapan kullanıcı:', user.id);
+
       if (editingUrun) {
         // Güncelleme
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('urun_takip')
           .update(formData)
-          .eq('id', editingUrun.id);
+          .eq('id', editingUrun.id)
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Güncelleme hatası:', error);
+          throw error;
+        }
+        
+        console.log('Güncelleme başarılı:', data);
         alert('Ürün başarıyla güncellendi');
       } else {
-        // Yeni ekleme
-        const { error } = await supabase
+        // Yeni ekleme - user_id ekle
+        const dataToInsert = {
+          ...formData,
+          user_id: user.id
+        };
+        
+        console.log('Eklenecek veri:', dataToInsert);
+        
+        const { data, error } = await supabase
           .from('urun_takip')
-          .insert([formData]);
+          .insert([dataToInsert])
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Ekleme hatası:', error);
+          console.error('Hata detayları:', {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint
+          });
+          throw error;
+        }
+        
+        console.log('Ekleme başarılı:', data);
         alert('Ürün başarıyla eklendi');
       }
 
@@ -115,7 +179,16 @@ const UrunTakip = () => {
       loadUrunler();
     } catch (error) {
       console.error('Ürün kaydedilirken hata:', error);
-      alert('Ürün kaydedilirken hata oluştu: ' + error.message);
+      
+      if (error.code === '42501') {
+        alert('Yetki hatası: Bu işlemi yapmaya yetkiniz yok. Lütfen giriş yapın veya yöneticinizle iletişime geçin.');
+      } else if (error.code === 'PGRST116') {
+        alert('Tablo bulunamadı. Lütfen migration dosyasını Supabase\'de çalıştırın.');
+      } else if (error.message?.includes('JWT')) {
+        alert('Oturum süresi dolmuş. Lütfen yeniden giriş yapın.');
+      } else {
+        alert('Ürün kaydedilirken hata oluştu: ' + (error.message || 'Bilinmeyen hata'));
+      }
     } finally {
       setLoading(false);
     }
@@ -335,6 +408,78 @@ const UrunTakip = () => {
 
   return (
     <div className="max-w-7xl mx-auto">
+      {/* Veritabanı Hata Uyarısı */}
+      {dbError === 'table_not_found' && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-6 mb-6 rounded-lg shadow-md">
+          <div className="flex items-start">
+            <AlertCircle className="w-6 h-6 text-red-500 mr-3 flex-shrink-0 mt-1" />
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-red-800 mb-2">
+                Veritabanı Tablosu Bulunamadı
+              </h3>
+              <p className="text-red-700 mb-4">
+                <code className="bg-red-100 px-2 py-1 rounded">urun_takip</code> tablosu henüz oluşturulmamış. 
+                Lütfen aşağıdaki adımları takip edin:
+              </p>
+              <ol className="list-decimal list-inside space-y-2 text-red-700 mb-4">
+                <li>
+                  <a 
+                    href="https://app.supabase.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline font-medium"
+                  >
+                    Supabase Dashboard
+                  </a>'a gidin
+                </li>
+                <li>Sol menüden <strong>SQL Editor</strong> seçeneğine tıklayın</li>
+                <li><code className="bg-red-100 px-2 py-1 rounded">urun-takip-migration.sql</code> dosyasının içeriğini kopyalayın</li>
+                <li>SQL Editor'e yapıştırıp <strong>Run</strong> butonuna tıklayın</li>
+                <li>Bu sayfayı yenileyin</li>
+              </ol>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => window.open('https://app.supabase.com', '_blank')}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2"
+                >
+                  <Database className="w-4 h-4" />
+                  Supabase'i Aç
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Sayfayı Yenile
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dbError === 'permission_denied' && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-6 mb-6 rounded-lg shadow-md">
+          <div className="flex items-start">
+            <AlertCircle className="w-6 h-6 text-yellow-500 mr-3 flex-shrink-0 mt-1" />
+            <div>
+              <h3 className="text-lg font-semibold text-yellow-800 mb-2">
+                Yetki Hatası
+              </h3>
+              <p className="text-yellow-700 mb-3">
+                Bu verilere erişim yetkiniz yok. Lütfen giriş yaptığınızdan emin olun.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition"
+              >
+                Sayfayı Yenile
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-lg p-6 mb-6">
         <div className="flex items-center justify-between">
