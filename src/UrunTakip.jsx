@@ -15,6 +15,8 @@ const UrunTakip = () => {
   const [filterLokasyon, setFilterLokasyon] = useState('');
   const [loading, setLoading] = useState(false);
   const [dbError, setDbError] = useState(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [hasSession, setHasSession] = useState(false);
 
   const [formData, setFormData] = useState({
     urun_adi: '',
@@ -31,6 +33,18 @@ const UrunTakip = () => {
 
   // Ürünleri yükle - session dinleyicisi ile
   useEffect(() => {
+    // İlk session kontrolü
+    const checkInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsCheckingAuth(false);
+      if (session?.user) {
+        setHasSession(true);
+        loadUrunler();
+      }
+    };
+
+    checkInitialSession();
+
     // Session dinleyicisi
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -40,19 +54,15 @@ const UrunTakip = () => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
           if (session?.user) {
             console.log('✅ Kullanıcı oturum kuruldu, ürünler yükleniyor');
+            setHasSession(true);
             loadUrunler();
           }
         } else if (event === 'SIGNED_OUT') {
           // Kullanıcı çıkış yaptı
           console.log('🚪 Kullanıcı çıkış yaptı, ürünler temizleniyor');
+          setHasSession(false);
           setUrunler([]);
           setDbError(null);
-        } else if (event === 'INITIAL_SESSION') {
-          // İlk yüklemede session varsa yükle
-          if (session?.user) {
-            console.log('✅ İlk session bulundu, ürünler yükleniyor');
-            loadUrunler();
-          }
         }
       }
     );
@@ -438,6 +448,37 @@ const UrunTakip = () => {
     const fileName = `Urun_Takip_Raporu_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
     doc.save(fileName);
   };
+
+  // Auth kontrolü yapılıyor
+  if (isCheckingAuth) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <RefreshCw className="w-12 h-12 text-purple-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Oturum kontrol ediliyor...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Giriş yapılmamış
+  if (!hasSession) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <div className="text-center bg-white p-8 rounded-xl shadow-lg">
+          <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Lütfen Önce Giriş Yapınız</h2>
+          <p className="text-gray-600 mb-6">Bu sayfayı görüntülemek için giriş yapmanız gerekmektedir.</p>
+          <button
+            onClick={() => window.location.href = '/'}
+            className="bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 transition"
+          >
+            Giriş Sayfasına Dön
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto">

@@ -39,6 +39,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_urun_takip_updated_at ON urun_takip;
+
 CREATE TRIGGER update_urun_takip_updated_at
     BEFORE UPDATE ON urun_takip
     FOR EACH ROW
