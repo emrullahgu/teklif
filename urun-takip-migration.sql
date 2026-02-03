@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS urun_takip (
     tarih DATE DEFAULT CURRENT_DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+    user_email TEXT NOT NULL
 );
 
 -- Index'ler oluştur
@@ -24,7 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_urun_takip_kategori ON urun_takip(kategori);
 CREATE INDEX IF NOT EXISTS idx_urun_takip_marka ON urun_takip(marka);
 CREATE INDEX IF NOT EXISTS idx_urun_takip_lokasyon ON urun_takip(lokasyon);
 CREATE INDEX IF NOT EXISTS idx_urun_takip_created_at ON urun_takip(created_at);
-CREATE INDEX IF NOT EXISTS idx_urun_takip_user_id ON urun_takip(user_id);
+CREATE INDEX IF NOT EXISTS idx_urun_takip_user_email ON urun_takip(user_email);
 
 -- Full text search için index
 CREATE INDEX IF NOT EXISTS idx_urun_takip_search ON urun_takip 
@@ -46,42 +46,16 @@ CREATE TRIGGER update_urun_takip_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Row Level Security (RLS) Politikaları
-ALTER TABLE urun_takip ENABLE ROW LEVEL SECURITY;
-
--- Önce mevcut politikaları temizle (varsa)
-DROP POLICY IF EXISTS "Kullanıcılar kendi ürünlerini görebilir" ON urun_takip;
-DROP POLICY IF EXISTS "Kullanıcılar ürün ekleyebilir" ON urun_takip;
-DROP POLICY IF EXISTS "Kullanıcılar kendi ürünlerini güncelleyebilir" ON urun_takip;
-DROP POLICY IF EXISTS "Kullanıcılar kendi ürünlerini silebilir" ON urun_takip;
-
--- Kullanıcılar sadece kendi kayıtlarını görebilir
-CREATE POLICY "Kullanıcılar kendi ürünlerini görebilir"
-    ON urun_takip FOR SELECT
-    USING (auth.uid() = user_id);
-
--- Kullanıcılar kendi kayıtlarını ekleyebilir - user_id otomatik atanacak
-CREATE POLICY "Kullanıcılar ürün ekleyebilir"
-    ON urun_takip FOR INSERT
-    WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
-
--- Kullanıcılar kendi kayıtlarını güncelleyebilir
-CREATE POLICY "Kullanıcılar kendi ürünlerini güncelleyebilir"
-    ON urun_takip FOR UPDATE
-    USING (auth.uid() = user_id)
-    WITH CHECK (auth.uid() = user_id);
-
--- Kullanıcılar kendi kayıtlarını silebilir
-CREATE POLICY "Kullanıcılar kendi ürünlerini silebilir"
-    ON urun_takip FOR DELETE
-    USING (auth.uid() = user_id);
+-- RLS KAPATILDI - Uygulama seviyesinde user_email ile güvenlik sağlanıyor
+-- Bu projede custom users tablosu kullanıldığı için Supabase Auth RLS kullanılamıyor
+ALTER TABLE urun_takip DISABLE ROW LEVEL SECURITY;
 
 -- Örnek veriler (isteğe bağlı)
--- INSERT INTO urun_takip (urun_adi, kategori, marka, model, miktar, birim, lokasyon, aciklama, seri_no, user_id) VALUES
--- ('Panel 600W', 'Solar Panel', 'JinkoSolar', 'Tiger Pro 600W', 50, 'Adet', 'Depo-A, Raf-3', 'Yüksek verimli monokristal panel', 'JS-600-2024', auth.uid()),
--- ('Güç İnvertörü', 'İnvertör', 'Huawei', 'SUN2000-10KTL', 5, 'Adet', 'Depo-B, Raf-1', 'Hibrit tip, 10kW', 'HW-INV-001', auth.uid()),
--- ('NYY Kablo 4x16', 'Kablo', 'Türk Prysmian', '4x16 NYY', 500, 'Metre', 'Depo-C, Rulo-12', 'Topraklı enerji kablosu', 'NYY-4X16-2024', auth.uid()),
--- ('Sigorta Panosu', 'Elektrik Panosu', 'Schneider', 'PrismaSeT P', 3, 'Adet', 'Depo-A, Raf-5', '24 modül sigorta panosu', 'SCH-PAN-789', auth.uid());
+-- INSERT INTO urun_takip (urun_adi, kategori, marka, model, miktar, birim, lokasyon, aciklama, seri_no, user_email) VALUES
+-- ('Panel 600W', 'Solar Panel', 'JinkoSolar', 'Tiger Pro 600W', 50, 'Adet', 'Depo-A, Raf-3', 'Yüksek verimli monokristal panel', 'JS-600-2024', 'emrullah.gunay@kobinerji.com'),
+-- ('Güç İnvertörü', 'İnvertör', 'Huawei', 'SUN2000-10KTL', 5, 'Adet', 'Depo-B, Raf-1', 'Hibrit tip, 10kW', 'HW-INV-001', 'emrullah.gunay@kobinerji.com'),
+-- ('NYY Kablo 4x16', 'Kablo', 'Türk Prysmian', '4x16 NYY', 500, 'Metre', 'Depo-C, Rulo-12', 'Topraklı enerji kablosu', 'NYY-4X16-2024', 'emrullah.gunay@kobinerji.com'),
+-- ('Sigorta Panosu', 'Elektrik Panosu', 'Schneider', 'PrismaSeT P', 3, 'Adet', 'Depo-A, Raf-5', '24 modül sigorta panosu', 'SCH-PAN-789', 'emrullah.gunay@kobinerji.com');
 
 COMMENT ON TABLE urun_takip IS 'Ürün ve envanter takip sistemi - hangi ürün, nerede, hangi marka, kaç adet';
 COMMENT ON COLUMN urun_takip.urun_adi IS 'Ürünün adı';
@@ -93,3 +67,4 @@ COMMENT ON COLUMN urun_takip.birim IS 'Birim (Adet, Kg, Metre, vb.)';
 COMMENT ON COLUMN urun_takip.lokasyon IS 'Ürünün bulunduğu fiziksel konum (Depo-A, Raf-3 vb.)';
 COMMENT ON COLUMN urun_takip.seri_no IS 'Seri numarası veya lot numarası';
 COMMENT ON COLUMN urun_takip.tarih IS 'Kayıt/stok giriş tarihi';
+COMMENT ON COLUMN urun_takip.user_email IS 'Ürünü ekleyen kullanıcının email adresi';

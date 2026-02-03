@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Search, Plus, Edit2, Trash2, Save, X, MapPin, Tag, Hash, Calendar, Building2, Filter, Download, Upload, RefreshCw, AlertCircle, Database } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import { useAuth } from './SimpleAuth';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
 const UrunTakip = () => {
+  const { isAuthenticated, currentUser, loading: authLoading } = useAuth();
   const [urunler, setUrunler] = useState([]);
   const [filteredUrunler, setFilteredUrunler] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,8 +17,6 @@ const UrunTakip = () => {
   const [filterLokasyon, setFilterLokasyon] = useState('');
   const [loading, setLoading] = useState(false);
   const [dbError, setDbError] = useState(null);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [hasSession, setHasSession] = useState(false);
 
   const [formData, setFormData] = useState({
     urun_adi: '',
@@ -31,47 +31,12 @@ const UrunTakip = () => {
     tarih: new Date().toISOString().split('T')[0]
   });
 
-  // Ürünleri yükle - session dinleyicisi ile
+  // Ürünleri yükle - authentication kontrolü ile
   useEffect(() => {
-    // İlk session kontrolü
-    const checkInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsCheckingAuth(false);
-      if (session?.user) {
-        setHasSession(true);
-        loadUrunler();
-      }
-    };
-
-    checkInitialSession();
-
-    // Session dinleyicisi
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth durumu değişti:', event, session?.user?.id);
-        
-        // Sadece giriş yapıldığında veya token yenilendiğinde yükle
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          if (session?.user) {
-            console.log('✅ Kullanıcı oturum kuruldu, ürünler yükleniyor');
-            setHasSession(true);
-            loadUrunler();
-          }
-        } else if (event === 'SIGNED_OUT') {
-          // Kullanıcı çıkış yaptı
-          console.log('🚪 Kullanıcı çıkış yaptı, ürünler temizleniyor');
-          setHasSession(false);
-          setUrunler([]);
-          setDbError(null);
-        }
-      }
-    );
-
-    // Cleanup
-    return () => {
-      subscription?.unsubscribe();
-    };
-  }, []);
+    if (isAuthenticated && currentUser) {
+      loadUrunler();
+    }
+  }, [isAuthenticated, currentUser]);
 
   // Arama ve filtreleme
   useEffect(() => {
@@ -106,24 +71,21 @@ const UrunTakip = () => {
   }, [searchTerm, filterKategori, filterMarka, filterLokasyon, urunler]);
 
   const loadUrunler = async () => {
+    if (!currentUser) {
+      console.warn('Kullanıcı oturumu yok');
+      return;
+    }
+
     try {
       setLoading(true);
       setDbError(null);
-      
-      // Session'dan user al (getUser yerine)
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user) {
-        console.warn('Oturum bulunamadı, ürünler yüklenmedi');
-        setUrunler([]);
-        return;
-      }
 
-      console.log('✅ Oturum var, ürünler yükleniyor:', session.user.id);
+      console.log('✅ Kullanıcı var, ürünler yükleniyor:', currentUser.email);
 
       const { data, error } = await supabase
         .from('urun_takip')
         .select('*')
+        .eq('user_email', currentUser.email)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -155,24 +117,14 @@ const UrunTakip = () => {
       return;
     }
 
+    if (!currentUser) {
+      alert('Lütfen önce giriş yapın.');
+      return;
+    }
+
     try {
       setLoading(true);
-
-      // Session'dan user al
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('Session hatası:', sessionError);
-        alert('Oturum hatası. Lütfen yeniden giriş yapın.');
-        return;
-      }
-      
-      if (!session?.user) {
-        alert('Lütfen önce giriş yapın.');
-        return;
-      }
-
-      console.log('✅ Kullanıcı oturumu var:', session.user.id);
+      console.log('✅ Kullanıcı oturumu var:', currentUser.email);
 
       if (editingUrun) {
         // Güncelleme
@@ -190,10 +142,10 @@ const UrunTakip = () => {
         console.log('✅ Güncelleme başarılı:', data);
         alert('Ürün başarıyla güncellendi');
       } else {
-        // Yeni ekleme - user_id ekle
+        // Yeni ekleme - user_email ekle
         const dataToInsert = {
           ...formData,
-          user_id: session.user.id
+          user_email: currentUser.email
         };
         
         console.log('📝 Eklenecek veri:', dataToInsert);
@@ -450,7 +402,7 @@ const UrunTakip = () => {
   };
 
   // Auth kontrolü yapılıyor
-  if (isCheckingAuth) {
+  if (authLoading) {
     return (
       <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
@@ -462,7 +414,7 @@ const UrunTakip = () => {
   }
 
   // Giriş yapılmamış
-  if (!hasSession) {
+  if (!isAuthenticated) {
     return (
       <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[60vh]">
         <div className="text-center bg-white p-8 rounded-xl shadow-lg">
