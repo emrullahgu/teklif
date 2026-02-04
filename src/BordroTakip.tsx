@@ -1586,9 +1586,10 @@ export default function BordroTakip() {
       
       // Avans detayları için body oluştur
       const bordroBody: any[] = [
-        ['Anlasilan Net Maas', `${stats.dailyRate.toFixed(2)} TL x ${stats.totalWorkDays} gun = ${(stats.dailyRate * stats.totalWorkDays).toFixed(2)} TL`],
-        ['Mesai Ucreti (x1.5)', `${stats.hourlyRate.toFixed(2)} TL x ${stats.totalOvertimeHours} saat x 1.5 = ${stats.overtimePay.toFixed(2)} TL`],
-        ['Pazar/Tatil Farki', stats.totalSundayDays > 0 ? `${stats.totalSundayDays} gun x ${(stats.dailyRate * 2).toFixed(2)} TL = ${stats.totalSundayPay.toFixed(2)} TL` : `${stats.totalSundayPay.toFixed(2)} TL`],
+        ['Anlasilan Net Maas', `${employee.agreedSalary.toFixed(2)} TL`],
+        ['Mesai Ucreti (x1.5)', `${stats.overtimePay.toFixed(2)} TL`],
+        ['Pazar/Tatil Farki', `${stats.totalSundayPay.toFixed(2)} TL`],
+        ['Gelmedi Kesintisi', `- ${stats.absentDeduction.toFixed(2)} TL`],
         ['Ekstra Odemeler (Prim/Gider)', `${stats.totalExtras.toFixed(2)} TL`],
         ['', ''],
         ['BRUT HAKEDIS', `${stats.grossTotal.toFixed(2)} TL`],

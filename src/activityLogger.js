@@ -62,6 +62,7 @@ export const ActivityLogger = {
   bordroDailyLogSave: (employeeName, date) => logActivity('update', `Puantaj kaydedildi: ${employeeName} - ${date}`, 'bordro'),
   bordroExpenseAdd: (type, amount, employeeName) => logActivity('create', `${type} eklendi: ${amount} TL - ${employeeName}`, 'bordro'),
   bordroExpenseDelete: (type, amount) => logActivity('delete', `${type} silindi: ${amount} TL`, 'bordro'),
+  bordroBalanceUpdate: (employeeName, month, year) => logActivity('update', `Bakiye kaydedildi: ${employeeName} - ${month}/${year}`, 'bordro'),
   bordroMonthlySave: (month, year, employeeCount) => logActivity('create', `Aylık bordro kaydedildi: ${month}/${year} - ${employeeCount} personel`, 'bordro'),
   bordroExportPDF: (employeeName) => logActivity('export', `Bordro PDF indirildi: ${employeeName}`, 'bordro'),
   bordroExportAllPDF: (month, year) => logActivity('export', `Toplu bordro PDF indirildi: ${month}/${year}`, 'bordro'),
