@@ -105,7 +105,7 @@ const isWeekend = (day: number, month: number, year: number) => {
 };
 
 // --- HESAPLAMA MOTORU (BASİTLEŞTİRİLMİŞ MANTIK) ---
-const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefined, daysInMonth: number) => {
+const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefined, daysInMonth: number, currentMonth: number, currentYear: number) => {
     let totalWorkDays = 0;
     let totalSundayDays = 0;
     let totalOvertimeHours = 0;
@@ -1051,7 +1051,7 @@ export default function BordroTakip() {
       // Şimdi özet raporu oluştur
       for (const emp of employees) {
         const empData = appData[emp.id]?.[monthKey];
-        const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
 
         const payrollData = {
           employee_id: emp.id,
@@ -1235,8 +1235,8 @@ export default function BordroTakip() {
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId) || { id: '0', name: '', agreedSalary: 0, officialSalary: 0 };
 
   const currentStats = useMemo(() => 
-    calculateEmployeeStats(selectedEmployee, currentData, daysInMonth), 
-  [selectedEmployee, currentData, daysInMonth]);
+    calculateEmployeeStats(selectedEmployee, currentData, daysInMonth, currentMonth, currentYear), 
+  [selectedEmployee, currentData, daysInMonth, currentMonth, currentYear]);
 
   // --- HANDLERS ---
 
@@ -1543,7 +1543,7 @@ export default function BordroTakip() {
     try {
       const exportData = employees.map(emp => {
         const empData = appData[emp.id]?.[monthKey];
-        const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
         
         return {
           'Personel': emp.name,
@@ -1590,7 +1590,7 @@ export default function BordroTakip() {
   const exportSinglePDF = async (employee: Employee) => {
     try {
       const empData = appData[employee.id]?.[monthKey];
-      const stats = calculateEmployeeStats(employee, empData, daysInMonth);
+      const stats = calculateEmployeeStats(employee, empData, daysInMonth, currentMonth, currentYear);
       
       const doc = new jsPDF();
       
@@ -1917,7 +1917,7 @@ export default function BordroTakip() {
       // Özet Tablo Verisi
       const tableData = employees.map(emp => {
         const empData = appData[emp.id]?.[monthKey];
-        const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
         const cleanName = emp.name.replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
         
         return [
@@ -1935,7 +1935,7 @@ export default function BordroTakip() {
       // Toplamlar
       const totals = employees.reduce((acc, emp) => {
         const empData = appData[emp.id]?.[monthKey];
-        const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
         return {
           workDays: acc.workDays + stats.totalWorkDays,
           overtime: acc.overtime + stats.totalOvertimeHours,
@@ -2571,7 +2571,7 @@ export default function BordroTakip() {
                         <tbody className="divide-y divide-gray-100">
                             {employees.map(emp => {
                                 const empData = appData[emp.id]?.[monthKey];
-                                const stats = calculateEmployeeStats(emp, empData, daysInMonth);
+                                const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
                                 
                                 return (
                                     <tr key={emp.id} className="hover:bg-blue-50 transition-colors group">
@@ -2637,37 +2637,37 @@ export default function BordroTakip() {
                                     <td className="p-4 text-right">{formatCurrency(employees.reduce((sum, emp) => sum + emp.agreedSalary, 0))}</td>
                                     <td className="p-4 text-center">
                                         {employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
                                             return sum + stats.totalWorkDays;
                                         }, 0)}
                                     </td>
                                     <td className="p-4 text-center">
                                         {employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
                                             return sum + stats.totalOvertimeHours;
                                         }, 0)} s
                                     </td>
                                     <td className="p-4 text-right">
                                         {formatCurrency(employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
                                             return sum + stats.grossTotal;
                                         }, 0))}
                                     </td>
                                     <td className="p-4 text-right">
                                         {formatCurrency(employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
                                             return sum + stats.totalAdvances;
                                         }, 0))}
                                     </td>
                                     <td className="p-4 text-right text-xl bg-red-800 border-l-4 border-yellow-300">
                                         {formatCurrency(employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
                                             return sum + stats.netPayable;
                                         }, 0))}
                                     </td>
                                     <td className="p-4 text-right text-sm opacity-75">
                                         {formatCurrency(employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth);
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
                                             return sum + stats.officialPay;
                                         }, 0))}
                                     </td>
