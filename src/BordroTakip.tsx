@@ -185,9 +185,25 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     // GİDER/AVANS/PRİM TOPLA
     data.expenses.forEach(exp => {
         if (exp.type === 'Avans') {
-            // Avans tutarı zaten aylık taksit tutarı olarak kaydedilmiş
-            // Toplam tutarı böl değil, direkt tutarı al
-            totalAdvances += exp.amount;
+            // Taksitli avans ise: Veriliş tarihinden itibaren kaç taksit geçmiş?
+            const installmentTotal = exp.installment_total || 1;
+            const expDate = new Date(exp.date);
+            const expMonth = expDate.getMonth();
+            const expYear = expDate.getFullYear();
+            
+            // Avansın verildiği aydan şimdiye kaç ay geçti?
+            const monthsFromStart = (currentYear - expYear) * 12 + (currentMonth - expMonth);
+            
+            // Kaçıncı taksitteyiz? (1'den başlar)
+            const currentInstallmentNumber = monthsFromStart + 1;
+            
+            // Bu ay için taksit kesilecek mi?
+            if (currentInstallmentNumber > 0 && currentInstallmentNumber <= installmentTotal) {
+                // Aylık taksit tutarı
+                const monthlyInstallment = exp.amount / installmentTotal;
+                totalAdvances += monthlyInstallment;
+                console.log(`💰 Avans: ${exp.description} - Taksit ${currentInstallmentNumber}/${installmentTotal} = ${monthlyInstallment.toFixed(2)} TL`);
+            }
         }
         else if (exp.type === 'Gider') totalExpenses += exp.amount;
         else if (exp.type === 'Prim') totalBonuses += exp.amount;
@@ -590,87 +606,14 @@ export default function BordroTakip() {
     }
   };
 
-  // 🔄 Geçmiş Aylardan Devam Eden Taksitleri Getir
-  const loadContinuingInstallments = async (employeeId: string) => {
-    try {
-      console.log('🔄 Devam eden taksitler kontrol ediliyor...');
-      
-      // Geçmiş aylardan bu aya devam edebilecek taksitli avansları bul
-      const { data: pastInstallments, error } = await supabase
-        .from('bordro_expenses')
-        .select('*')
-        .eq('employee_id', employeeId)
-        .eq('type', 'Avans')
-        .gt('installment_total', 1)
-        .order('year', { ascending: false })
-        .order('month', { ascending: false })
-        .limit(12); // Son 12 ay
 
-      if (error) {
-        console.error('❌ Geçmiş taksit yükleme hatası:', error);
-        return [];
-      }
-
-      const continuingInstallments: Expense[] = [];
-      
-      if (pastInstallments && pastInstallments.length > 0) {
-        pastInstallments.forEach(exp => {
-          const expMonth = exp.month;
-          const expYear = exp.year;
-          const installmentCurrent = exp.installment_current || 1;
-          const installmentTotal = exp.installment_total || 1;
-          
-          // Kaç ay geçmiş?
-          const monthsDiff = (currentYear - expYear) * 12 + (currentMonth - expMonth);
-          
-          // Bu avansın şu anki taksit numarası
-          const currentInstallmentNumber = installmentCurrent + monthsDiff;
-          
-          // Hala devam ediyorsa bu aya ekle
-          if (currentInstallmentNumber > 0 && currentInstallmentNumber <= installmentTotal) {
-            console.log(`✅ Devam eden taksit bulundu: ${exp.description} (${currentInstallmentNumber}/${installmentTotal})`);
-            
-            // Mevcut ay için bu taksiti kontrol et - zaten varsa ekleme
-            const { data: existingExpense } = await supabase
-              .from('bordro_expenses')
-              .select('id')
-              .eq('employee_id', employeeId)
-              .eq('month', currentMonth)
-              .eq('year', currentYear)
-              .eq('type', 'Avans')
-              .ilike('description', `%${currentInstallmentNumber}/${installmentTotal}%`)
-              .single();
-            
-            if (!existingExpense) {
-              continuingInstallments.push({
-                id: crypto.randomUUID(),
-                type: 'Avans',
-                amount: parseFloat(exp.amount),
-                description: exp.description.replace(/\(\d+\/\d+ taksit\)/, `(${currentInstallmentNumber}/${installmentTotal} taksit)`),
-                date: new Date().toISOString().split('T')[0],
-                installment_total: installmentTotal,
-                installment_current: currentInstallmentNumber
-              });
-            }
-          }
-        });
-      }
-      
-      console.log(`✅ ${continuingInstallments.length} devam eden taksit bulundu`);
-      return continuingInstallments;
-      
-    } catch (error) {
-      console.error('❌ Devam eden taksit yükleme hatası:', error);
-      return [];
-    }
-  };
 
   // Aylık Verileri Yükle
   const loadMonthlyData = async (employeeId: string) => {
     try {
       console.log('📥 Aylık veri yükleniyor:', employeeId, monthKey);
       
-      // Puantaj Kayıtları
+      // Puantaj Kayıtları (sadece bu ay)
       const { data: logsData, error: logsError } = await supabase
         .from('bordro_daily_logs')
         .select('*')
@@ -680,24 +623,19 @@ export default function BordroTakip() {
 
       if (logsError) {
         console.error('❌ Puantaj yükleme hatası:', logsError);
-        // Hata olsa bile devam et, boş veri ile
       }
 
-      // Giderler
+      // Giderler (TÜM ZAMANLARIN - geçmiş taksitleri almak için)
+      // Avanslar için: Veriliş tarihinden itibaren devam edenleri alacağız
       const { data: expensesData, error: expensesError } = await supabase
         .from('bordro_expenses')
         .select('*')
         .eq('employee_id', employeeId)
-        .eq('month', currentMonth)
-        .eq('year', currentYear);
+        .order('date', { ascending: false });
 
       if (expensesError) {
         console.error('❌ Gider yükleme hatası:', expensesError);
-        // Hata olsa bile devam et, boş veri ile
       }
-      
-      // 🔄 Geçmiş aylardan devam eden taksitleri getir
-      const continuingInstallments = await loadContinuingInstallments(employeeId);
 
       // State'e Dönüştür
       const logs: Record<number, DailyLog> = {};
@@ -712,27 +650,47 @@ export default function BordroTakip() {
         };
       });
 
-      const expenses: Expense[] = (expensesData || []).map(exp => ({
-        id: exp.id,
-        type: exp.type,
-        amount: parseFloat(exp.amount),
-        description: exp.description || '',
-        date: exp.date,
-        installment_total: exp.installment_total || 1,
-        installment_current: exp.installment_current || 1
-      }));
-      
-      // Devam eden taksitleri ekle
-      if (continuingInstallments.length > 0) {
-        // Önce bu taksitleri veritabanına kaydet
-        for (const installment of continuingInstallments) {
-          await saveExpense(installment);
-          expenses.push(installment);
+      // Giderleri filtrele - sadece bu ay için geçerli olanları al
+      const expenses: Expense[] = [];
+      (expensesData || []).forEach(exp => {
+        const expDate = new Date(exp.date);
+        const expMonth = expDate.getMonth();
+        const expYear = expDate.getFullYear();
+        
+        // Eğer Avans ise ve taksitli ise, bu ay için geçerli mi kontrol et
+        if (exp.type === 'Avans') {
+          const installmentTotal = exp.installment_total || 1;
+          const monthsFromStart = (currentYear - expYear) * 12 + (currentMonth - expMonth);
+          const currentInstallmentNumber = monthsFromStart + 1;
+          
+          // Bu ay için taksit devam ediyor mu?
+          if (currentInstallmentNumber > 0 && currentInstallmentNumber <= installmentTotal) {
+            expenses.push({
+              id: exp.id,
+              type: exp.type,
+              amount: parseFloat(exp.amount),
+              description: exp.description || '',
+              date: exp.date,
+              installment_total: installmentTotal,
+              installment_current: currentInstallmentNumber // Şu anki taksit numarası
+            });
+          }
+        } 
+        // Diğer gider tipleri için sadece bu aya ait olanları al
+        else if (expMonth === currentMonth && expYear === currentYear) {
+          expenses.push({
+            id: exp.id,
+            type: exp.type,
+            amount: parseFloat(exp.amount),
+            description: exp.description || '',
+            date: exp.date,
+            installment_total: exp.installment_total || 1,
+            installment_current: exp.installment_current || 1
+          });
         }
-        console.log(`✅ ${continuingInstallments.length} devam eden taksit otomatik eklendi`);
-      }
+      });
 
-      console.log('✅ Veri yüklendi:', Object.keys(logs).length, 'gün,', expenses.length, 'gider');
+      console.log('✅ Veri yüklendi:', Object.keys(logs).length, 'gün,', expenses.length, 'gider (taksitli avanslar dahil)');
 
       // 🔒 GÜVENLİK: Mevcut state verilerini ASLA silme, sadece veritabanından gelenleri ekle
       setAppData(prev => {
@@ -1384,26 +1342,23 @@ export default function BordroTakip() {
 
     const totalAmount = parseFloat(advanceForm.amount);
     const installmentTotal = parseInt(advanceForm.installmentTotal) || 1;
-    const installmentCurrent = parseInt(advanceForm.installmentCurrent) || 1;
 
-    if (installmentCurrent > installmentTotal || installmentCurrent < 1) {
-      alert('⚠️ Geçersiz taksit numarası! Şu anki taksit, toplam taksit sayısından büyük olamaz.');
+    if (installmentTotal < 1 || installmentTotal > 24) {
+      alert('⚠️ Taksit sayısı 1-24 arasında olmalıdır!');
       return;
     }
     
-    // ÖNEMLI: Taksitli avans ise, aylık taksit tutarını hesapla
-    const monthlyAmount = installmentTotal > 1 ? totalAmount / installmentTotal : totalAmount;
-    
+    // ÖNEMLI: TOPLAM tutarı kaydet, her ay hesaplama sırasında bölünecek
     const newExpense: Expense = {
       id: crypto.randomUUID(),
       type: advanceForm.type,
-      amount: monthlyAmount, // Aylık taksit tutarı
+      amount: totalAmount, // TOPLAM TUTAR (bölünmeden)
       description: advanceForm.type === 'Avans' && installmentTotal > 1 
-        ? `Taksitli Avans - Toplam: ${formatCurrency(totalAmount)} (${installmentCurrent}/${installmentTotal} taksit)`
-        : `${advanceForm.type} (${advanceForm.date})`,
+        ? `Taksitli Avans - ${installmentTotal} ay (${formatCurrency(totalAmount / installmentTotal)}/ay)`
+        : `${advanceForm.type}`,
       date: advanceForm.date,
       installment_total: installmentTotal,
-      installment_current: installmentCurrent
+      installment_current: 1 // Her zaman 1'den başlar
     };
 
     // State güncellemesi - IMMUTABILITY KORUNARAK
@@ -1446,17 +1401,17 @@ export default function BordroTakip() {
     });
     
     if (advanceForm.type === 'Avans' && installmentTotal > 1) {
-      const remainingMonths = installmentTotal - installmentCurrent + 1;
+      const monthlyAmount = totalAmount / installmentTotal;
       alert(
         `✅ Taksitli Avans Başarıyla Eklendi!\n\n` +
         `💰 Toplam Tutar: ${formatCurrency(totalAmount)}\n` +
         `📊 Aylık Taksit: ${formatCurrency(monthlyAmount)}\n` +
-        `📅 Taksit: ${installmentCurrent}/${installmentTotal}\n` +
-        `⏳ Kalan Ay: ${remainingMonths} ay\n\n` +
-        `🔄 Gelecek ${remainingMonths - 1} ay otomatik devam edecek!`
+        `📅 Taksit Süresi: ${installmentTotal} ay\n` +
+        `📆 Başlangıç: ${new Date(advanceForm.date).toLocaleDateString('tr-TR')}\n\n` +
+        `🔄 Önümüzdeki ${installmentTotal} ay boyunca her ay ${formatCurrency(monthlyAmount)} kesilecek!`
       );
     } else {
-      alert(`✅ ${advanceForm.type} başarıyla eklendi!`);
+      alert(`✅ ${advanceForm.type} başarıyla eklendi!\n\n💰 Tutar: ${formatCurrency(totalAmount)}`);
     }
   };
 
@@ -1704,10 +1659,11 @@ export default function BordroTakip() {
         const avanslar = empData.expenses.filter((e: Expense) => e.type === 'Avans');
         avanslar.forEach((avans: Expense) => {
           const dateStr = new Date(avans.date).toLocaleDateString('tr-TR').replace(/İ/g, 'I').replace(/ı/g, 'i');
+          const monthlyAmount = avans.amount / (avans.installment_total || 1);
           const installmentInfo = (avans.installment_total || 1) > 1 
-            ? ` (${avans.installment_current}/${avans.installment_total} taksit)` 
+            ? ` (${avans.installment_current}/${avans.installment_total} taksit - Toplam: ${avans.amount.toFixed(2)} TL)` 
             : '';
-          bordroBody.push([`  - Avans ${dateStr}${installmentInfo}`, `- ${avans.amount.toFixed(2)} TL`]);
+          bordroBody.push([`  - Avans ${dateStr}${installmentInfo}`, `- ${monthlyAmount.toFixed(2)} TL`]);
         });
       }
       
@@ -2321,45 +2277,27 @@ export default function BordroTakip() {
                           <label className="block text-xs font-bold text-gray-700 mb-2">
                             📊 Taksit Bilgileri
                           </label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="block text-xs text-gray-600 mb-1">Toplam Taksit</label>
-                              <input 
-                                type="number" 
-                                min="1"
-                                max="12"
-                                className="w-full p-2 border-2 border-yellow-400 rounded focus:ring-2 focus:ring-yellow-500 font-bold" 
-                                value={advanceForm.installmentTotal} 
-                                onChange={(e) => setAdvanceForm({
-                                  ...advanceForm, 
-                                  installmentTotal: e.target.value,
-                                  installmentCurrent: Math.min(parseInt(e.target.value) || 1, parseInt(advanceForm.installmentCurrent) || 1).toString()
-                                })} 
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-600 mb-1">Şu Anki Taksit</label>
-                              <input 
-                                type="number" 
-                                min="1"
-                                max={advanceForm.installmentTotal}
-                                className="w-full p-2 border-2 border-yellow-400 rounded focus:ring-2 focus:ring-yellow-500 font-bold" 
-                                value={advanceForm.installmentCurrent} 
-                                onChange={(e) => setAdvanceForm({...advanceForm, installmentCurrent: e.target.value})} 
-                              />
-                            </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">Kaç Ay Taksit?</label>
+                            <input 
+                              type="number" 
+                              min="1"
+                              max="24"
+                              className="w-full p-2 border-2 border-yellow-400 rounded focus:ring-2 focus:ring-yellow-500 font-bold" 
+                              value={advanceForm.installmentTotal} 
+                              onChange={(e) => setAdvanceForm({
+                                ...advanceForm, 
+                                installmentTotal: e.target.value
+                              })} 
+                            />
                           </div>
                           <div className="text-xs text-gray-600 mt-2 bg-white p-2 rounded border border-yellow-200">
                             💡 <strong>Nasıl Çalışır:</strong><br/>
-                            • Toplam avans tutarını girin (örn: 10,000 TL)<br/>
+                            • <strong>Toplam avans tutarını</strong> girin (örn: 10,000 TL)<br/>
                             • Taksit sayısını seçin (örn: 5 ay)<br/>
                             • Her ay <strong>{formatCurrency((parseFloat(advanceForm.amount) || 0) / (parseInt(advanceForm.installmentTotal) || 1))}</strong> otomatik kesilecek<br/>
-                            • Gelecek aylarda otomatik devam edecek ({parseInt(advanceForm.installmentTotal) - parseInt(advanceForm.installmentCurrent) + 1} ay)
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                            • Bu aydan başlayarak <strong>{advanceForm.installmentTotal} ay</strong> boyunca devam edecek<br/>
+                            • ✅ Geçmiş avanslar otomatik takip edilir!
                         <p className="text-sm text-gray-600">
                           <strong>Personel:</strong> {selectedEmployee.name}
                         </p>
@@ -2823,7 +2761,9 @@ export default function BordroTakip() {
                                       <span>Avanslar:</span>
                                       <span className="font-semibold">-{formatCurrency(currentStats.totalAdvances)}</span>
                                     </div>
-                                    {currentData.expenses.filter(e => e.type === 'Avans').map(avans => (
+                                    {currentData.expenses.filter(e => e.type === 'Avans').map(avans => {
+                                      const monthlyAmount = avans.amount / (avans.installment_total || 1);
+                                      return (
                                       <div key={avans.id} className="flex justify-between text-xs text-red-500 pl-4">
                                         <span>
                                           • {new Date(avans.date).toLocaleDateString('tr-TR')}
@@ -2833,9 +2773,10 @@ export default function BordroTakip() {
                                             </span>
                                           )}
                                         </span>
-                                        <span>-{formatCurrency(avans.amount)}</span>
+                                        <span>-{formatCurrency(monthlyAmount)}</span>
                                       </div>
-                                    ))}
+                                      );
+                                    })}
                                   </>
                                 )}
                                 <div className="flex justify-between font-black text-lg pt-2 bg-blue-50 p-2 rounded"><span>NET HAKEDİŞ:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
@@ -2890,7 +2831,13 @@ export default function BordroTakip() {
                             </button>
                             <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
                                 {currentData.expenses.length > 0 ? (
-                                  currentData.expenses.map(e => (
+                                  currentData.expenses.map(e => {
+                                    // Eğer avans ise, aylık taksit tutarını hesapla
+                                    const displayAmount = e.type === 'Avans' 
+                                      ? e.amount / (e.installment_total || 1)
+                                      : e.amount;
+                                    
+                                    return (
                                     <div key={e.id} className="flex justify-between items-start text-xs bg-gray-50 p-2 rounded border hover:bg-blue-50 transition">
                                         <div className="flex-1">
                                           <div className={`font-bold ${e.type === 'Avans' ? 'text-red-600' : e.type === 'Gider' ? 'text-orange-600' : 'text-green-600'}`}>
@@ -2903,10 +2850,15 @@ export default function BordroTakip() {
                                           </div>
                                           <div className="text-gray-500 text-[10px] mt-0.5">
                                             📅 {new Date(e.date).toLocaleDateString('tr-TR')}
+                                            {e.type === 'Avans' && (e.installment_total || 1) > 1 && (
+                                              <span className="ml-1 text-yellow-600">
+                                                (Toplam: {formatCurrency(e.amount)})
+                                              </span>
+                                            )}
                                           </div>
                                         </div>
                                         <div className="flex items-center space-x-2">
-                                            <span className="font-bold">{formatCurrency(e.amount)}</span>
+                                            <span className="font-bold">{formatCurrency(displayAmount)}/ay</span>
                                             <button 
                                               onClick={() => deleteExpense(e.id)}
                                               className="p-1 hover:bg-red-100 rounded"
@@ -2915,7 +2867,8 @@ export default function BordroTakip() {
                                             </button>
                                         </div>
                                     </div>
-                                  ))
+                                    );
+                                  })
                                 ) : (
                                   <div className="text-center text-gray-400 text-xs py-2 italic">
                                     Henüz kayıt yok
