@@ -2298,6 +2298,11 @@ export default function BordroTakip() {
                             • Her ay <strong>{formatCurrency((parseFloat(advanceForm.amount) || 0) / (parseInt(advanceForm.installmentTotal) || 1))}</strong> otomatik kesilecek<br/>
                             • Bu aydan başlayarak <strong>{advanceForm.installmentTotal} ay</strong> boyunca devam edecek<br/>
                             • ✅ Geçmiş avanslar otomatik takip edilir!
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="bg-blue-50 p-3 rounded border border-blue-200">
                         <p className="text-sm text-gray-600">
                           <strong>Personel:</strong> {selectedEmployee.name}
                         </p>
