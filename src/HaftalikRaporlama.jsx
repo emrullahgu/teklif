@@ -110,6 +110,39 @@ export default function HaftalikRaporlama() {
     return Math.min(Math.max(cosPhi, 0), 1).toFixed(3);
   };
 
+  // Saatlik verileri günlük bazda gruplama fonksiyonu
+  const groupDataByDay = (data) => {
+    if (!data || data.length === 0) return [];
+    
+    const dayMap = {};
+    
+    data.forEach(row => {
+      const tarih = row.tarih; // YYYY-MM-DD formatında
+      if (!dayMap[tarih]) {
+        dayMap[tarih] = {
+          tarih: tarih,
+          gun: new Date(tarih).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }),
+          tuketim: 0,
+          okunan_endeks: 0,
+          hesaplanmis_endeks: 0,
+          count: 0
+        };
+      }
+      
+      dayMap[tarih].tuketim += parseFloat(row.tuketim || 0);
+      dayMap[tarih].okunan_endeks += parseFloat(row.okunan_endeks || 0);
+      dayMap[tarih].hesaplanmis_endeks += parseFloat(row.hesaplanmis_endeks || 0);
+      dayMap[tarih].count += 1;
+    });
+    
+    // Ortalama hesapla ve array'e çevir
+    return Object.values(dayMap).map(day => ({
+      ...day,
+      okunan_endeks: day.okunan_endeks / day.count,
+      hesaplanmis_endeks: day.hesaplanmis_endeks / day.count
+    })).sort((a, b) => new Date(a.tarih) - new Date(b.tarih));
+  };
+
   // Aktif/Reaktif enerji değiştiğinde güç faktörünü otomatik hesapla
   useEffect(() => {
     if (autoCalculateCosPhi && formData.enerji_tuketimi && ososOzetTablosu.length > 0) {
@@ -1588,9 +1621,9 @@ export default function HaftalikRaporlama() {
 
                 {/* Tüketim Grafiği */}
                 <div className="mb-6 bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-bold text-gray-700 mb-3">Saatlik Tüketim Grafiği</h4>
+                  <h4 className="font-bold text-gray-700 mb-3">Günlük Tüketim Grafiği</h4>
                   <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={parsedExcelData.slice(0, 50)}>
+                    <AreaChart data={groupDataByDay(parsedExcelData)}>
                       <defs>
                         <linearGradient id="colorTuketim" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
@@ -1598,7 +1631,7 @@ export default function HaftalikRaporlama() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="saat" fontSize={12} />
+                      <XAxis dataKey="gun" fontSize={12} />
                       <YAxis fontSize={12} />
                       <Tooltip />
                       <Area type="monotone" dataKey="tuketim" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorTuketim)" />
@@ -1692,10 +1725,10 @@ export default function HaftalikRaporlama() {
                 <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border-2 border-blue-200">
                   <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                     <Activity className="w-5 h-5 text-blue-600" />
-                    Saatlik Enerji Tüketimi {parsedExcelData[0]?.enerji_turu === 'aktif' ? '(kWh)' : '(kVArh)'}
+                    Günlük Enerji Tüketimi {parsedExcelData[0]?.enerji_turu === 'aktif' ? '(kWh)' : '(kVArh)'}
                   </h4>
                   <ResponsiveContainer width="100%" height={350}>
-                    <AreaChart data={parsedExcelData}>
+                    <AreaChart data={groupDataByDay(parsedExcelData)}>
                       <defs>
                         <linearGradient id="colorTuketim2" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
@@ -1703,7 +1736,7 @@ export default function HaftalikRaporlama() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="saat" fontSize={11} />
+                      <XAxis dataKey="gun" fontSize={11} />
                       <YAxis fontSize={11} label={{ value: 'kWh', angle: -90, position: 'insideLeft' }} />
                       <Tooltip contentStyle={{ background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }} />
                       <Area type="monotone" dataKey="tuketim" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorTuketim2)" />
@@ -1715,12 +1748,12 @@ export default function HaftalikRaporlama() {
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border-2 border-green-200">
                   <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-green-600" />
-                    Hesaplanmış Endeks Değerleri
+                    Günlük Ortalama Hesaplanmış Endeks Değerleri
                   </h4>
                   <ResponsiveContainer width="100%" height={350}>
-                    <RechartsBar data={parsedExcelData.slice(0, 50)}>
+                    <RechartsBar data={groupDataByDay(parsedExcelData)}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="saat" fontSize={11} />
+                      <XAxis dataKey="gun" fontSize={11} />
                       <YAxis fontSize={11} />
                       <Tooltip contentStyle={{ background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }} />
                       <Bar dataKey="hesaplanmis_endeks" fill="#10b981" radius={[8, 8, 0, 0]} />
@@ -1732,12 +1765,12 @@ export default function HaftalikRaporlama() {
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
                   <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-purple-600" />
-                    Okunan Endeks Trendi
+                    Günlük Ortalama Okunan Endeks Trendi
                   </h4>
                   <ResponsiveContainer width="100%" height={350}>
-                    <RechartsLine data={parsedExcelData}>
+                    <RechartsLine data={groupDataByDay(parsedExcelData)}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="saat" fontSize={11} />
+                      <XAxis dataKey="gun" fontSize={11} />
                       <YAxis fontSize={11} />
                       <Tooltip contentStyle={{ background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }} />
                       <Legend />
@@ -1749,21 +1782,21 @@ export default function HaftalikRaporlama() {
                 {/* İstatistikler */}
                 <div className="grid grid-cols-4 gap-4">
                   <div className="bg-gradient-to-br from-orange-100 to-orange-200 p-4 rounded-lg text-center">
-                    <p className="text-sm text-orange-700 font-medium">Max Tüketim</p>
+                    <p className="text-sm text-orange-700 font-medium">Max Günlük Tüketim</p>
                     <p className="text-2xl font-bold text-orange-900">
-                      {Math.max(...parsedExcelData.map(d => d.tuketim)).toFixed(2)} kWh
+                      {Math.max(...groupDataByDay(parsedExcelData).map(d => d.tuketim)).toFixed(2)} kWh
                     </p>
                   </div>
                   <div className="bg-gradient-to-br from-blue-100 to-blue-200 p-4 rounded-lg text-center">
-                    <p className="text-sm text-blue-700 font-medium">Min Tüketim</p>
+                    <p className="text-sm text-blue-700 font-medium">Min Günlük Tüketim</p>
                     <p className="text-2xl font-bold text-blue-900">
-                      {Math.min(...parsedExcelData.map(d => d.tuketim)).toFixed(2)} kWh
+                      {Math.min(...groupDataByDay(parsedExcelData).map(d => d.tuketim)).toFixed(2)} kWh
                     </p>
                   </div>
                   <div className="bg-gradient-to-br from-green-100 to-green-200 p-4 rounded-lg text-center">
-                    <p className="text-sm text-green-700 font-medium">Ortalama</p>
+                    <p className="text-sm text-green-700 font-medium">Günlük Ortalama</p>
                     <p className="text-2xl font-bold text-green-900">
-                      {(parsedExcelData.reduce((sum, d) => sum + d.tuketim, 0) / parsedExcelData.length).toFixed(2)} kWh
+                      {(groupDataByDay(parsedExcelData).reduce((sum, d) => sum + d.tuketim, 0) / groupDataByDay(parsedExcelData).length).toFixed(2)} kWh
                     </p>
                   </div>
                   <div className="bg-gradient-to-br from-purple-100 to-purple-200 p-4 rounded-lg text-center">
@@ -2188,16 +2221,16 @@ export default function HaftalikRaporlama() {
                               {/* Excel Grafiği - Recharts ile render edilecek */}
                               <div style={{ height: '235mm' }}>
                                 <div style={{ marginBottom: '5mm' }}>
-                                  <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: excelSet.color, margin: '0 0 3mm 0' }}>Saatlik {excelSet.title} Tüketimi</h3>
+                                  <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: excelSet.color, margin: '0 0 3mm 0' }}>Günlük {excelSet.title} Tüketimi</h3>
                                   <ResponsiveContainer width="100%" height={280}>
-                                    <RechartsLine data={excelData}>
+                                    <RechartsLine data={groupDataByDay(excelData)}>
                                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                       <XAxis 
-                                        dataKey="saat" 
+                                        dataKey="gun" 
                                         angle={-45} 
                                         textAnchor="end" 
                                         height={60} 
-                                        tick={{ fontSize: 8 }}
+                                        tick={{ fontSize: 10 }}
                                       />
                                       <YAxis tick={{ fontSize: 10 }} label={{ value: `Tüketim (${excelSet.type === 'aktif' ? 'kWh' : 'kVArh'})`, angle: -90, position: 'insideLeft', style: { fontSize: 10 } }} />
                                       <Tooltip 
@@ -2205,7 +2238,7 @@ export default function HaftalikRaporlama() {
                                         formatter={(value) => [value.toFixed(2) + ` ${excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}`, 'Tüketim']}
                                       />
                                       <Legend wrapperStyle={{ fontSize: '10px' }} />
-                                      <Line type="monotone" dataKey="tuketim" stroke={excelSet.color} strokeWidth={2} dot={{ r: 2 }} name="Saatlik Tüketim" />
+                                      <Line type="monotone" dataKey="tuketim" stroke={excelSet.color} strokeWidth={2} dot={{ r: 3 }} name="Günlük Tüketim" />
                                     </RechartsLine>
                                   </ResponsiveContainer>
                                 </div>
@@ -2228,24 +2261,24 @@ export default function HaftalikRaporlama() {
                                         <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>Haftalık toplam {excelSet.title.toLowerCase()}</td>
                                       </tr>
                                       <tr style={{ backgroundColor: 'white' }}>
-                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Ortalama Tüketim</td>
-                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd' }}>{(excelData.reduce((sum, d) => sum + (d.tuketim || 0), 0) / excelData.length).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
-                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>Saatlik ortalama değer</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Günlük Ortalama</td>
+                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd' }}>{(groupDataByDay(excelData).reduce((sum, d) => sum + (d.tuketim || 0), 0) / groupDataByDay(excelData).length).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>Günlük ortalama tüketim</td>
                                       </tr>
                                       <tr style={{ backgroundColor: '#f8fafc' }}>
-                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Maksimum Tüketim</td>
-                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd', color: '#dc2626', fontWeight: 'bold' }}>{Math.max(...excelData.map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
-                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>En yüksek saatlik tüketim (zirve)</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Max Günlük Tüketim</td>
+                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd', color: '#dc2626', fontWeight: 'bold' }}>{Math.max(...groupDataByDay(excelData).map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>En yüksek günlük tüketim</td>
                                       </tr>
                                       <tr style={{ backgroundColor: 'white' }}>
-                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Minimum Tüketim</td>
-                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd', color: '#16a34a' }}>{Math.min(...excelData.map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
-                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>En düşük saatlik tüketim (baz yük)</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Min Günlük Tüketim</td>
+                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd', color: '#16a34a' }}>{Math.min(...groupDataByDay(excelData).map(d => d.tuketim || 0)).toFixed(2)} {excelSet.type === 'aktif' ? 'kWh' : 'kVArh'}</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>En düşük günlük tüketim</td>
                                       </tr>
                                       <tr style={{ backgroundColor: '#f8fafc' }}>
-                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Veri Noktası</td>
-                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd' }}>{excelData.length} ölçüm</td>
-                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>Toplam kayıt sayısı (1 hafta = 168 saat)</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontWeight: 'bold' }}>Gün Sayısı</td>
+                                        <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd' }}>{groupDataByDay(excelData).length} gün</td>
+                                        <td style={{ padding: '6px', border: '1px solid #ddd', fontSize: '8px' }}>Rapor dönemi gün sayısı (1 hafta = 7 gün)</td>
                                       </tr>
                                     </tbody>
                                   </table>
