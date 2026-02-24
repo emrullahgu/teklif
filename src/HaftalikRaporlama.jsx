@@ -2051,7 +2051,7 @@ export default function HaftalikRaporlama() {
                               <tr style={{ background: '#f8fafc' }}>
                                 <td style={{ padding: '10px', fontSize: '11px', fontWeight: 'bold', color: '#334155', border: '1px solid #e2e8f0' }}>Enerji Tüketimi</td>
                                 <td style={{ padding: '10px', fontSize: '11px', color: '#1e293b', border: '1px solid #e2e8f0' }}>{selectedRapor.enerji_tuketimi} kWh</td>
-                                <td style={{ padding: '10px', fontSize: '11px', color: '#64748b', border: '1px solid #e2e8f0' }}>Haftalık toplam tüketim</td>
+                                <td style={{ padding: '10px', fontSize: '11px', color: '#64748b', border: '1px solid #e2e8f0' }}>Ayın ilk gününden bu güne kadar kümülatif toplam</td>
                               </tr>
                               <tr style={{ background: 'white' }}>
                                 <td style={{ padding: '10px', fontSize: '11px', fontWeight: 'bold', color: '#334155', border: '1px solid #e2e8f0' }}>Maliyet</td>
