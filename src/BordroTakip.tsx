@@ -971,14 +971,25 @@ export default function BordroTakip() {
     try {
       console.log('🗑️ Veritabanından siliniyor:', id);
       
-      const { error } = await supabase
+      const { data, error, count } = await supabase
         .from('bordro_expenses')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select(); // ✅ EKLEME: Silinen kayıtları döndür
 
-      if (error) throw error;
+      console.log('🔍 DELETE sonucu:', { data, error, count, silenenKayitSayisi: data?.length });
+
+      if (error) {
+        console.error('❌ DELETE ERROR detay:', error);
+        throw error;
+      }
       
-      console.log('✅ Veritabanından silindi:', id);
+      if (!data || data.length === 0) {
+        console.error('⚠️ DİKKAT: DELETE başarılı ama HİÇ KAYIT SİLİNMEDİ! RLS engellemiş olabilir!');
+        throw new Error('Kayıt silinemedi! Row Level Security tarafından engellenmiş olabilir.');
+      }
+      
+      console.log('✅ Veritabanından silindi:', id, '- Silinen kayıt sayısı:', data.length);
       
     } catch (error) {
       console.error('❌ Gider silme hatası:', error);
