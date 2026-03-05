@@ -28,7 +28,7 @@ import {
   Shield,
   History
 } from 'lucide-react';
-import { supabase } from './supabaseClient';
+import { supabase, adminSupabase } from './supabaseClient';
 import ActivityLogger from './activityLogger';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -969,32 +969,25 @@ export default function BordroTakip() {
   // 🔒 Gider/Avans Sil (Çift onaylı güvenli silme)
   const deleteExpenseFromDB = async (id: string) => {
     try {
-      console.log('🗑️ Veritabanından siliniyor:', id);
+      console.log('🗑️ Veritabanından siliniyor (adminSupabase ile):', id);
       
-      const { data, error, count } = await supabase
+      // 🔐 Admin client kullan (service_role key ile - Trigger bypass)
+      const { error } = await adminSupabase
         .from('bordro_expenses')
         .delete()
-        .eq('id', id)
-        .select(); // ✅ EKLEME: Silinen kayıtları döndür
-
-      console.log('🔍 DELETE sonucu:', { data, error, count, silenenKayitSayisi: data?.length });
+        .eq('id', id);
 
       if (error) {
-        console.error('❌ DELETE ERROR detay:', error);
-        throw error;
+        console.error('❌ DELETE ERROR:', error);
+        throw new Error(`Silme hatası: ${error.message}`);
       }
       
-      if (!data || data.length === 0) {
-        console.error('⚠️ DİKKAT: DELETE başarılı ama HİÇ KAYIT SİLİNMEDİ! RLS engellemiş olabilir!');
-        throw new Error('Kayıt silinemedi! Row Level Security tarafından engellenmiş olabilir.');
-      }
-      
-      console.log('✅ Veritabanından silindi:', id, '- Silinen kayıt sayısı:', data.length);
+      console.log('✅ Veritabanından silindi:', id);
       
     } catch (error) {
       console.error('❌ Gider silme hatası:', error);
-      alert('❌ Veritabanından silme başarısız!\n\nHata: ' + (error as any)?.message + '\n\n⚠️ Kayıt state\'den silindi ama veritabanında kalabilir. Sayfayı yenileyin.');
-      throw error; // Hatayı yukarı fırlat
+      alert('❌ Veritabanından silme başarısız!\n\nHata: ' + (error as any)?.message);
+      throw error;
     }
   };
 
