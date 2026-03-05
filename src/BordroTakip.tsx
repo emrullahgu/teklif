@@ -698,7 +698,6 @@ export default function BordroTakip() {
       // 🔒 GÜVENLİK: Mevcut state verilerini ASLA silme, sadece veritabanından gelenleri ekle
       setAppData(prev => {
         const existingLogs = prev[employeeId]?.[monthKey]?.logs || {};
-        const existingExpenses = prev[employeeId]?.[monthKey]?.expenses || [];
         
         // Veritabanından gelen verilerle mevcut verileri birleştir (veritabanı öncelikli)
         const mergedLogs = { ...existingLogs, ...logs };
@@ -713,7 +712,7 @@ export default function BordroTakip() {
               month: currentMonth, 
               year: currentYear, 
               logs: mergedLogs, 
-              expenses: expenses.length > 0 ? expenses : existingExpenses // Veritabanında varsa kullan
+              expenses: expenses // ✅ VERİTABANI HER ZAMAN DOĞRUDUR - boş bile olsa veritabanını kullan
             }
           }
         };
