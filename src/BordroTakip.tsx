@@ -1363,7 +1363,10 @@ export default function BordroTakip() {
       installment_current: 1 // Her zaman 1'den başlar
     };
 
-    // State güncellemesi - IMMUTABILITY KORUNARAK
+    // ✅ ÖNCE VERİTABANINA KAYDET (başarısız olursa state'e dokunma)
+    await saveExpense(newExpense);
+
+    // ✅ BAŞARILI OLDUYSA State güncellemesi - IMMUTABILITY KORUNARAK
     setAppData(prev => {
        const newData = {...prev};
        
@@ -1388,9 +1391,6 @@ export default function BordroTakip() {
        
        return newData;
     });
-
-    // Veritabanına Kaydet
-    await saveExpense(newExpense);
     
     // Modal'ı kapat ve formu sıfırla
     setShowAdvanceModal(false);
@@ -1498,7 +1498,11 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
       console.log('🗑️ Gider siliniyor (kullanıcı çift onay verdi):', id);
       console.log('📋 Silinen kayıt:', expense.type, expense.amount, expense.description);
       
-      // State güncellemesi - IMMUTABILITY KORUNARAK
+      // ✅ ÖNCE VERİTABANINDAN SİL (başarısız olursa state'e dokunma)
+      await deleteExpenseFromDB(id);
+      console.log('✅ Veritabanından silindi, ID:', id);
+      
+      // ✅ BAŞARILI OLDUYSA State güncellemesi - IMMUTABILITY KORUNARAK
       setAppData(prev => {
           const newData = {...prev};
           
@@ -1513,9 +1517,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
           
           return newData;
       });
-
-      await deleteExpenseFromDB(id);
-      console.log('✅ Veritabanından silindi, ID:', id);
+      
       alert('✅ Kayıt silindi.\n\n⚠️ Not: Veritabanından tamamen silindi, geri getirilemez!');
     } catch (error) {
       console.error('❌ Silme hatası:', error);

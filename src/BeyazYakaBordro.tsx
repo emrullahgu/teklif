@@ -640,23 +640,24 @@ const BeyazYakaBordro: React.FC = () => {
         installment_current
       };
 
-      // Expense listesine ekle
       const updatedExpenses = [...expensesList, newExpense];
+      
+      // ✅ ÖNCE VERİTABANINA KAYDET (başarısız olursa state'e dokunma)
+      if (payrollData && payrollData.id) {
+        const { error: payrollError } = await supabase
+          .from('beyaz_yaka_monthly_payroll')
+          .update({ expenses: updatedExpenses })
+          .eq('id', payrollData.id);
+        
+        if (payrollError) throw payrollError;
+      }
+      
+      // ✅ BAŞARILI OLDUYSA State'i güncelle
       setExpensesList(updatedExpenses);
       
-      // PayrollData'yı güncelle ve kaydet
       if (payrollData) {
         const updatedPayrollData = { ...payrollData, expenses: updatedExpenses };
         setPayrollData(updatedPayrollData);
-        
-        if (payrollData.id) {
-          const { error: payrollError } = await supabase
-            .from('beyaz_yaka_monthly_payroll')
-            .update({ expenses: updatedExpenses })
-            .eq('id', payrollData.id);
-          
-          if (payrollError) throw payrollError;
-        }
       }
       
       // Eğer Avans ise, eski sisteme de kaydet
@@ -698,21 +699,23 @@ const BeyazYakaBordro: React.FC = () => {
     
     try {
       const updatedExpenses = expensesList.filter(e => e.id !== expenseId);
+      
+      // ✅ ÖNCE VERİTABANINDAN SİL (başarısız olursa state'e dokunma)
+      if (payrollData && payrollData.id) {
+        const { error } = await supabase
+          .from('beyaz_yaka_monthly_payroll')
+          .update({ expenses: updatedExpenses })
+          .eq('id', payrollData.id);
+        
+        if (error) throw error;
+      }
+      
+      // ✅ BAŞARILI OLDUYSA State'i güncelle
       setExpensesList(updatedExpenses);
       
-      // Eğer payrollData varsa ve id'si varsa, güncellenmiş expenses ile kaydet
       if (payrollData) {
         const updatedPayrollData = { ...payrollData, expenses: updatedExpenses };
         setPayrollData(updatedPayrollData);
-        
-        if (payrollData.id) {
-          const { error } = await supabase
-            .from('beyaz_yaka_monthly_payroll')
-            .update({ expenses: updatedExpenses })
-            .eq('id', payrollData.id);
-          
-          if (error) throw error;
-        }
       }
       
       showMessage('success', 'Kayıt silindi');
