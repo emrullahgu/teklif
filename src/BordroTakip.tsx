@@ -1420,10 +1420,42 @@ export default function BordroTakip() {
     const expense = currentData.expenses.find(e => e.id === id);
     if (!expense) return;
     
+    // ⚠️ TAKSİTLİ AVANS KONTROLÜ
+    const isTaksitli = expense.type === 'Avans' && (expense.installment_total || 1) > 1;
+    const currentTaksit = expense.installment_current || 1;
+    const totalTaksit = expense.installment_total || 1;
+    
+    if (isTaksitli) {
+      const taksitMessage = `
+🚨 TAKSİTLİ AVANS SİLME UYARISI
+
+Bu kayıt taksitli bir avanstır:
+━━━━━━━━━━━━━━━━━━━━━
+💰 Toplam Tutar: ${formatCurrency(expense.amount * totalTaksit)}
+📊 Taksit Planı: ${totalTaksit} ay
+🔢 Şu anki ay: ${currentTaksit}/${totalTaksit} (${formatCurrency(expense.amount)}/ay)
+📝 Açıklama: ${expense.description || '-'}
+━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ ÖNEMLİ: Bu kaydı sildiğinizde TÜM TAKSİT PLANI silinecek!
+Yani ${totalTaksit} aylık tüm taksitler iptal olacak.
+
+Kalan ${totalTaksit - currentTaksit} aylık taksitler de kesilmeyecek.
+
+TÜM TAKSİT PLANINI silmek istiyor musunuz?
+      `.trim();
+      
+      if (!window.confirm(taksitMessage)) {
+        console.log('🛑 Taksitli avans silme iptal edildi');
+        return;
+      }
+    }
+    
     const confirmMessage = `⚠️ Bu kaydı silmek istediğinizden EMİN misiniz?\n\n` +
       `Tür: ${expense.type}\n` +
-      `Tutar: ${formatCurrency(expense.amount)}\n` +
+      `Tutar: ${isTaksitli ? `${formatCurrency(expense.amount)}/ay (${totalTaksit} ay, Toplam: ${formatCurrency(expense.amount * totalTaksit)})` : formatCurrency(expense.amount)}\n` +
       `Açıklama: ${expense.description}\n\n` +
+      (isTaksitli ? `⚠️ TÜM TAKSİT PLANI SİLİNECEK!\n\n` : '') +
       `🔒 Bu işlem GERİ ALINAMAZ!\n\n` +
       `💡 Emin değilseniz İPTAL edin!`;
     
@@ -1438,7 +1470,11 @@ export default function BordroTakip() {
     }
     
     // İkinci onay (ekstra güvenlik)
-    if (!window.confirm(`⚠️ SON ONAY\n\nGerçekten ${formatCurrency(expense.amount)} tutarındaki ${expense.type} kaydını silmek istediğinize emin misiniz?\n\nBu işlem GERİ ALINAMAZ!`)) {
+    const finalConfirm = isTaksitli
+      ? `⚠️ SON ONAY\n\nGerçekten ${totalTaksit} aylık taksit planının TAMAMINI silmek istediğinize emin misiniz?\n\nToplam: ${formatCurrency(expense.amount * totalTaksit)}\n\nBu işlem GERİ ALINAMAZ!`
+      : `⚠️ SON ONAY\n\nGerçekten ${formatCurrency(expense.amount)} tutarındaki ${expense.type} kaydını silmek istediğinize emin misiniz?\n\nBu işlem GERİ ALINAMAZ!`;
+    
+    if (!window.confirm(finalConfirm)) {
       console.log('🛑 İkinci onayda iptal edildi');
       return;
     }
