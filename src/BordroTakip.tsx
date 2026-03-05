@@ -657,11 +657,14 @@ export default function BordroTakip() {
         const expMonth = expDate.getMonth();
         const expYear = expDate.getFullYear();
         
-        // Eğer Avans ise ve taksitli ise, bu ay için geçerli mi kontrol et
-        if (exp.type === 'Avans') {
-          const installmentTotal = exp.installment_total || 1;
+        // Eğer TAKSİTLİ kayıt ise (Avans, Prim, Kesinti vs. herhangi biri olabilir)
+        const installmentTotal = exp.installment_total || 1;
+        if (installmentTotal > 1) {
+          // Taksitli kayıt - bu ay için geçerli mi kontrol et
           const monthsFromStart = (currentYear - expYear) * 12 + (currentMonth - expMonth);
           const currentInstallmentNumber = monthsFromStart + 1;
+          
+          console.log(`💰 ${exp.type}: ${exp.description} - Taksit ${currentInstallmentNumber}/${installmentTotal}`);
           
           // Bu ay için taksit devam ediyor mu?
           if (currentInstallmentNumber > 0 && currentInstallmentNumber <= installmentTotal) {
@@ -676,7 +679,7 @@ export default function BordroTakip() {
             });
           }
         } 
-        // Diğer gider tipleri için sadece bu aya ait olanları al
+        // Tek seferlik kayıtlar - sadece bu aya ait olanları al
         else if (expMonth === currentMonth && expYear === currentYear) {
           expenses.push({
             id: exp.id,
@@ -684,7 +687,7 @@ export default function BordroTakip() {
             amount: parseFloat(exp.amount),
             description: exp.description || '',
             date: exp.date,
-            installment_total: exp.installment_total || 1,
+            installment_total: installmentTotal,
             installment_current: exp.installment_current || 1
           });
         }
@@ -1420,16 +1423,29 @@ export default function BordroTakip() {
     const expense = currentData.expenses.find(e => e.id === id);
     if (!expense) return;
     
-    // ⚠️ TAKSİTLİ AVANS KONTROLÜ
-    const isTaksitli = expense.type === 'Avans' && (expense.installment_total || 1) > 1;
+    // 📋 DEBUG: Silinecek kayıt detayları
+    console.log('🔍 Silme İsteği:', {
+      id,
+      type: expense.type,
+      amount: expense.amount,
+      description: expense.description,
+      installment_total: expense.installment_total,
+      installment_current: expense.installment_current,
+      date: expense.date
+    });
+    
+    // ⚠️ TAKSİTLİ KAYIT KONTROLÜ (Avans, Prim, Kesinti - HERŞEY)
+    const isTaksitli = (expense.installment_total || 1) > 1;
     const currentTaksit = expense.installment_current || 1;
     const totalTaksit = expense.installment_total || 1;
     
+    console.log('📊 Taksit Durumu:', { isTaksitli, currentTaksit, totalTaksit });
+    
     if (isTaksitli) {
       const taksitMessage = `
-🚨 TAKSİTLİ AVANS SİLME UYARISI
+🚨 TAKSİTLİ KAYIT SİLME UYARISI
 
-Bu kayıt taksitli bir avanstır:
+Bu kayıt taksitli bir ${expense.type} kaydıdır:
 ━━━━━━━━━━━━━━━━━━━━━
 💰 Toplam Tutar: ${formatCurrency(expense.amount * totalTaksit)}
 📊 Taksit Planı: ${totalTaksit} ay
@@ -1446,7 +1462,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
       `.trim();
       
       if (!window.confirm(taksitMessage)) {
-        console.log('🛑 Taksitli avans silme iptal edildi');
+        console.log('🛑 Taksitli kayıt silme iptal edildi');
         return;
       }
     }
@@ -1481,6 +1497,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
     
     try {
       console.log('🗑️ Gider siliniyor (kullanıcı çift onay verdi):', id);
+      console.log('📋 Silinen kayıt:', expense.type, expense.amount, expense.description);
       
       // State güncellemesi - IMMUTABILITY KORUNARAK
       setAppData(prev => {
@@ -1499,6 +1516,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
       });
 
       await deleteExpenseFromDB(id);
+      console.log('✅ Veritabanından silindi, ID:', id);
       alert('✅ Kayıt silindi.\n\n⚠️ Not: Veritabanından tamamen silindi, geri getirilemez!');
     } catch (error) {
       console.error('❌ Silme hatası:', error);

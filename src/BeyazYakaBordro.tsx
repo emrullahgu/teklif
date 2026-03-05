@@ -451,12 +451,15 @@ const BeyazYakaBordro: React.FC = () => {
       
       if (data) {
         setPayrollData(data);
+        // Expenses bilgisini yükle
+        setExpensesList(data.expenses || []);
       } else {
         // Yeni bordro oluştur
         const employee = employees.find(e => e.id === selectedEmployeeId);
         if (employee) {
           const newPayroll = createDefaultPayroll(employee);
           setPayrollData(newPayroll);
+          setExpensesList([]);
         }
       }
     } catch (error) {
@@ -582,22 +585,28 @@ const BeyazYakaBordro: React.FC = () => {
     
     setLoading(true);
     try {
+      // Expenses bilgisini payrollData'ya ekle
+      const dataToSave = {
+        ...payrollData,
+        expenses: expensesList
+      };
+
       if (payrollData.id) {
         const { error } = await supabase
           .from('beyaz_yaka_monthly_payroll')
-          .update(payrollData)
+          .update(dataToSave)
           .eq('id', payrollData.id);
         
         if (error) throw error;
       } else {
         const { data, error } = await supabase
           .from('beyaz_yaka_monthly_payroll')
-          .insert([payrollData])
+          .insert([dataToSave])
           .select()
           .single();
         
         if (error) throw error;
-        setPayrollData({ ...payrollData, id: data.id });
+        setPayrollData({ ...dataToSave, id: data.id });
       }
       
       showMessage('success', 'Bordro kaydedildi');
@@ -632,7 +641,23 @@ const BeyazYakaBordro: React.FC = () => {
       };
 
       // Expense listesine ekle
-      setExpensesList(prev => [...prev, newExpense]);
+      const updatedExpenses = [...expensesList, newExpense];
+      setExpensesList(updatedExpenses);
+      
+      // PayrollData'yı güncelle ve kaydet
+      if (payrollData) {
+        const updatedPayrollData = { ...payrollData, expenses: updatedExpenses };
+        setPayrollData(updatedPayrollData);
+        
+        if (payrollData.id) {
+          const { error: payrollError } = await supabase
+            .from('beyaz_yaka_monthly_payroll')
+            .update({ expenses: updatedExpenses })
+            .eq('id', payrollData.id);
+          
+          if (payrollError) throw payrollError;
+        }
+      }
       
       // Eğer Avans ise, eski sisteme de kaydet
       if (advanceForm.type === 'Avans') {
@@ -672,9 +697,25 @@ const BeyazYakaBordro: React.FC = () => {
     if (!confirm('Bu kaydı silmek istediğinizden emin misiniz?')) return;
     
     try {
-      setExpensesList(prev => prev.filter(e => e.id !== expenseId));
+      const updatedExpenses = expensesList.filter(e => e.id !== expenseId);
+      setExpensesList(updatedExpenses);
+      
+      // Eğer payrollData varsa ve id'si varsa, güncellenmiş expenses ile kaydet
+      if (payrollData) {
+        const updatedPayrollData = { ...payrollData, expenses: updatedExpenses };
+        setPayrollData(updatedPayrollData);
+        
+        if (payrollData.id) {
+          const { error } = await supabase
+            .from('beyaz_yaka_monthly_payroll')
+            .update({ expenses: updatedExpenses })
+            .eq('id', payrollData.id);
+          
+          if (error) throw error;
+        }
+      }
+      
       showMessage('success', 'Kayıt silindi');
-      loadPayrollData();
     } catch (error) {
       console.error('Silme hatası:', error);
       showMessage('error', 'Silme başarısız');
@@ -1433,10 +1474,10 @@ const BeyazYakaBordro: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Avanslar */}
+                {/* Avans/Gider/Prim Kayıtları */}
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-gray-800">Avanslar</h3>
+                    <h3 className="text-xl font-bold text-gray-800">Avans / Gider / Prim Kayıtları</h3>
                     <button
                       onClick={() => {
                         setShowAdvanceModal(true);
@@ -1445,8 +1486,63 @@ const BeyazYakaBordro: React.FC = () => {
                       className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-2"
                     >
                       <PlusCircle size={18} />
-                      Yeni Avans
+                      Yeni Kayıt Ekle
                     </button>
+                  </div>
+                  {expensesList.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th className="px-4 py-2 text-left">Tip</th>
+                            <th className="px-4 py-2 text-left">Tarih</th>
+                            <th className="px-4 py-2 text-right">Tutar</th>
+                            <th className="px-4 py-2 text-center">Taksit</th>
+                            <th className="px-4 py-2 text-left">Açıklama</th>
+                            <th className="px-4 py-2 text-center">İşlem</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {expensesList.map((exp) => (
+                            <tr key={exp.id} className="border-b">
+                              <td className="px-4 py-2">
+                                <span className={`px-2 py-1 rounded text-sm font-medium ${
+                                  exp.type === 'Prim' ? 'bg-green-100 text-green-800' :
+                                  exp.type === 'Avans' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-red-100 text-red-800'
+                                }`}>
+                                  {exp.type}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2">{new Date(exp.date).toLocaleDateString('tr-TR')}</td>
+                              <td className="px-4 py-2 text-right font-semibold">{formatCurrency(exp.amount)}</td>
+                              <td className="px-4 py-2 text-center">
+                                {exp.installment_total > 1 ? `${exp.installment_current} / ${exp.installment_total}` : '-'}
+                              </td>
+                              <td className="px-4 py-2">{exp.description || '-'}</td>
+                              <td className="px-4 py-2 text-center">
+                                <button
+                                  onClick={() => deleteExpense(exp.id)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Sil"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-center text-gray-500 py-4">Kayıt bulunmuyor</p>
+                  )}
+                </div>
+
+                {/* Eski Sistem Avansları */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-gray-800">Eski Sistem Avansları</h3>
                   </div>
                   {advances.length > 0 ? (
                     <div className="overflow-x-auto">
