@@ -970,30 +970,43 @@ export default function BordroTakip() {
   const deleteExpenseFromDB = async (id: string) => {
     try {
       console.log('🗑️ Veritabanından siliniyor:', id);
+      console.log('🔍 Supabase client auth durumu:', await supabase.auth.getSession());
       
-      const { data, error, count } = await supabase
+      const { data, error, count, status, statusText } = await supabase
         .from('bordro_expenses')
         .delete()
         .eq('id', id)
         .select(); // ✅ EKLEME: Silinen kayıtları döndür
 
-      console.log('🔍 DELETE sonucu:', { data, error, count, silenenKayitSayisi: data?.length });
+      console.log('🔍 DELETE tam sonucu:', { 
+        data, 
+        error, 
+        count, 
+        status, 
+        statusText,
+        silenenKayitSayisi: data?.length,
+        errorCode: error?.code,
+        errorMessage: error?.message,
+        errorDetails: error?.details,
+        errorHint: error?.hint
+      });
 
       if (error) {
-        console.error('❌ DELETE ERROR detay:', error);
-        throw error;
+        console.error('❌ DELETE ERROR detay:', JSON.stringify(error, null, 2));
+        throw new Error(`Supabase hatası: ${error.message} (Kod: ${error.code})`);
       }
       
       if (!data || data.length === 0) {
-        console.error('⚠️ DİKKAT: DELETE başarılı ama HİÇ KAYIT SİLİNMEDİ! RLS engellemiş olabilir!');
-        throw new Error('Kayıt silinemedi! Row Level Security tarafından engellenmiş olabilir.');
+        console.error('⚠️ DİKKAT: DELETE başarılı ama HİÇ KAYIT SİLİNMEDİ!');
+        console.error('Bu muhtemelen yetki sorunu. Supabase permissions kontrol edin.');
+        throw new Error('Kayıt silinemedi! Permissions eksik olabilir. Supabase Dashboard\'dan yetkiler kontrol edin.');
       }
       
       console.log('✅ Veritabanından silindi:', id, '- Silinen kayıt sayısı:', data.length);
       
     } catch (error) {
       console.error('❌ Gider silme hatası:', error);
-      alert('❌ Veritabanından silme başarısız!\n\nHata: ' + (error as any)?.message + '\n\n⚠️ Kayıt state\'den silindi ama veritabanında kalabilir. Sayfayı yenileyin.');
+      alert('❌ Veritabanından silme başarısız!\n\nHata: ' + (error as any)?.message + '\n\n⚠️ Console\'u (F12) açın ve tam hata mesajını görün.');
       throw error; // Hatayı yukarı fırlat
     }
   };
