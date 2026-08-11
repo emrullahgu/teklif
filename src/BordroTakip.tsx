@@ -104,6 +104,25 @@ const isWeekend = (day: number, month: number, year: number) => {
   return { isSaturday: dayIndex === 6, isSunday: dayIndex === 0 };
 };
 
+const getWorkedHours = (startTime: string, endTime: string) => {
+  if (!startTime || !endTime) return 0;
+
+  const parseTime = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return NaN;
+    return hours * 60 + minutes;
+  };
+
+  const startMinutes = parseTime(startTime);
+  const endMinutes = parseTime(endTime);
+
+  if (Number.isNaN(startMinutes) || Number.isNaN(endMinutes) || endMinutes <= startMinutes) {
+    return 0;
+  }
+
+  return (endMinutes - startMinutes) / 60;
+};
+
 // --- HESAPLAMA MOTORU (BASİTLEŞTİRİLMİŞ MANTIK) ---
 const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefined, daysInMonth: number, currentMonth: number, currentYear: number) => {
     let totalWorkDays = 0;
@@ -114,6 +133,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     let totalExpenses = 0;
     let totalBonuses = 0;
     let totalAbsentDays = 0; // Gelmediği günler
+    let totalShortageHours = 0;
+    let shortageDeduction = 0;
 
     if (!data) {
         return {
@@ -133,7 +154,9 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
             grossTotal: 0,
             netPayable: 0,
             officialPay: employee.officialSalary,
-            remainingHandPay: 0
+            remainingHandPay: 0,
+            totalShortageHours: 0,
+            shortageDeduction: 0
         };
     }
 
@@ -158,13 +181,28 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     for (let i = 1; i <= daysInMonth; i++) {
         const log = data.logs[i];
         if (log) {
+            const workedHours = getWorkedHours(log.startTime, log.endTime);
+            const standardShiftHours = 8;
+
             if (log.type === 'Normal') {
                 totalWorkDays += 1;
+
+                const shortageHours = Math.max(0, standardShiftHours - workedHours);
+                if (shortageHours > 0) {
+                    totalShortageHours += shortageHours;
+                    shortageDeduction += shortageHours * hourlyRateForOvertime;
+                }
             } else if (log.type === 'Pazar' || log.type === 'Resmi Tatil') {
                 // Pazar/Tatil = Normal gün sayılır + 1 günlük EK fark (sabit 30 güne göre)
                 totalWorkDays += 1; // Normal gün olarak say
                 totalSundayDays += 1;
                 totalSundayPay += dailyRateFixed; // Ek fark: 90,000/30 = 3,000 TL
+
+                const shortageHours = Math.max(0, standardShiftHours - workedHours);
+                if (shortageHours > 0) {
+                    totalShortageHours += shortageHours;
+                    shortageDeduction += shortageHours * hourlyRateForOvertime;
+                }
             } else if (log.type === 'İzinli' || log.type === 'Raporlu') {
                 // İzinli ve Raporlu günler çalışılan güne sayılmaz, kesinti de yapılmaz
             } else if (log.type === 'Gelmedi') {
@@ -213,7 +251,7 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     const totalExtras = totalExpenses + totalBonuses;
     const overtimePay = totalOvertimeHours * hourlyRateForOvertime * 1.5; // Mesai: Sabit saatlik × 1.5
     const absentDeduction = totalAbsentDays * dailyRateFixed; // Gelmediği günler için kesinti: 2 gün × 3,000 = 6,000 TL
-    const grossTotal = employee.agreedSalary + totalSundayPay + overtimePay + totalExtras - absentDeduction; // Anlaşılan Maaş - Gelmedi + Ekstralar
+    const grossTotal = employee.agreedSalary + totalSundayPay + overtimePay + totalExtras - absentDeduction - shortageDeduction; // Anlaşılan Maaş - Gelmedi - Az Çalışma + Ekstralar
     const netPayable = grossTotal - totalAdvances;
     
     // ÖDENECEK ÖDENECEK = NET ELE GEÇEN (officialSalary sadece gösterim için)
@@ -236,7 +274,9 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
         grossTotal,
         netPayable,
         officialPay: employee.officialSalary,
-        remainingHandPay
+        remainingHandPay,
+        totalShortageHours,
+        shortageDeduction
     };
 };
 
@@ -1055,17 +1095,56 @@ export default function BordroTakip() {
       }
       
       // Şimdi özet raporu oluştur
+      const referenceMonth = new Date(currentYear, currentMonth, 1);
+      const nowMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const isHistoricalMonth = referenceMonth < nowMonth;
+
       for (const emp of employees) {
         const empData = appData[emp.id]?.[monthKey];
         const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
+
+        const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+        const previousYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+        const { data: previousSummary, error: previousSummaryError } = await supabase
+          .from('monthly_payroll_summary')
+          .select('carryover_balance')
+          .eq('employee_id', emp.id)
+          .eq('month', previousMonth)
+          .eq('year', previousYear)
+          .maybeSingle();
+
+        if (previousSummaryError) throw previousSummaryError;
+
+        const previousCarryover = Number(previousSummary?.carryover_balance ?? 0);
+        const carryoverBalance = previousCarryover + stats.netPayable;
+
+        const { data: existingSummary, error: summaryLookupError } = await supabase
+          .from('monthly_payroll_summary')
+          .select('agreed_salary, official_salary, carryover_balance')
+          .eq('employee_id', emp.id)
+          .eq('month', currentMonth)
+          .eq('year', currentYear)
+          .maybeSingle();
+
+        if (summaryLookupError) throw summaryLookupError;
+
+        const salarySnapshot = isHistoricalMonth && existingSummary
+          ? {
+              agreed_salary: Number(existingSummary.agreed_salary ?? emp.agreedSalary),
+              official_salary: Number(existingSummary.official_salary ?? emp.officialSalary)
+            }
+          : {
+              agreed_salary: emp.agreedSalary,
+              official_salary: emp.officialSalary
+            };
 
         const payrollData = {
           employee_id: emp.id,
           month: currentMonth,
           year: currentYear,
           employee_name: emp.name,
-          agreed_salary: emp.agreedSalary,
-          official_salary: emp.officialSalary,
+          ...salarySnapshot,
           days_worked: stats.totalWorkDays,
           sunday_days: stats.totalSundayDays,
           overtime_hours: stats.totalOvertimeHours,
@@ -1073,12 +1152,23 @@ export default function BordroTakip() {
           expenses: stats.totalExpenses,
           bonuses: stats.totalBonuses,
           net_payable: stats.netPayable,
-          hand_pay: stats.remainingHandPay
+          hand_pay: stats.remainingHandPay,
+          carryover_balance: carryoverBalance
         };
 
-        const { error } = await supabase
-          .from('monthly_payroll_summary')
-          .upsert(payrollData, { onConflict: 'employee_id,month,year' });
+        let error;
+        if (existingSummary) {
+          ({ error } = await supabase
+            .from('monthly_payroll_summary')
+            .update(payrollData)
+            .eq('employee_id', emp.id)
+            .eq('month', currentMonth)
+            .eq('year', currentYear));
+        } else {
+          ({ error } = await supabase
+            .from('monthly_payroll_summary')
+            .insert([payrollData]));
+        }
 
         if (error) throw error;
       }
@@ -3082,6 +3172,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                         <th className="p-2 border text-right">Gider</th>
                         <th className="p-2 border text-right">Prim</th>
                         <th className="p-2 border text-right">Net Hakediş</th>
+                        <th className="p-2 border text-right bg-amber-500 text-white">Devreden Bakiye</th>
                         <th className="p-2 border text-right bg-red-600">Resmi Maaş</th>
                         <th className="p-2 border text-right bg-green-600">Ek Ödeme</th>
                       </tr>
@@ -3098,6 +3189,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                           <td className="p-2 border text-right text-orange-600">{parseFloat(record.expenses).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right text-green-600">{parseFloat(record.bonuses).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right font-bold text-blue-700">{parseFloat(record.net_payable).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right font-bold text-amber-700 bg-amber-50">{parseFloat(record.carryover_balance || 0).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right font-bold text-red-700 bg-red-50">{parseFloat(record.official_salary).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right font-bold text-green-700 bg-green-50">{parseFloat(record.hand_pay).toLocaleString('tr-TR')} ₺</td>
                         </tr>
@@ -3113,6 +3205,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                         <td className="p-2 border text-right text-orange-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.expenses), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right text-green-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.bonuses), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right font-bold text-blue-700">{historicalData.reduce((sum, r) => sum + parseFloat(r.net_payable), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right font-bold text-amber-700 bg-amber-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.carryover_balance || 0), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right font-bold text-red-700 bg-red-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.official_salary), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right font-bold text-green-700 bg-green-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.hand_pay), 0).toLocaleString('tr-TR')} ₺</td>
                       </tr>

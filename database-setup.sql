@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS monthly_payroll_summary (
   bonuses DECIMAL(10,2) DEFAULT 0,
   net_payable DECIMAL(10,2) NOT NULL,
   hand_pay DECIMAL(10,2) NOT NULL,
+  carryover_balance DECIMAL(10,2) DEFAULT 0,
   closed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_by TEXT,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
