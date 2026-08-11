@@ -251,8 +251,10 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     const totalExtras = totalExpenses + totalBonuses;
     const overtimePay = totalOvertimeHours * hourlyRateForOvertime * 1.5; // Mesai: Sabit saatlik × 1.5
     const absentDeduction = totalAbsentDays * dailyRateFixed; // Gelmediği günler için kesinti: 2 gün × 3,000 = 6,000 TL
-    const grossTotal = employee.agreedSalary + totalSundayPay + overtimePay + totalExtras - absentDeduction - shortageDeduction; // Anlaşılan Maaş - Gelmedi - Az Çalışma + Ekstralar
-    const netPayable = grossTotal - totalAdvances;
+    // Sadece gelmedi, saatlik eksiklik ve avans maaştan düşer.
+    // Mesai, gider ve prim bu hesaplamada ek ödeme olarak dikkate alınmaz.
+    const grossTotal = employee.agreedSalary - absentDeduction - shortageDeduction - totalAdvances;
+    const netPayable = grossTotal;
     
     // ÖDENECEK ÖDENECEK = NET ELE GEÇEN (officialSalary sadece gösterim için)
     const remainingHandPay = netPayable;
@@ -767,6 +769,15 @@ export default function BordroTakip() {
   const saveEmployee = async () => {
     if (!employeeForm.name || !employeeForm.agreedSalary || !employeeForm.officialSalary) {
       alert("⚠️ Lütfen tüm zorunlu alanları doldurunuz:\n• Personel Adı\n• Ödenecek Maaş\n• Göstermelik Maaş");
+      return;
+    }
+
+    const now = new Date();
+    const selectedMonthDate = new Date(currentYear, currentMonth, 1);
+    const currentMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    if (selectedMonthDate < currentMonthDate) {
+      alert('⚠️ Geçmiş ay için maaş değiştirilemez.\n\nYeni maaş sadece mevcut ve sonraki aylar için geçerli olur.\nEski aylar sabit kalır.');
       return;
     }
 
