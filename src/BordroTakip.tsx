@@ -47,7 +47,8 @@ interface DailyLog {
   type: DayType;
   startTime: string;
   endTime: string;
-  overtimeHours: number;
+  overtimeHours: number;   // 🔒 Fazla mesai saati (planlanandan FAZLA çalışılan süre) - her zaman >= 0
+  shortfallHours: number;  // 🔒 Eksik çalışma saati (planlanandan AZ çalışılan süre) - her zaman >= 0, overtimeHours'tan TAMAMEN AYRI
   description: string;
   lastModifiedBy?: string;  // 🛡️ KİM değiştirdi
   lastModifiedAt?: string;  // 🛡️ NE ZAMAN değiştirdi
@@ -70,6 +71,11 @@ interface Employee {
   tc_no?: string;
   agreedSalary: number;
   officialSalary: number;
+  active?: boolean;
+  // 🔒 İşten ayrılış tarihi (varsa). Doluysa personel bu tarihin bulunduğu
+  // aydan SONRAKİ aylarda bordrolarda görünmez; o ay dahil ÖNCEKİ tüm
+  // aylardaki kayıtları (maaş, mesai, prim, gider) korunmaya devam eder.
+  terminationDate?: string | null; // 'YYYY-MM-DD'
 }
 
 interface MonthlyData {
@@ -79,9 +85,27 @@ interface MonthlyData {
   expenses: Expense[];
 }
 
+// 🔒 MAAŞ GEÇMİŞİ: Bir personelin maaşı zamla güncellendiğinde ÖNCEKİ aylar
+// etkilenmesin diye her değişiklik "geçerlilik başlangıç ayı/yılı" ile birlikte
+// ayrı bir kayıt olarak saklanır (bkz. bordro-salary-history-migration.sql).
+interface SalaryHistoryEntry {
+  id?: string;
+  employeeId: string;
+  agreedSalary: number;
+  officialSalary: number;
+  effectiveMonth: number; // 0-11
+  effectiveYear: number;
+}
+
+type SalaryHistoryMap = Record<string, SalaryHistoryEntry[]>;
+
 const DEFAULT_START_TIME = "08:00";
 const DEFAULT_END_TIME_WEEKDAY = "18:00";
 const DEFAULT_END_TIME_SATURDAY = "13:00";
+// 🔒 Fazla mesai katsayısı: fazla mesai saatleri saatlik ücretin bu katsayı
+// ile çarpımı kadar maaşa EKLENİR. Eksik çalışma saatleri ise bu katsayı
+// UYGULANMADAN, sadece saatlik ücret üzerinden maaştan DÜŞÜLÜR.
+const OVERTIME_MULTIPLIER = 1.5;
 
 // --- YARDIMCI FONKSİYONLAR ---
 
@@ -104,11 +128,91 @@ const isWeekend = (day: number, month: number, year: number) => {
   return { isSaturday: dayIndex === 6, isSunday: dayIndex === 0 };
 };
 
+// "HH:MM" formatındaki saati ondalıklı saat değerine çevirir (örn. "08:30" -> 8.5)
+const parseTimeToHours = (time: string): number => {
+  if (!time) return 0;
+  const [h, m] = time.split(':').map(Number);
+  return (h || 0) + (m || 0) / 60;
+};
+
+// 🔒 İşten ayrılan bir personelin, ayrıldığı aydan SONRAKİ yeni bordrolarda
+// görünmemesi ama ayrıldığı ay DAHİL önceki tüm aylarda görünmeye devam
+// etmesi gerekir. Bu fonksiyon, verilen ay/yıl için personelin o dönemde
+// "görünür" olup olmadığını belirler.
+// Örnek: Personel 2026-07-15'te ayrıldıysa -> Ocak..Temmuz 2026 görünür,
+// Ağustos 2026 ve sonrası görünmez.
+const isEmployeeVisibleInMonth = (employee: Employee, targetMonth: number, targetYear: number): boolean => {
+  if (!employee.terminationDate) return true;
+
+  // Tarih string'ini elle ayrıştır (saat dilimi kaymalarından etkilenmemek için)
+  const parts = employee.terminationDate.split('-');
+  const termYear = parseInt(parts[0], 10);
+  const termMonth = parseInt(parts[1], 10) - 1; // 0-11
+  if (isNaN(termYear) || isNaN(termMonth)) return true;
+
+  const termKey = termYear * 12 + termMonth;
+  const targetKey = targetYear * 12 + targetMonth;
+  return targetKey <= termKey;
+};
+
+// 🔒 Belirli bir ay/yıl için GEÇERLİ OLAN maaşı bulur.
+// Kural: O aya kadar (o ay dahil) girilmiş en SON maaş kaydı geçerlidir.
+// Örnek: Haziran'da zam girildiyse, Ocak-Mayıs sorgulandığında hâlâ ESKİ
+// maaş döner; Haziran ve sonrası için YENİ maaş döner.
+const getEffectiveSalary = (
+  employee: Employee,
+  history: SalaryHistoryEntry[] | undefined,
+  targetMonth: number,
+  targetYear: number
+): { agreedSalary: number; officialSalary: number } => {
+  if (!history || history.length === 0) {
+    // Geçmiş kaydı hiç yoksa (ör. migration çalıştırılmadan önceki durum),
+    // geriye dönük uyumluluk için personelin güncel maaşını kullan.
+    return { agreedSalary: employee.agreedSalary, officialSalary: employee.officialSalary };
+  }
+
+  const targetKey = targetYear * 12 + targetMonth;
+
+  // effective tarihi <= hedef tarih olan kayıtlar arasında EN YAKIN (en büyük) olanı seç
+  let best: SalaryHistoryEntry | null = null;
+  let bestKey = -Infinity;
+
+  for (const entry of history) {
+    const entryKey = entry.effectiveYear * 12 + entry.effectiveMonth;
+    if (entryKey <= targetKey && entryKey > bestKey) {
+      best = entry;
+      bestKey = entryKey;
+    }
+  }
+
+  if (best) {
+    return { agreedSalary: best.agreedSalary, officialSalary: best.officialSalary };
+  }
+
+  // Hedef tarih, bilinen TÜM kayıtlardan daha eskiyse (ör. personel daha
+  // sonra işe başlamış görünüyor ama eski bir ay sorgulanıyorsa), elimizdeki
+  // EN ESKİ kaydı kullan - bu, o dönem için bilinen tek referans noktasıdır.
+  const earliest = [...history].sort((a, b) => (a.effectiveYear * 12 + a.effectiveMonth) - (b.effectiveYear * 12 + b.effectiveMonth))[0];
+  return { agreedSalary: earliest.agreedSalary, officialSalary: earliest.officialSalary };
+};
+
 // --- HESAPLAMA MOTORU (BASİTLEŞTİRİLMİŞ MANTIK) ---
-const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefined, daysInMonth: number, currentMonth: number, currentYear: number) => {
+const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefined, daysInMonth: number, currentMonth: number, currentYear: number, salaryHistory?: SalaryHistoryMap) => {
+    // 🔒 O AYA ÖZEL geçerli maaş (sonraki bir tarihte yapılan zam bu hesaplamayı ETKİLEMEZ)
+    const { agreedSalary: effectiveAgreedSalary, officialSalary: effectiveOfficialSalary } = getEffectiveSalary(
+        employee,
+        salaryHistory?.[employee.id],
+        currentMonth,
+        currentYear
+    );
+    // Not: Aşağıdaki hesaplamalarda kullanılan `employee` referansı, geçmişe
+    // duyarlı maaşı yansıtması için o ay için geçerli değerlerle değiştirilir.
+    employee = { ...employee, agreedSalary: effectiveAgreedSalary, officialSalary: effectiveOfficialSalary };
+
     let totalWorkDays = 0;
     let totalSundayDays = 0;
     let totalOvertimeHours = 0;
+    let totalShortfallHours = 0; // 🔒 Eksik çalışma saati (overtime'dan tamamen ayrı toplanır)
     let totalSundayPay = 0;
     let totalAdvances = 0;
     let totalExpenses = 0;
@@ -123,6 +227,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
             totalSundayDays: 0,
             totalOvertimeHours: 0,
             overtimePay: 0,
+            totalShortfallHours: 0,
+            shortfallDeduction: 0,
             totalSundayPay: 0,
             totalAbsentDays: 0,
             absentDeduction: 0,
@@ -142,12 +248,16 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
     // Mesai Saatlik Ücret = Anlaşılan Net Maaş / 30 / 8 (HER ZAMAN 30 güne göre, sabit)
     // Pazar/Tatil = Normal gün + 1 günlük ek fark (sabit 30 güne göre: 90,000/30 = 3,000 TL)
     // Gelmedi = Anlaşılan Maaş'tan KESİNTİ (90,000/30 = 3,000 TL/gün)
-    // Fazla Mesai = Saatlik Ücret (30 güne göre) × 1.5
+    // Fazla Mesai = Saatlik Ücret (30 güne göre) × OVERTIME_MULTIPLIER (maaşa EKLENİR)
+    // Eksik Çalışma = Saatlik Ücret (30 güne göre) × 1 (katsayı YOK, maaştan DÜŞÜLÜR)
+    // 🔒 Eksik çalışma ve fazla mesai TAMAMEN AYRI alanlarda (shortfallHours / overtimeHours)
+    //    tutulur ve ayrı işaretle (kesinti / ek ödeme) hesaba katılır; asla birbirine karıştırılmaz.
     // BÖYLECE: 
     //   - 30 gün tam çalışırsa = 90,000 TL
     //   - 2 gün gelmedi = 90,000 - 6,000 = 84,000 TL
     //   - Pazar çalışma: 90,000 + 3,000 TL (ek fark)
-    //   - Mesai: 5 saat × 375 TL × 1.5 = 2,812.50 TL
+    //   - Mesai: 5 saat × 375 TL × 1.5 = 2,812.50 TL (EK)
+    //   - Eksik çalışma: 2 saat × 375 TL = 750 TL (KESİNTİ)
     
     const dailyRate = employee.agreedSalary / daysInMonth; // Normal günler için (değişken)
     const dailyRateFixed = employee.agreedSalary / 30; // Pazar/Tatil farkı ve kesinti için sabit (90,000/30 = 3,000 TL)
@@ -173,8 +283,12 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
             }
             // Boş günler (gelmedi) için de kesinti yapılacak
 
+            // 🔒 Fazla mesai ve eksik çalışma TAMAMEN AYRI toplanır (aynı gün için ikisi birden olmaz)
             if (log.overtimeHours > 0) {
                 totalOvertimeHours += log.overtimeHours;
+            }
+            if (log.shortfallHours > 0) {
+                totalShortfallHours += log.shortfallHours;
             }
         } else {
             // Eğer log yoksa, o gün boş demektir (Gelmedi)
@@ -211,9 +325,10 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
 
     // TOPLAM HESAPLAMALAR
     const totalExtras = totalExpenses + totalBonuses;
-    const overtimePay = totalOvertimeHours * hourlyRateForOvertime * 1.5; // Mesai: Sabit saatlik × 1.5
+    const overtimePay = totalOvertimeHours * hourlyRateForOvertime * OVERTIME_MULTIPLIER; // Mesai: Sabit saatlik × katsayı (EK)
+    const shortfallDeduction = totalShortfallHours * hourlyRateForOvertime; // Eksik çalışma: Sabit saatlik × 1 (katsayı YOK, KESİNTİ)
     const absentDeduction = totalAbsentDays * dailyRateFixed; // Gelmediği günler için kesinti: 2 gün × 3,000 = 6,000 TL
-    const grossTotal = employee.agreedSalary + totalSundayPay + overtimePay + totalExtras - absentDeduction; // Anlaşılan Maaş - Gelmedi + Ekstralar
+    const grossTotal = employee.agreedSalary + totalSundayPay + overtimePay + totalExtras - absentDeduction - shortfallDeduction; // Anlaşılan Maaş - Gelmedi - Eksik Çalışma + Ekstralar
     const netPayable = grossTotal - totalAdvances;
     
     // ÖDENECEK ÖDENECEK = NET ELE GEÇEN (officialSalary sadece gösterim için)
@@ -226,6 +341,8 @@ const calculateEmployeeStats = (employee: Employee, data: MonthlyData | undefine
         totalSundayDays,
         totalOvertimeHours,
         overtimePay,
+        totalShortfallHours,
+        shortfallDeduction,
         totalSundayPay,
         totalAbsentDays,
         absentDeduction,
@@ -251,6 +368,8 @@ export default function BordroTakip() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   }); 
   const [employees, setEmployees] = useState<Employee[]>([]);
+  // 🔒 Personel başına maaş geçmişi (employeeId -> geçerlilik tarihli kayıtlar)
+  const [salaryHistory, setSalaryHistory] = useState<SalaryHistoryMap>({});
   const [logo, setLogo] = useState<string | null>(() => {
     // Logo'yu localStorage'dan yükle, yoksa default logo
     const DEFAULT_LOGO = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzFFM0E4QSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjQ4IiBmb250LWZhbWlseT0iQXJpYWwiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSIgZm9udC13ZWlnaHQ9ImJvbGQiPktCPC90ZXh0Pjwvc3ZnPg==';
@@ -259,7 +378,14 @@ export default function BordroTakip() {
   
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
-  const [employeeForm, setEmployeeForm] = useState({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
+  const [employeeForm, setEmployeeForm] = useState({ name: '', tcNo: '', agreedSalary: '', officialSalary: '', effectiveMonth: '', effectiveYear: '' });
+
+  // 🔒 İŞTEN ÇIKARMA (Terminate) Modalı - Personel silinmez, sadece işten
+  // ayrılış tarihi girilerek pasif duruma alınır. Ayrılış tarihinden SONRAKİ
+  // aylarda personel bordrolarda görünmez; önceki aylardaki kayıtlar korunur.
+  const [showTerminateModal, setShowTerminateModal] = useState(false);
+  const [terminatingEmployee, setTerminatingEmployee] = useState<Employee | null>(null);
+  const [terminationDateInput, setTerminationDateInput] = useState('');
 
   const [appData, setAppData] = useState<Record<string, Record<string, MonthlyData>>>({});
   const [loading, setLoading] = useState(false);
@@ -295,10 +421,54 @@ export default function BordroTakip() {
   const [historyMonth, setHistoryMonth] = useState(currentDate.getMonth());
   const [historicalData, setHistoricalData] = useState<any[]>([]);
 
+  // 🔒 DEVREDEN BAKİYE: Seçili personelin GEÇMİŞ AYDAN devreden bakiyesi
+  // (bir önceki ayın "gelecek aya devreden bakiyesi"). Ayı Kapat işleminde
+  // gerçekte ödenen tutar bu bakiyeyle birlikte hesaba katılır.
+  const [selectedEmployeePreviousBalance, setSelectedEmployeePreviousBalance] = useState(0);
+
+  // 🔒 AYI KAPAT MODALI: Her personel için geçmiş bakiye + bu ay net maaş +
+  // toplam borç + (kullanıcının gireceği) ödenen tutar + yeni bakiye
+  const [showCloseMonthModal, setShowCloseMonthModal] = useState(false);
+  const [closeMonthRows, setCloseMonthRows] = useState<Array<{
+    employeeId: string;
+    name: string;
+    previousBalance: number;
+    netPayable: number;
+    totalDue: number;
+    paidAmount: number;
+  }>>([]);
+
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const monthKey = `${currentYear}-${currentMonth}`;
+
+  // 🔒 Bir personelin, verilen ay/yıldan BİR ÖNCEKİ ayın "gelecek aya devreden
+  // bakiyesi"ni getirir (kapatılmış bordro yoksa 0 döner).
+  const getPreviousMonthBalance = async (employeeId: string, month: number, year: number): Promise<number> => {
+    try {
+      const prevMonth = month === 0 ? 11 : month - 1;
+      const prevYear = month === 0 ? year - 1 : year;
+
+      const { data, error } = await supabase
+        .from('monthly_payroll_summary')
+        .select('carryover_balance')
+        .eq('employee_id', employeeId)
+        .eq('month', prevMonth)
+        .eq('year', prevYear)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('⚠️ Geçmiş bakiye sorgulanamadı (migration gerekebilir):', error.message);
+        return 0;
+      }
+
+      return data ? parseFloat(data.carryover_balance) || 0 : 0;
+    } catch (error) {
+      console.error('❌ Geçmiş bakiye yükleme hatası:', error);
+      return 0;
+    }
+  };
 
   // --- 🛡️ EK KORUMA FONKSİYONLARI ---
 
@@ -495,6 +665,7 @@ export default function BordroTakip() {
             start_time: log.startTime,
             end_time: log.endTime,
             overtime_hours: log.overtimeHours,
+            shortfall_hours: log.shortfallHours,
             description: log.description,
             last_modified_by: sessionId,
             last_modified_at: new Date().toISOString(),
@@ -567,7 +738,6 @@ export default function BordroTakip() {
       const { data, error } = await supabase
         .from('bordro_employees')
         .select('*')
-        .eq('active', true)
         .order('name');
 
       if (error) {
@@ -586,25 +756,79 @@ export default function BordroTakip() {
 
       console.log('✅ Personeller yüklendi:', data?.length || 0, 'kişi');
 
+      // 🔒 NOT: Artık SADECE aktif personeller değil, TÜMÜ (işten ayrılanlar
+      // dahil) yükleniyor. İşten ayrılan personelin geçmiş aylardaki
+      // kayıtlarının görünmeye devam edebilmesi için bu gereklidir.
+      // Hangi personelin hangi ayda GÖRÜNECEĞİ, isEmployeeVisibleInMonth /
+      // visibleEmployees ile ayrıca (ay bazlı) belirlenir.
       const formattedEmployees = data.map(emp => ({
         id: emp.id,
         name: emp.name,
         tc_no: emp.tc_no,
         agreedSalary: parseFloat(emp.agreed_salary),
-        officialSalary: parseFloat(emp.official_salary)
+        officialSalary: parseFloat(emp.official_salary),
+        active: emp.active !== false,
+        terminationDate: emp.termination_date || null
       }));
 
       setEmployees(formattedEmployees);
       
-      if (formattedEmployees.length > 0 && !selectedEmployeeId) {
-        setSelectedEmployeeId(formattedEmployees[0].id);
+      if (!selectedEmployeeId) {
+        // Şu an görüntülenen ay için GÖRÜNÜR olan ilk personeli seç
+        const firstVisible = formattedEmployees.find(e => isEmployeeVisibleInMonth(e, currentMonth, currentYear));
+        if (firstVisible) {
+          setSelectedEmployeeId(firstVisible.id);
+        }
       }
+
+      // 🔒 Maaş geçmişini de yükle (ay bazlı doğru hesaplama için şart)
+      await loadSalaryHistory();
     } catch (error) {
       console.error('❌ Personel yükleme hatası:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // 🔒 Maaş Geçmişini Yükle (Tüm personeller için tek seferde)
+  // Bir personelin maaşı güncellendiğinde SADECE bu tablodaki yeni satır
+  // sonraki ayları etkiler; önceki aylar için kaydedilmiş eski satırlar
+  // olduğu gibi kalır.
+  const loadSalaryHistory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('bordro_salary_history')
+        .select('*')
+        .order('effective_year', { ascending: true })
+        .order('effective_month', { ascending: true });
+
+      if (error) {
+        // Migration henüz çalıştırılmamış olabilir (tablo yok) - sessizce
+        // eski davranışa (personelin güncel maaşı) geri dön.
+        console.warn('⚠️ Maaş geçmişi yüklenemedi (migration gerekebilir):', error.message);
+        return;
+      }
+
+      const grouped: SalaryHistoryMap = {};
+      (data || []).forEach(row => {
+        const entry: SalaryHistoryEntry = {
+          id: row.id,
+          employeeId: row.employee_id,
+          agreedSalary: parseFloat(row.agreed_salary),
+          officialSalary: parseFloat(row.official_salary),
+          effectiveMonth: row.effective_month,
+          effectiveYear: row.effective_year
+        };
+        if (!grouped[entry.employeeId]) grouped[entry.employeeId] = [];
+        grouped[entry.employeeId].push(entry);
+      });
+
+      setSalaryHistory(grouped);
+    } catch (error) {
+      console.error('❌ Maaş geçmişi yükleme hatası:', error);
+    }
+  };
+
 
 
 
@@ -646,6 +870,7 @@ export default function BordroTakip() {
           startTime: log.start_time || '',
           endTime: log.end_time || '',
           overtimeHours: parseFloat(log.overtime_hours) || 0,
+          shortfallHours: parseFloat(log.shortfall_hours) || 0,
           description: log.description || ''
         };
       });
@@ -734,13 +959,21 @@ export default function BordroTakip() {
       setLoading(true);
       console.log('💾 Personel kaydediliyor...', employeeForm);
       
+      const newAgreedSalary = parseFloat(employeeForm.agreedSalary);
+      const newOfficialSalary = parseFloat(employeeForm.officialSalary);
+      // 🔒 Maaşın geçerli olacağı ay/yıl (varsayılan: sayfada görüntülenen ay)
+      const effectiveMonth = employeeForm.effectiveMonth !== '' ? parseInt(employeeForm.effectiveMonth) : currentMonth;
+      const effectiveYear = employeeForm.effectiveYear !== '' ? parseInt(employeeForm.effectiveYear) : currentYear;
+
       const employeeData = {
         name: employeeForm.name,
         tc_no: employeeForm.tcNo || null,
-        agreed_salary: parseFloat(employeeForm.agreedSalary),
-        official_salary: parseFloat(employeeForm.officialSalary),
+        agreed_salary: newAgreedSalary,
+        official_salary: newOfficialSalary,
         updated_at: new Date().toISOString()
       };
+
+      let targetEmployeeId: string | null = editingEmployeeId;
 
       if (editingEmployeeId) {
         // GÜNCELLEME
@@ -780,13 +1013,52 @@ export default function BordroTakip() {
         console.log('✅ Personel eklendi:', data);
         if (data && data[0]) {
           setSelectedEmployeeId(data[0].id);
+          targetEmployeeId = data[0].id;
         }
         await ActivityLogger.bordroEmployeeCreate(employeeForm.name);
       }
 
+      // 🔒 MAAŞ GEÇMİŞİ KAYDI
+      // Bir personelin maaşı güncellendiğinde SADECE bu satır (ve varsa daha
+      // sonraki tarihli satırlar) o tarihten itibaren geçerli olur; önceki
+      // aylar için daha önce kaydedilmiş satırlar OLDUĞU GİBİ kalır ve
+      // hesaplamalar etkilenmez.
+      if (targetEmployeeId) {
+        const existingEmployee = employees.find(e => e.id === targetEmployeeId);
+        const priorEffective = editingEmployeeId && existingEmployee
+          ? getEffectiveSalary(existingEmployee, salaryHistory[targetEmployeeId], effectiveMonth, effectiveYear)
+          : null;
+
+        // Yeni personelde her zaman, güncellemede sadece maaş gerçekten
+        // değiştiyse (veya geçmişte hiç kayıt yoksa) yeni bir geçmiş satırı ekle.
+        const salaryActuallyChanged = !priorEffective
+          || priorEffective.agreedSalary !== newAgreedSalary
+          || priorEffective.officialSalary !== newOfficialSalary;
+
+        if (salaryActuallyChanged) {
+          const { error: historyError } = await supabase
+            .from('bordro_salary_history')
+            .upsert({
+              employee_id: targetEmployeeId,
+              agreed_salary: newAgreedSalary,
+              official_salary: newOfficialSalary,
+              effective_month: effectiveMonth,
+              effective_year: effectiveYear,
+              note: editingEmployeeId ? 'Maaş güncellemesi' : 'Personel oluşturma - başlangıç maaşı'
+            }, { onConflict: 'employee_id,effective_month,effective_year' });
+
+          if (historyError) {
+            // Migration henüz çalıştırılmamışsa (tablo yok) kullanıcıyı bilgilendir
+            // ama personel kaydını iptal etme - eski davranışa devam edilir.
+            console.error('❌ Maaş geçmişi kaydedilemedi:', historyError);
+            alert('⚠️ Personel bilgileri kaydedildi ANCAK maaş geçmişi kaydedilemedi!\n\nHata: ' + historyError.message + '\n\n👉 Çözüm: bordro-salary-history-migration.sql dosyasını Supabase SQL Editor\'da çalıştırın.\n\n🔒 Bu migration çalıştırılmadan geçmiş aylardaki maaş hesaplamaları güncel maaştan etkilenebilir!');
+          }
+        }
+      }
+
       await loadEmployees();
       setShowEmployeeModal(false);
-      setEmployeeForm({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
+      setEmployeeForm({ name: '', tcNo: '', agreedSalary: '', officialSalary: '', effectiveMonth: '', effectiveYear: '' });
       setEditingEmployeeId(null);
       
       alert('✅ Personel başarıyla kaydedildi!');
@@ -799,57 +1071,111 @@ export default function BordroTakip() {
     }
   };
 
-  // 🔒 Personel Sil (Soft Delete - Veriler korunur)
-  const deleteEmployee = async (empId: string, empName: string) => {
-    // UYARI: Gerçekte silmiyoruz, sadece "active=false" yapıyoruz
-    const warningMessage = `⚠️ DİKKAT: ${empName} isimli personeli silmek üzeresiniz!\n\n` +
+  // 🔒 İşten Çıkarma Modalını Aç (Soft Delete - Veriler korunur)
+  const openTerminateModal = (emp: Employee) => {
+    setTerminatingEmployee(emp);
+    // Varsayılan: bugünün tarihi (kullanıcı dilerse değiştirebilir)
+    setTerminationDateInput(emp.terminationDate || new Date().toISOString().split('T')[0]);
+    setShowTerminateModal(true);
+  };
+
+  // 🔒 Personeli İşten Çıkar (Soft Delete - Veriler korunur, kayıt SİLİNMEZ)
+  // Kural: Girilen tarihin AYI DAHİL önceki tüm aylarda personel bordrolarda
+  // görünmeye devam eder; bu tarihten SONRAKİ aylarda artık görünmez.
+  const confirmTerminateEmployee = async () => {
+    if (!terminatingEmployee) return;
+    const empId = terminatingEmployee.id;
+    const empName = terminatingEmployee.name;
+
+    if (!terminationDateInput) {
+      alert('⚠️ Lütfen işten ayrılış tarihini seçin.');
+      return;
+    }
+
+    const dateLabel = new Date(terminationDateInput).toLocaleDateString('tr-TR');
+
+    const warningMessage = `⚠️ DİKKAT: ${empName} isimli personeli işten çıkarmak üzeresiniz!\n\n` +
+      `📅 İşten Ayrılış Tarihi: ${dateLabel}\n\n` +
       `🔒 GÜVENLİK BİLGİSİ:\n` +
-      `• Personel "pasif" yapılacak (gerçekten silinmeyecek)\n` +
-      `• Tüm puantaj kayıtları VERİTABANINDA KORUNACAK\n` +
+      `• Personel "pasif" yapılacak (GERÇEKTEN SİLİNMEYECEK)\n` +
+      `• ${dateLabel} tarihinin bulunduğu AY DAHİL önceki tüm aylardaki\n` +
+      `  maaş, mesai, prim ve gider kayıtları AYNEN KORUNACAK ve\n` +
+      `  bordrolarda görünmeye devam edecek\n` +
+      `• Bu tarihten SONRAKİ aylarda personel yeni bordrolarda görünmeyecek\n` +
       `• Gerekirse tekrar aktif hale getirilebilir\n\n` +
-      `📋 Personel sadece listeden gizlenecektir.\n\n` +
       `Devam etmek istiyor musunuz?`;
-    
+
     if (!confirm(warningMessage)) {
-      console.log('🛑 Personel silme işlemi iptal edildi');
+      console.log('🛑 İşten çıkarma işlemi iptal edildi');
       return;
     }
 
     // 🛡️ KATMAN 11: Güvenlik Kodu Kontrolü
-    if (!verifyDeleteCode(`${empName} personeli`)) {
+    if (!verifyDeleteCode(`${empName} personeli (işten çıkar)`)) {
       return;
     }
 
     // İkinci onay
-    if (!confirm(`⚠️ SON ONAY\n\n${empName} personelini pasif yapmak istediğinize emin misiniz?\n\n(Puantaj kayıtları korunacak)`)) {
+    if (!confirm(`⚠️ SON ONAY\n\n${empName} personelini ${dateLabel} tarihi itibarıyla işten çıkarmak istediğinize emin misiniz?\n\n(Önceki aylardaki tüm kayıtlar korunacak)`)) {
       console.log('🛑 İkinci onayda iptal edildi');
       return;
     }
 
     try {
       setLoading(true);
-      console.log('🔄 Personel pasif yapılıyor (soft delete):', empId);
+      console.log('🔄 Personel işten çıkarılıyor (soft delete):', empId, terminationDateInput);
       
-      // Personeli pasif yap (soft delete - veriler korunur)
+      // Personeli pasif yap + işten ayrılış tarihini kaydet (soft delete - veriler korunur)
       const { error } = await supabase
         .from('bordro_employees')
-        .update({ active: false, updated_at: new Date().toISOString() })
+        .update({ active: false, termination_date: terminationDateInput, updated_at: new Date().toISOString() })
         .eq('id', empId);
 
       if (error) throw error;
       
-      await ActivityLogger.bordroEmployeeDelete(empName);
+      await ActivityLogger.bordroEmployeeTerminate(empName, dateLabel);
       await loadEmployees();
       
-      // Silinen personel seçiliyse, seçimi temizle
-      if (selectedEmployeeId === empId) {
-        setSelectedEmployeeId(employees.length > 1 ? employees[0].id : '');
+      // İşten çıkarılan personel seçiliyse ve artık bu ayda görünmüyorsa, seçimi değiştir
+      if (selectedEmployeeId === empId && !isEmployeeVisibleInMonth({ ...terminatingEmployee, terminationDate: terminationDateInput }, currentMonth, currentYear)) {
+        const nextVisible = employees.find(e => e.id !== empId && isEmployeeVisibleInMonth(e, currentMonth, currentYear));
+        setSelectedEmployeeId(nextVisible ? nextVisible.id : '');
       }
+
+      setShowTerminateModal(false);
+      setTerminatingEmployee(null);
       
-      alert(`✅ ${empName} listeden kaldırıldı.\n\n🔒 Not: Tüm puantaj kayıtları veritabanında güvenle saklanmaktadır.\n\n💡 Gerekirse personeli tekrar aktif yapabilirsiniz.`);
+      alert(`✅ ${empName} işten çıkarıldı.\n\n📅 Ayrılış Tarihi: ${dateLabel}\n🔒 Not: ${dateLabel} DAHİL önceki tüm aylardaki kayıtlar veritabanında güvenle saklanmaktadır ve o aylarda görünmeye devam edecektir.\n\n💡 Gerekirse personeli tekrar aktif yapabilirsiniz.`);
       
     } catch (error) {
-      console.error('❌ Personel silme hatası:', error);
+      console.error('❌ Personel işten çıkarma hatası:', error);
+      alert('❌ İşlem başarısız!\n\nHata: ' + (error as any)?.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔒 İşten Çıkarılan Personeli Yeniden Aktif Et (Ayrılış tarihini temizler)
+  const reactivateEmployee = async (empId: string, empName: string) => {
+    if (!confirm(`${empName} personelini yeniden aktif etmek istediğinize emin misiniz?\n\nİşten ayrılış tarihi kaldırılacak ve personel tekrar tüm aylarda görünür olacaktır.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('bordro_employees')
+        .update({ active: true, termination_date: null, updated_at: new Date().toISOString() })
+        .eq('id', empId);
+
+      if (error) throw error;
+
+      await ActivityLogger.bordroEmployeeReactivate(empName);
+      await loadEmployees();
+      setShowEmployeeModal(false);
+      alert(`✅ ${empName} yeniden aktif edildi.`);
+    } catch (error) {
+      console.error('❌ Personel yeniden aktif etme hatası:', error);
       alert('❌ İşlem başarısız!\n\nHata: ' + (error as any)?.message);
     } finally {
       setLoading(false);
@@ -876,6 +1202,7 @@ export default function BordroTakip() {
         start_time: log.startTime,
         end_time: log.endTime,
         overtime_hours: log.overtimeHours,
+        shortfall_hours: log.shortfallHours,
         description: log.description,
         last_modified_by: sessionId,        // 🛡️ Hangi oturum değiştirdi
         last_modified_at: new Date().toISOString(), // 🛡️ Ne zaman değiştirdi
@@ -1020,15 +1347,51 @@ export default function BordroTakip() {
     */
   };
 
-  // --- AYLIK BORDRO KAYDET ---
-  const saveMonthlyPayroll = async () => {
-    // Bekleyen kayıtları kontrol et
+  // --- AYLIK BORDRO KAYDET (AYI KAPAT) ---
+  // 🔒 ADIM 1: Modalı aç - her personel için geçmiş bakiye + bu ay net maaş +
+  // toplam borç hesaplanır, ödenen tutar varsayılan olarak toplam borca eşitlenir
+  // (kullanıcı dilerse değiştirebilir - kısmi ödeme yapılırsa fark sonraki aya devreder).
+  const openCloseMonthModal = async () => {
     if (pendingSaves.size > 0) {
       alert('⚠️ Lütfen bekleyin! Kaydedilmemiş değişiklikler var. Tüm değişiklikler kaydedildikten sonra tekrar deneyin.');
       return;
     }
 
-    if (!confirm(`${currentYear} yılı ${MONTHS[currentMonth]} ayı bordrosunu kaydetmek istediğinize emin misiniz?\n\n✅ Tüm puantaj verileri, mesai saatleri ve notlar veritabanında güvenle saklanmıştır.\n✅ Bu işlem sadece aylık özet raporu oluşturur.\n✅ Verileriniz kaybolmaz, istediğiniz zaman tekrar görüntüleyebilirsiniz.`)) {
+    if (visibleEmployees.length === 0) {
+      alert('⚠️ Bu ay için görüntülenecek personel yok.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const rows = await Promise.all(visibleEmployees.map(async (emp) => {
+        const empData = appData[emp.id]?.[monthKey];
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
+        const previousBalance = await getPreviousMonthBalance(emp.id, currentMonth, currentYear);
+        const totalDue = previousBalance + stats.netPayable;
+        return {
+          employeeId: emp.id,
+          name: emp.name,
+          previousBalance,
+          netPayable: stats.netPayable,
+          totalDue,
+          paidAmount: totalDue // Varsayılan: tam ödeme (kullanıcı değiştirebilir)
+        };
+      }));
+
+      setCloseMonthRows(rows);
+      setShowCloseMonthModal(true);
+    } catch (error) {
+      console.error('❌ Ayı Kapat modalı hazırlanırken hata:', error);
+      alert('❌ Ayı Kapat penceresi açılırken bir hata oluştu!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔒 ADIM 2: Onaylanan ödenen tutarlarla ayı kapat ve kaydet
+  const confirmCloseMonth = async () => {
+    if (!confirm(`${currentYear} yılı ${MONTHS[currentMonth]} ayı bordrosunu kaydetmek istediğinize emin misiniz?\n\n✅ Tüm puantaj verileri, mesai saatleri ve notlar veritabanında güvenle saklanmıştır.\n✅ Girdiğiniz ödenen tutarlara göre devreden bakiyeler hesaplanacaktır.\n✅ Verileriniz kaybolmaz, istediğiniz zaman tekrar görüntüleyebilirsiniz.`)) {
       return;
     }
 
@@ -1039,7 +1402,7 @@ export default function BordroTakip() {
       console.log('📝 Ay kapatılıyor, son kontrol yapılıyor...');
       
       // Her personel için tüm günlük logları ve giderleri tekrar kaydet (güvenlik için)
-      for (const emp of employees) {
+      for (const emp of visibleEmployees) {
         const empData = appData[emp.id]?.[monthKey];
         if (empData) {
           // Logs'u kaydet
@@ -1054,26 +1417,39 @@ export default function BordroTakip() {
         }
       }
       
-      // Şimdi özet raporu oluştur
-      for (const emp of employees) {
+      // Şimdi özet raporu oluştur (🔒 sadece bu ay için görünür/aktif olan personeller için)
+      for (const emp of visibleEmployees) {
         const empData = appData[emp.id]?.[monthKey];
-        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
+        // 🔒 KRİTİK: Snapshot'a o AY için geçerli olan maaş yazılır, güncel maaş değil.
+        // Böylece bu ay kapatıldıktan sonra maaş güncellense bile bu kayıt değişmez.
+        const effSalary = getEffectiveSalary(emp, salaryHistory[emp.id], currentMonth, currentYear);
+
+        // 🔒 DEVREDEN BAKİYE: modaldeki (kullanıcının onayladığı) satırdan al
+        const row = closeMonthRows.find(r => r.employeeId === emp.id);
+        const previousBalance = row?.previousBalance ?? 0;
+        const paidAmount = row?.paidAmount ?? stats.netPayable;
+        const carryoverBalance = previousBalance + stats.netPayable - paidAmount;
 
         const payrollData = {
           employee_id: emp.id,
           month: currentMonth,
           year: currentYear,
           employee_name: emp.name,
-          agreed_salary: emp.agreedSalary,
-          official_salary: emp.officialSalary,
+          agreed_salary: effSalary.agreedSalary,
+          official_salary: effSalary.officialSalary,
           days_worked: stats.totalWorkDays,
           sunday_days: stats.totalSundayDays,
           overtime_hours: stats.totalOvertimeHours,
+          shortfall_hours: stats.totalShortfallHours,
           advances: stats.totalAdvances,
           expenses: stats.totalExpenses,
           bonuses: stats.totalBonuses,
           net_payable: stats.netPayable,
-          hand_pay: stats.remainingHandPay
+          hand_pay: stats.remainingHandPay,
+          previous_balance: previousBalance,
+          paid_amount: paidAmount,
+          carryover_balance: carryoverBalance
         };
 
         const { error } = await supabase
@@ -1083,8 +1459,9 @@ export default function BordroTakip() {
         if (error) throw error;
       }
 
-      await ActivityLogger.bordroMonthlySave(currentMonth + 1, currentYear, employees.length);
-      alert(`✅ ${MONTHS[currentMonth]} ${currentYear} bordrosu başarıyla kapatıldı!\n\n📊 Özet rapor oluşturuldu\n💾 Tüm detaylı veriler güvenle saklandı\n📂 Geçmiş Bordrolar'dan görüntüleyebilirsiniz\n\n⚠️ Not: Bu ay için girdiğiniz tüm puantaj, mesai ve not bilgileri veritabanında saklanmıştır. İstediğiniz zaman bu aya geri dönüp verileri görüntüleyebilirsiniz.`);
+      await ActivityLogger.bordroMonthlySave(currentMonth + 1, currentYear, visibleEmployees.length);
+      setShowCloseMonthModal(false);
+      alert(`✅ ${MONTHS[currentMonth]} ${currentYear} bordrosu başarıyla kapatıldı!\n\n📊 Özet rapor oluşturuldu\n💾 Tüm detaylı veriler güvenle saklandı\n💰 Devreden bakiyeler hesaplandı ve kaydedildi\n📂 Geçmiş Bordrolar'dan görüntüleyebilirsiniz\n\n⚠️ Not: Bu ay için girdiğiniz tüm puantaj, mesai ve not bilgileri veritabanında saklanmıştır. İstediğiniz zaman bu aya geri dönüp verileri görüntüleyebilirsiniz.`);
     } catch (error) {
       console.error('Bordro kaydetme hatası:', error);
       alert('❌ Bordro kaydedilirken bir hata oluştu!\n\nHata: ' + (error as any)?.message);
@@ -1184,19 +1561,26 @@ export default function BordroTakip() {
     }
   }, [appData]);
 
+  // 🔒 O AY için "görünür" olan personeller (işten ayrılanlar, ayrılış
+  // tarihinden SONRAKİ aylarda bu listede yer almaz; ayrılış ayı dahil
+  // önceki tüm aylarda listede kalmaya devam eder).
+  const visibleEmployees = useMemo(() => 
+    employees.filter(emp => isEmployeeVisibleInMonth(emp, currentMonth, currentYear)),
+  [employees, currentMonth, currentYear]);
+
   // Personel listesi yüklendiğinde, tüm personeller için aylık verileri yükle
   useEffect(() => {
-    if (employees.length > 0) {
-      console.log('👥 Tüm personeller için veri yükleniyor...');
+    if (visibleEmployees.length > 0) {
+      console.log('👥 Bu ay için görünür personeller için veri yükleniyor...');
       // Sırayla yükle (yarış koşulunu önle)
       const loadAllData = async () => {
-        for (const emp of employees) {
+        for (const emp of visibleEmployees) {
           await loadMonthlyData(emp.id);
         }
       };
       loadAllData();
     }
-  }, [employees.length, monthKey]);
+  }, [visibleEmployees, monthKey]);
 
   // Personel veya Ay Değiştiğinde Verileri Yükle
   useEffect(() => {
@@ -1212,8 +1596,11 @@ export default function BordroTakip() {
 
   // Veri İlklendirme - SADECE VERİTABANINDA VERİ YOKSA
   useEffect(() => {
-    if (employees.length > 0 && !employees.find(e => e.id === selectedEmployeeId)) {
-        setSelectedEmployeeId(employees[0].id);
+    // 🔒 Seçili personel bu ayda görünür değilse (işten ayrıldıysa ve
+    // görüntülenen ay ayrılış tarihinden sonraysa), o ay için görünen
+    // ilk personele otomatik geç.
+    if (visibleEmployees.length > 0 && !visibleEmployees.find(e => e.id === selectedEmployeeId)) {
+        setSelectedEmployeeId(visibleEmployees[0].id);
     }
     
     // 🔒 GÜVENLİK: SADECE veritabanından yükleme tamamlandıktan SONRA
@@ -1235,14 +1622,27 @@ export default function BordroTakip() {
         console.log('✅ Mevcut kayıtlar yüklendi ve korundu:', Object.keys(currentLogs).length, 'gün');
       }
     }
-  }, [selectedEmployeeId, monthKey, appData[selectedEmployeeId]?.[monthKey]?.logs, loading]);
+  }, [selectedEmployeeId, monthKey, appData[selectedEmployeeId]?.[monthKey]?.logs, loading, visibleEmployees]);
 
   const currentData = appData[selectedEmployeeId]?.[monthKey] || { month: currentMonth, year: currentYear, logs: {}, expenses: [] };
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId) || { id: '0', name: '', agreedSalary: 0, officialSalary: 0 };
 
   const currentStats = useMemo(() => 
-    calculateEmployeeStats(selectedEmployee, currentData, daysInMonth, currentMonth, currentYear), 
-  [selectedEmployee, currentData, daysInMonth, currentMonth, currentYear]);
+    calculateEmployeeStats(selectedEmployee, currentData, daysInMonth, currentMonth, currentYear, salaryHistory), 
+  [selectedEmployee, currentData, daysInMonth, currentMonth, currentYear, salaryHistory]);
+
+  // 🔒 Seçili personel veya ay değiştiğinde, geçmiş aydan devreden bakiyeyi yükle
+  useEffect(() => {
+    if (!selectedEmployeeId || selectedEmployeeId === '0') {
+      setSelectedEmployeePreviousBalance(0);
+      return;
+    }
+    let cancelled = false;
+    getPreviousMonthBalance(selectedEmployeeId, currentMonth, currentYear).then(balance => {
+      if (!cancelled) setSelectedEmployeePreviousBalance(balance);
+    });
+    return () => { cancelled = true; };
+  }, [selectedEmployeeId, currentMonth, currentYear]);
 
   // --- HANDLERS ---
 
@@ -1270,6 +1670,7 @@ export default function BordroTakip() {
           startTime: DEFAULT_START_TIME,
           endTime: isSaturday ? DEFAULT_END_TIME_SATURDAY : DEFAULT_END_TIME_WEEKDAY,
           overtimeHours: 0,
+          shortfallHours: 0,
           description: ''
         };
       } else {
@@ -1280,19 +1681,49 @@ export default function BordroTakip() {
       // Alan güncelle
       (currentLogs[day] as any)[field] = value;
 
-      // Otomatik Mesai Hesaplama
+      // 🔒 Fazla mesai ve eksik çalışma AYNI ANDA dolu olamaz: biri manuel
+      // olarak pozitif girildiğinde diğeri otomatik olarak sıfırlanır.
+      if (field === 'overtimeHours' && value > 0) {
+        currentLogs[day].shortfallHours = 0;
+      } else if (field === 'shortfallHours' && value > 0) {
+        currentLogs[day].overtimeHours = 0;
+      }
+
+      // Otomatik Mesai / Eksik Çalışma Hesaplama
+      // 🔒 Planlanan çalışma süresi (start-end) ile GERÇEK çalışma süresi
+      // karşılaştırılır: fark pozitifse FAZLA MESAİ, negatifse EKSİK ÇALIŞMA
+      // olarak ayrı ayrı alanlara yazılır - ikisi asla aynı anda dolmaz.
       if (field === 'endTime' || field === 'startTime' || field === 'type') {
         const log = currentLogs[day];
         const { isSaturday, isSunday } = isWeekend(day, currentMonth, currentYear);
         
-        const endHour = parseInt(log.endTime.split(':')[0]);
         let autoOvertime = 0;
+        let autoShortfall = 0;
 
-        if (log.type === 'Normal') {
-            if (isSaturday && endHour > 13) autoOvertime = endHour - 13;
-            else if (!isSaturday && !isSunday && endHour > 18) autoOvertime = endHour - 18;
+        // Pazar günleri "Normal" olarak işaretlense bile (örn. otomatik
+        // doldurmada boş gün yer tutucusu) planlı çalışma günü sayılmaz.
+        // 🔒 actualHours <= 0 (giriş=çıkış, örn. "OTOMATİK DOLDUR" ile
+        // oluşturulan Cumartesi/Pazar 0 saatlik yer tutucular) durumunda da
+        // hesaplama yapılmaz - bu, "gerçekte çalışılmadı/izlenmedi" anlamına
+        // gelir, "planlanandan eksik çalışıldı" anlamına GELMEZ.
+        if (log.type === 'Normal' && !isSunday) {
+            const plannedStart = parseTimeToHours(DEFAULT_START_TIME);
+            const plannedEnd = parseTimeToHours(isSaturday ? DEFAULT_END_TIME_SATURDAY : DEFAULT_END_TIME_WEEKDAY);
+            const plannedHours = plannedEnd - plannedStart;
+
+            const actualStart = parseTimeToHours(log.startTime);
+            const actualEnd = parseTimeToHours(log.endTime);
+            const actualHours = actualEnd - actualStart;
+
+            if (actualHours > 0) {
+                const diff = actualHours - plannedHours;
+                if (diff > 0) autoOvertime = diff;
+                else if (diff < 0) autoShortfall = -diff;
+            }
         }
-        currentLogs[day].overtimeHours = autoOvertime > 0 ? autoOvertime : 0;
+
+        currentLogs[day].overtimeHours = autoOvertime > 0 ? Math.round(autoOvertime * 100) / 100 : 0;
+        currentLogs[day].shortfallHours = autoShortfall > 0 ? Math.round(autoShortfall * 100) / 100 : 0;
       }
 
       console.log('📊 Güncellenmiş log:', currentLogs[day]);
@@ -1574,7 +2005,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
   };
 
   const openAddModal = () => {
-    setEmployeeForm({ name: '', tcNo: '', agreedSalary: '', officialSalary: '' });
+    setEmployeeForm({ name: '', tcNo: '', agreedSalary: '', officialSalary: '', effectiveMonth: currentMonth.toString(), effectiveYear: currentYear.toString() });
     setEditingEmployeeId(null);
     setShowEmployeeModal(true);
   };
@@ -1584,7 +2015,11 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
         name: emp.name,
         tcNo: emp.tc_no || '',
         agreedSalary: emp.agreedSalary.toString(), 
-        officialSalary: emp.officialSalary.toString() 
+        officialSalary: emp.officialSalary.toString(),
+        // 🔒 Varsayılan olarak şu an görüntülenen ay/yıl önerilir; kullanıcı
+        // maaş değişikliğinin başka bir aydan itibaren geçerli olmasını isterse değiştirebilir.
+        effectiveMonth: currentMonth.toString(),
+        effectiveYear: currentYear.toString()
     });
     setEditingEmployeeId(emp.id);
     setShowEmployeeModal(true);
@@ -1600,20 +2035,24 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
   // Excel Export - Tüm Personel
   const exportToExcel = async () => {
     try {
-      const exportData = employees.map(emp => {
+      const exportData = visibleEmployees.map(emp => {
         const empData = appData[emp.id]?.[monthKey];
-        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
+        // 🔒 O ay için geçerli olan maaş (güncel maaş değil)
+        const effSalary = getEffectiveSalary(emp, salaryHistory[emp.id], currentMonth, currentYear);
         
         return {
           'Personel': emp.name,
           'TC No': emp.tc_no || '',
-          'Anlaşılan Maaş': emp.agreedSalary,
-          'Resmi Maaş': emp.officialSalary,
+          'Anlaşılan Maaş': effSalary.agreedSalary,
+          'Resmi Maaş': effSalary.officialSalary,
           'Günlük Mesai Ücret (30 güne göre)': stats.dailyRate.toFixed(2),
-          'Saatlik Mesai Ücret (x1.5)': (stats.hourlyRate * 1.5).toFixed(2),
+          [`Saatlik Mesai Ücret (x${OVERTIME_MULTIPLIER})`]: (stats.hourlyRate * OVERTIME_MULTIPLIER).toFixed(2),
           'Çalışılan Gün': stats.totalWorkDays,
           'Mesai Saati': stats.totalOvertimeHours,
           'Mesai Ücreti': stats.overtimePay.toFixed(2),
+          'Eksik Çalışma Saati': stats.totalShortfallHours,
+          'Eksik Çalışma Kesintisi': stats.shortfallDeduction.toFixed(2),
           'Pazar Farkı': stats.totalSundayPay.toFixed(2),
           'Ekstra Ödemeler': stats.totalExtras.toFixed(2),
           'Brüt Hakediş': stats.grossTotal.toFixed(2),
@@ -1649,7 +2088,9 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
   const exportSinglePDF = async (employee: Employee) => {
     try {
       const empData = appData[employee.id]?.[monthKey];
-      const stats = calculateEmployeeStats(employee, empData, daysInMonth, currentMonth, currentYear);
+      const stats = calculateEmployeeStats(employee, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
+      // 🔒 O ay için geçerli olan maaş (PDF'de güncel maaş değil, o döneme ait maaş görünmeli)
+      const effSalary = getEffectiveSalary(employee, salaryHistory[employee.id], currentMonth, currentYear);
       
       const doc = new jsPDF();
       
@@ -1703,8 +2144,9 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
       
       // Avans detayları için body oluştur
       const bordroBody: any[] = [
-        ['Anlasilan Net Maas', `${employee.agreedSalary.toFixed(2)} TL`],
-        ['Mesai Ucreti (x1.5)', `${stats.overtimePay.toFixed(2)} TL`],
+        ['Anlasilan Net Maas', `${effSalary.agreedSalary.toFixed(2)} TL`],
+        [`Mesai Ucreti (x${OVERTIME_MULTIPLIER})`, `${stats.overtimePay.toFixed(2)} TL`],
+        ['Eksik Calisma Kesintisi', `- ${stats.shortfallDeduction.toFixed(2)} TL`],
         ['Pazar/Tatil Farki', `${stats.totalSundayPay.toFixed(2)} TL`],
         ['Gelmedi Kesintisi', `- ${stats.absentDeduction.toFixed(2)} TL`],
         ['Ekstra Odemeler (Prim/Gider)', `${stats.totalExtras.toFixed(2)} TL`],
@@ -1790,13 +2232,14 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
             log.startTime || '-',
             log.endTime || '-',
             log.overtimeHours || 0,
+            log.shortfallHours || 0,
             descClean
           ];
         });
 
         (doc as any).autoTable({
           startY: finalY + 5,
-          head: [['Gun', 'Gun Adi', 'Durum', 'Giris', 'Cikis', 'Mesai', 'Aciklama']],
+          head: [['Gun', 'Gun Adi', 'Durum', 'Giris', 'Cikis', 'Mesai', 'Eksik', 'Aciklama']],
           body: puantajData,
           theme: 'striped',
           headStyles: { fillColor: [30, 58, 138], fontSize: 8, fontStyle: 'bold' },
@@ -1974,9 +2417,9 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
       doc.line(20, startY + 18, 190, startY + 18);
       
       // Özet Tablo Verisi
-      const tableData = employees.map(emp => {
+      const tableData = visibleEmployees.map(emp => {
         const empData = appData[emp.id]?.[monthKey];
-        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
         const cleanName = emp.name.replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
         
         return [
@@ -1992,9 +2435,9 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
       });
 
       // Toplamlar
-      const totals = employees.reduce((acc, emp) => {
+      const totals = visibleEmployees.reduce((acc, emp) => {
         const empData = appData[emp.id]?.[monthKey];
-        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
+        const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
         return {
           workDays: acc.workDays + stats.totalWorkDays,
           overtime: acc.overtime + stats.totalOvertimeHours,
@@ -2132,6 +2575,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
               start_time: '08:00',
               end_time: '18:00',
               overtime_hours: 0,
+              shortfall_hours: 0,
               description: 'Excel\'den import'
             };
 
@@ -2274,12 +2718,161 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                             onChange={(e) => setEmployeeForm({...employeeForm, officialSalary: e.target.value})} 
                           />
                       </div>
+                      {editingEmployeeId && (
+                        <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                            <label className="block text-xs font-bold text-blue-800 mb-1">
+                              <span className="text-sm">🔒</span> Maaş değişikliği hangi aydan itibaren geçerli olsun?
+                            </label>
+                            <div className="flex space-x-2">
+                              <select
+                                className="flex-1 p-2 border rounded text-sm"
+                                value={employeeForm.effectiveMonth}
+                                onChange={(e) => setEmployeeForm({...employeeForm, effectiveMonth: e.target.value})}
+                              >
+                                {MONTHS.map((m, idx) => (
+                                  <option key={idx} value={idx}>{m}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                className="w-24 p-2 border rounded text-sm"
+                                value={employeeForm.effectiveYear}
+                                onChange={(e) => setEmployeeForm({...employeeForm, effectiveYear: e.target.value})}
+                              />
+                            </div>
+                            <p className="text-[11px] text-blue-700 mt-1">
+                              ℹ️ Bu tarihten ÖNCEKİ aylardaki maaş ve hesaplamalar değişmez; sadece bu ay ve sonrası yeni maaşla hesaplanır.
+                            </p>
+                        </div>
+                      )}
+                      {editingEmployeeId && (() => {
+                        const editingEmp = employees.find(e => e.id === editingEmployeeId);
+                        return editingEmp?.terminationDate ? (
+                          <div className="bg-red-50 border border-red-200 rounded p-2">
+                            <p className="text-xs font-bold text-red-700">
+                              🚪 İşten Ayrılış Tarihi: {new Date(editingEmp.terminationDate).toLocaleDateString('tr-TR')}
+                            </p>
+                            <p className="text-[11px] text-red-600 mt-1 mb-2">
+                              Bu tarihten sonraki aylarda personel bordrolarda görünmüyor.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => reactivateEmployee(editingEmp.id, editingEmp.name)}
+                              className="w-full bg-green-600 text-white text-xs py-1.5 rounded font-bold hover:bg-green-700 transition"
+                            >
+                              ✅ Yeniden Aktif Et
+                            </button>
+                          </div>
+                        ) : null;
+                      })()}
                       <button onClick={saveEmployee} className="w-full bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 transition mt-2">
                           {editingEmployeeId ? 'GÜNCELLE' : 'KAYDET'}
                       </button>
                   </div>
               </div>
           </div>
+      )}
+
+      {/* MODAL: Personeli İşten Çıkar */}
+      {showTerminateModal && terminatingEmployee && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl p-6 w-96">
+                  <div className="flex justify-between items-center mb-4 border-b pb-2">
+                      <h3 className="font-bold text-lg text-red-700">🚪 İşten Çıkar: {terminatingEmployee.name}</h3>
+                      <button onClick={() => { setShowTerminateModal(false); setTerminatingEmployee(null); }} className="text-gray-400 hover:text-red-500"><X className="w-5 h-5"/></button>
+                  </div>
+                  <div className="space-y-3">
+                      <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-800">
+                        🔒 Personel VERİTABANINDAN SİLİNMEZ. Sadece pasif duruma alınır.
+                        Girdiğiniz tarihin AYI DAHİL önceki tüm aylardaki kayıtlar korunur
+                        ve bordrolarda görünmeye devam eder; sonraki aylarda görünmez.
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 mb-1">İşten Ayrılış Tarihi</label>
+                          <input
+                            type="date"
+                            className="w-full p-2 border-2 border-red-400 rounded focus:ring-2 focus:ring-red-500"
+                            value={terminationDateInput}
+                            onChange={(e) => setTerminationDateInput(e.target.value)}
+                          />
+                      </div>
+                      <button onClick={confirmTerminateEmployee} className="w-full bg-red-600 text-white py-2 rounded font-bold hover:bg-red-700 transition mt-2">
+                          İŞTEN ÇIKAR
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* MODAL: Ayı Kapat & Kaydet (Devreden Bakiye Girişi) */}
+      {showCloseMonthModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-green-600 text-white p-4 flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <Save className="w-6 h-6"/>
+                <h2 className="text-xl font-bold">{MONTHS[currentMonth]} {currentYear} Ayını Kapat</h2>
+              </div>
+              <button onClick={() => setShowCloseMonthModal(false)} className="hover:bg-green-700 p-2 rounded">
+                <X className="w-5 h-5"/>
+              </button>
+            </div>
+
+            <div className="p-4 bg-blue-50 border-b text-xs text-blue-800">
+              🔒 Her personel için geçmiş aydan devreden bakiye + bu ay hesaplanan net maaş = <b>Toplam Borç</b>.
+              "Ödenen Tutar" varsayılan olarak Toplam Borç'a eşittir (tam ödeme); kısmi ödeme yaptıysanız
+              düzenleyin - fark otomatik olarak <b>gelecek aya devreden bakiye</b> olarak kaydedilecektir.
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-4">
+              <table className="w-full text-sm border-collapse">
+                <thead className="bg-gray-100 text-gray-600 uppercase text-xs sticky top-0">
+                  <tr>
+                    <th className="p-2 border text-left">Personel</th>
+                    <th className="p-2 border text-right">Geçmiş Bakiye</th>
+                    <th className="p-2 border text-right">Bu Ay Net Maaş</th>
+                    <th className="p-2 border text-right bg-yellow-50">Toplam Borç</th>
+                    <th className="p-2 border text-right bg-green-50">Ödenen Tutar</th>
+                    <th className="p-2 border text-right">Yeni Bakiye</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {closeMonthRows.map((row, idx) => {
+                    const newBalance = row.totalDue - row.paidAmount;
+                    return (
+                      <tr key={row.employeeId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        <td className="p-2 border font-semibold">{row.name}</td>
+                        <td className={`p-2 border text-right ${row.previousBalance > 0 ? 'text-red-600' : row.previousBalance < 0 ? 'text-green-600' : ''}`}>{formatCurrency(row.previousBalance)}</td>
+                        <td className="p-2 border text-right">{formatCurrency(row.netPayable)}</td>
+                        <td className="p-2 border text-right font-bold bg-yellow-50">{formatCurrency(row.totalDue)}</td>
+                        <td className="p-2 border text-right bg-green-50">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-28 text-right p-1 border rounded"
+                            value={row.paidAmount}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setCloseMonthRows(prev => prev.map(r => r.employeeId === row.employeeId ? { ...r, paidAmount: isNaN(val) ? 0 : val } : r));
+                            }}
+                          />
+                        </td>
+                        <td className={`p-2 border text-right font-bold ${newBalance > 0 ? 'text-red-600' : newBalance < 0 ? 'text-green-600' : 'text-gray-500'}`}>{formatCurrency(newBalance)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-4 border-t flex justify-end space-x-2 bg-gray-50">
+              <button onClick={() => setShowCloseMonthModal(false)} className="px-4 py-2 rounded border border-gray-300 text-gray-600 hover:bg-gray-100">İptal</button>
+              <button onClick={confirmCloseMonth} disabled={loading} className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white font-bold disabled:opacity-50">
+                {loading ? 'Kaydediliyor...' : 'Onayla ve Ayı Kapat'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL: Avans/Gider/Prim Ekle */}
@@ -2458,7 +3051,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
 
             {/* Aylık Bordroyu Kaydet */}
             <button
-              onClick={saveMonthlyPayroll}
+              onClick={openCloseMonthModal}
               disabled={loading}
               className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded text-sm font-semibold flex items-center space-x-1 disabled:opacity-50"
               title="Bu ayın bordrosunu kaydet"
@@ -2628,15 +3221,24 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {employees.map(emp => {
+                            {visibleEmployees.map(emp => {
                                 const empData = appData[emp.id]?.[monthKey];
-                                const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear);
+                                const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
+                                // 🔒 O ay için geçerli olan maaşı göster (güncel maaş değil)
+                                const effSalary = getEffectiveSalary(emp, salaryHistory[emp.id], currentMonth, currentYear);
                                 
                                 return (
                                     <tr key={emp.id} className="hover:bg-blue-50 transition-colors group">
-                                        <td className="p-4 font-bold text-gray-700">{emp.name}</td>
+                                        <td className="p-4 font-bold text-gray-700">
+                                          {emp.name}
+                                          {emp.terminationDate && (
+                                            <span className="block text-[10px] font-semibold text-red-500 mt-0.5">
+                                              🚪 İşten Ayrıldı: {new Date(emp.terminationDate).toLocaleDateString('tr-TR')}
+                                            </span>
+                                          )}
+                                        </td>
                                         <td className="p-4 text-center text-gray-500 text-xs font-mono">{emp.tc_no || '-'}</td>
-                                        <td className="p-4 text-right font-mono text-gray-500">{formatCurrency(emp.agreedSalary)}</td>
+                                        <td className="p-4 text-right font-mono text-gray-500">{formatCurrency(effSalary.agreedSalary)}</td>
                                         <td className="p-4 text-center">
                                             <span className="bg-gray-100 px-2 py-1 rounded text-xs font-bold">{stats.totalWorkDays}</span>
                                         </td>
@@ -2659,9 +3261,9 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                                 <Pencil className="w-4 h-4"/>
                                             </button>
                                             <button 
-                                                onClick={() => deleteEmployee(emp.id, emp.name)}
+                                                onClick={() => openTerminateModal(emp)}
                                                 className="bg-red-100 text-red-700 p-2 rounded-full hover:bg-red-200 transition"
-                                                title="Personeli Sil"
+                                                title="İşten Çıkar"
                                             >
                                                 <Trash2 className="w-4 h-4"/>
                                             </button>
@@ -2688,45 +3290,50 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                     <td colSpan={10} className="p-8 text-center text-gray-400 italic">Henüz personel eklenmemiş. "Yeni Personel" butonuna tıklayarak başlayın.</td>
                                 </tr>
                             )}
+                            {employees.length > 0 && visibleEmployees.length === 0 && (
+                                <tr>
+                                    <td colSpan={10} className="p-8 text-center text-gray-400 italic">Bu ay için görüntülenecek aktif personel yok. (Tüm personeller bu aydan önce işten ayrılmış olabilir.)</td>
+                                </tr>
+                            )}
                         </tbody>
-                        {employees.length > 0 && (
+                        {visibleEmployees.length > 0 && (
                             <tfoot className="bg-gradient-to-r from-blue-900 to-blue-700 text-white">
                                 <tr className="font-bold text-base">
                                     <td className="p-4" colSpan={2}>TOPLAM</td>
-                                    <td className="p-4 text-right">{formatCurrency(employees.reduce((sum, emp) => sum + emp.agreedSalary, 0))}</td>
+                                    <td className="p-4 text-right">{formatCurrency(visibleEmployees.reduce((sum, emp) => sum + getEffectiveSalary(emp, salaryHistory[emp.id], currentMonth, currentYear).agreedSalary, 0))}</td>
                                     <td className="p-4 text-center">
-                                        {employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
+                                        {visibleEmployees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
                                             return sum + stats.totalWorkDays;
                                         }, 0)}
                                     </td>
                                     <td className="p-4 text-center">
-                                        {employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
+                                        {visibleEmployees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
                                             return sum + stats.totalOvertimeHours;
                                         }, 0)} s
                                     </td>
                                     <td className="p-4 text-right">
-                                        {formatCurrency(employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
+                                        {formatCurrency(visibleEmployees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
                                             return sum + stats.grossTotal;
                                         }, 0))}
                                     </td>
                                     <td className="p-4 text-right">
-                                        {formatCurrency(employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
+                                        {formatCurrency(visibleEmployees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
                                             return sum + stats.totalAdvances;
                                         }, 0))}
                                     </td>
                                     <td className="p-4 text-right text-xl bg-red-800 border-l-4 border-yellow-300">
-                                        {formatCurrency(employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
+                                        {formatCurrency(visibleEmployees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
                                             return sum + stats.netPayable;
                                         }, 0))}
                                     </td>
                                     <td className="p-4 text-right text-sm opacity-75">
-                                        {formatCurrency(employees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear);
+                                        {formatCurrency(visibleEmployees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
                                             return sum + stats.officialPay;
                                         }, 0))}
                                     </td>
@@ -2755,8 +3362,8 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                 onChange={(e) => setSelectedEmployeeId(e.target.value)}
                                 className="flex-1 p-2 border rounded-md mb-4 bg-gray-50 font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                             >
-                                {employees.length === 0 && <option value="">Personel Yok</option>}
-                                {employees.map(emp => (
+                                {visibleEmployees.length === 0 && <option value="">Personel Yok</option>}
+                                {visibleEmployees.map(emp => (
                                     <option key={emp.id} value={emp.id}>{emp.name}</option>
                                 ))}
                             </select>
@@ -2774,7 +3381,8 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                         {selectedEmployee.id !== '0' && (
                           <div className="space-y-2 text-sm border-t pt-2">
                                <div className="flex justify-between"><span className="text-gray-500">Günlük Mesai Ücret:</span><span className="font-bold">{formatCurrency(currentStats.dailyRate)}</span></div>
-                               <div className="flex justify-between"><span className="text-gray-500">Saatlik Mesai (x1.5):</span><span className="text-blue-600 font-mono">{formatCurrency(currentStats.hourlyRate * 1.5)}</span></div>
+                               <div className="flex justify-between"><span className="text-gray-500">Saatlik Mesai (x{OVERTIME_MULTIPLIER}):</span><span className="text-blue-600 font-mono">{formatCurrency(currentStats.hourlyRate * OVERTIME_MULTIPLIER)}</span></div>
+                               <div className="flex justify-between"><span className="text-gray-500">Saatlik Eksik Çalışma Kesintisi:</span><span className="text-red-600 font-mono">{formatCurrency(currentStats.hourlyRate)}</span></div>
                           </div>
                         )}
                     </div>
@@ -2787,9 +3395,15 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                 <Banknote className="w-5 h-5 text-green-400"/>
                             </div>
                             <div className="p-4 space-y-2 text-sm">
+                                {selectedEmployeePreviousBalance !== 0 && (
+                                  <div className={`flex justify-between border-b pb-1 font-semibold ${selectedEmployeePreviousBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    <span>📆 Geçmiş Aydan Devreden Bakiye:</span>
+                                    <span>{selectedEmployeePreviousBalance > 0 ? '+' : ''}{formatCurrency(selectedEmployeePreviousBalance)}</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between border-b pb-1">
                                   <span>Anlaşılan Maaş:</span>
-                                  <span className="font-semibold">{formatCurrency(selectedEmployee.agreedSalary)}</span>
+                                  <span className="font-semibold">{formatCurrency(getEffectiveSalary(selectedEmployee, salaryHistory[selectedEmployee.id], currentMonth, currentYear).agreedSalary)}</span>
                                 </div>
                                 {currentStats.absentDeduction > 0 && (
                                   <div className="flex justify-between border-b pb-1 text-red-600">
@@ -2797,9 +3411,15 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                     <span className="font-semibold">-{formatCurrency(currentStats.absentDeduction)}</span>
                                   </div>
                                 )}
+                                {currentStats.shortfallDeduction > 0 && (
+                                  <div className="flex justify-between border-b pb-1 text-red-600">
+                                    <span>Eksik Çalışma ({currentStats.totalShortfallHours} saat):</span>
+                                    <span className="font-semibold">-{formatCurrency(currentStats.shortfallDeduction)}</span>
+                                  </div>
+                                )}
                                 {currentStats.overtimePay > 0 && (
                                   <div className="flex justify-between border-b pb-1 text-blue-600">
-                                    <span>Mesai ({currentStats.totalOvertimeHours} saat x1.5):</span>
+                                    <span>Mesai ({currentStats.totalOvertimeHours} saat x{OVERTIME_MULTIPLIER}):</span>
                                     <span className="font-semibold">+{formatCurrency(currentStats.overtimePay)}</span>
                                   </div>
                                 )}
@@ -2844,6 +3464,12 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                   </>
                                 )}
                                 <div className="flex justify-between font-black text-lg pt-2 bg-blue-50 p-2 rounded"><span>NET HAKEDİŞ:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
+                                {selectedEmployeePreviousBalance !== 0 && (
+                                  <div className="flex justify-between font-black text-base pt-1 bg-yellow-50 p-2 rounded border border-yellow-200">
+                                    <span>TOPLAM BORÇ (Bakiye + Net):</span>
+                                    <span>{formatCurrency(selectedEmployeePreviousBalance + currentStats.netPayable)}</span>
+                                  </div>
+                                )}
                                 <div className="bg-green-50 p-2 rounded border border-green-200 mt-2 space-y-1">
                                     <div className="flex justify-between font-bold text-green-700 text-sm border-b border-green-200 pb-1">
                                         <span>Resmi Maaş:</span>
@@ -2858,6 +3484,9 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                         <span>{formatCurrency(currentStats.netPayable)}</span>
                                     </div>
                                 </div>
+                                <p className="text-[11px] text-gray-400 pt-1">
+                                  💡 Gerçek ödenen tutar ve gelecek aya devreden bakiye, "Ayı Kapat &amp; Kaydet" işleminde belirlenir.
+                                </p>
                             </div>
                         </div>
                         
@@ -2972,6 +3601,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                         <th className="p-2 border w-20">GİRİŞ</th>
                                         <th className="p-2 border w-20">ÇIKIŞ</th>
                                         <th className="p-2 border w-16 text-center bg-blue-50">MESAİ</th>
+                                        <th className="p-2 border w-16 text-center bg-red-50">EKSİK</th>
                                         <th className="p-2 border">AÇIKLAMA</th>
                                     </tr>
                                 </thead>
@@ -3003,6 +3633,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                                 <td className="p-1 border"><input type="time" className="w-full text-xs text-center" value={log.startTime || ''} onChange={(e) => handleLogChange(day, 'startTime', e.target.value)} disabled={!isActive}/></td>
                                                 <td className="p-1 border"><input type="time" className="w-full text-xs text-center" value={log.endTime || ''} onChange={(e) => handleLogChange(day, 'endTime', e.target.value)} disabled={!isActive}/></td>
                                                 <td className="p-1 border text-center bg-blue-50"><input type="number" className="w-full text-center font-bold text-blue-700 bg-transparent text-xs" value={log.overtimeHours || 0} onChange={(e) => handleLogChange(day, 'overtimeHours', parseFloat(e.target.value))} disabled={!isActive} min="0" step="0.5"/></td>
+                                                <td className="p-1 border text-center bg-red-50"><input type="number" className="w-full text-center font-bold text-red-700 bg-transparent text-xs" value={log.shortfallHours || 0} onChange={(e) => handleLogChange(day, 'shortfallHours', parseFloat(e.target.value))} disabled={!isActive} min="0" step="0.5"/></td>
                                                 <td className="p-1 border"><input type="text" className="w-full text-xs p-1" placeholder="..." value={log.description || ''} onChange={(e) => handleLogChange(day, 'description', e.target.value)}/></td>
                                             </tr>
                                         );
@@ -3078,12 +3709,16 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                         <th className="p-2 border text-center">Çalışılan Gün</th>
                         <th className="p-2 border text-center">Pazar Günü</th>
                         <th className="p-2 border text-center">Mesai Saat</th>
+                        <th className="p-2 border text-center">Eksik Saat</th>
                         <th className="p-2 border text-right">Avans</th>
                         <th className="p-2 border text-right">Gider</th>
                         <th className="p-2 border text-right">Prim</th>
                         <th className="p-2 border text-right">Net Hakediş</th>
                         <th className="p-2 border text-right bg-red-600">Resmi Maaş</th>
                         <th className="p-2 border text-right bg-green-600">Ek Ödeme</th>
+                        <th className="p-2 border text-right bg-yellow-600">Geçmiş Bakiye</th>
+                        <th className="p-2 border text-right bg-emerald-600">Ödenen Tutar</th>
+                        <th className="p-2 border text-right bg-purple-800">Yeni Bakiye</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3094,12 +3729,16 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                           <td className="p-2 border text-center font-semibold">{record.days_worked}</td>
                           <td className="p-2 border text-center">{record.sunday_days}</td>
                           <td className="p-2 border text-center">{parseFloat(record.overtime_hours).toFixed(1)}</td>
+                          <td className="p-2 border text-center text-red-600">{parseFloat(record.shortfall_hours || 0).toFixed(1)}</td>
                           <td className="p-2 border text-right text-red-600">{parseFloat(record.advances).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right text-orange-600">{parseFloat(record.expenses).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right text-green-600">{parseFloat(record.bonuses).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right font-bold text-blue-700">{parseFloat(record.net_payable).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right font-bold text-red-700 bg-red-50">{parseFloat(record.official_salary).toLocaleString('tr-TR')} ₺</td>
                           <td className="p-2 border text-right font-bold text-green-700 bg-green-50">{parseFloat(record.hand_pay).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right bg-yellow-50">{parseFloat(record.previous_balance || 0).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right bg-emerald-50">{parseFloat(record.paid_amount || 0).toLocaleString('tr-TR')} ₺</td>
+                          <td className="p-2 border text-right font-bold bg-purple-50">{parseFloat(record.carryover_balance || 0).toLocaleString('tr-TR')} ₺</td>
                         </tr>
                       ))}
                     </tbody>
@@ -3109,12 +3748,16 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                         <td className="p-2 border text-center">{historicalData.reduce((sum, r) => sum + r.days_worked, 0)}</td>
                         <td className="p-2 border text-center">{historicalData.reduce((sum, r) => sum + r.sunday_days, 0)}</td>
                         <td className="p-2 border text-center">{historicalData.reduce((sum, r) => sum + parseFloat(r.overtime_hours), 0).toFixed(1)}</td>
+                        <td className="p-2 border text-center text-red-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.shortfall_hours || 0), 0).toFixed(1)}</td>
                         <td className="p-2 border text-right text-red-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.advances), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right text-orange-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.expenses), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right text-green-600">{historicalData.reduce((sum, r) => sum + parseFloat(r.bonuses), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right font-bold text-blue-700">{historicalData.reduce((sum, r) => sum + parseFloat(r.net_payable), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right font-bold text-red-700 bg-red-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.official_salary), 0).toLocaleString('tr-TR')} ₺</td>
                         <td className="p-2 border text-right font-bold text-green-700 bg-green-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.hand_pay), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right bg-yellow-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.previous_balance || 0), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right bg-emerald-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.paid_amount || 0), 0).toLocaleString('tr-TR')} ₺</td>
+                        <td className="p-2 border text-right bg-purple-50">{historicalData.reduce((sum, r) => sum + parseFloat(r.carryover_balance || 0), 0).toLocaleString('tr-TR')} ₺</td>
                       </tr>
                     </tfoot>
                   </table>
