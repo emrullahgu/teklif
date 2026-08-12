@@ -34,6 +34,29 @@ ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS note TEXT;
 ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS created_by TEXT;
 
+-- 🔒 GENEL GÜVENLİK: Tablo daha önce (bizim bilmediğimiz) FARKLI bir şemayla
+-- oluşturulmuş olabilir ve "effective_date" gibi bizim doldurmadığımız,
+-- NOT NULL + varsayılan değersiz ekstra bir kolona sahip olabilir (bu durumda
+-- INSERT "null value ... violates not-null constraint" hatası verir).
+-- Aşağıdaki blok, id/employee_id DIŞINDA varsayılan değeri olmayan TÜM
+-- NOT NULL kolonları otomatik olarak nullable yapar; böylece hangi ekstra
+-- kolon olursa olsun INSERT güvenle çalışır.
+DO $$
+DECLARE
+  col RECORD;
+BEGIN
+  FOR col IN
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = 'bordro_salary_history'
+      AND is_nullable = 'NO'
+      AND column_default IS NULL
+      AND column_name NOT IN ('id', 'employee_id')
+  LOOP
+    EXECUTE format('ALTER TABLE bordro_salary_history ALTER COLUMN %I DROP NOT NULL', col.column_name);
+  END LOOP;
+END $$;
+
 -- effective_month için CHECK kısıtı (yoksa ekle)
 DO $$
 BEGIN
