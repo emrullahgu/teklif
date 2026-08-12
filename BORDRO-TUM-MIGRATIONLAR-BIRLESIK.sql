@@ -16,18 +16,46 @@
 -- ============================================================================
 -- 1) MAAŞ GEÇMİŞİ
 -- ============================================================================
+-- 🔒 NOT: CREATE TABLE IF NOT EXISTS + ayrı ayrı ADD COLUMN IF NOT EXISTS
+-- kullanılıyor. Böylece tablo daha önce (eksik/farklı kolonlarla) kısmen
+-- oluşturulmuş olsa bile eksik kolonlar güvenle tamamlanır ve
+-- "column ... does not exist" hatası alınmaz.
 CREATE TABLE IF NOT EXISTS bordro_salary_history (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  employee_id UUID NOT NULL REFERENCES bordro_employees(id) ON DELETE CASCADE,
-  agreed_salary DECIMAL(10,2) NOT NULL,
-  official_salary DECIMAL(10,2) NOT NULL,
-  effective_month INTEGER NOT NULL CHECK (effective_month BETWEEN 0 AND 11),
-  effective_year INTEGER NOT NULL,
-  note TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  created_by TEXT,
-  UNIQUE(employee_id, effective_month, effective_year)
+  employee_id UUID NOT NULL REFERENCES bordro_employees(id) ON DELETE CASCADE
 );
+
+ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS agreed_salary DECIMAL(10,2);
+ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS official_salary DECIMAL(10,2);
+ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS effective_month INTEGER;
+ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS effective_year INTEGER;
+ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE bordro_salary_history ADD COLUMN IF NOT EXISTS created_by TEXT;
+
+-- effective_month için CHECK kısıtı (yoksa ekle)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'bordro_salary_history_effective_month_check'
+  ) THEN
+    ALTER TABLE bordro_salary_history
+      ADD CONSTRAINT bordro_salary_history_effective_month_check
+      CHECK (effective_month BETWEEN 0 AND 11);
+  END IF;
+END $$;
+
+-- Personel + ay + yıl için UNIQUE kısıtı (yoksa ekle)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'bordro_salary_history_unique'
+  ) THEN
+    ALTER TABLE bordro_salary_history
+      ADD CONSTRAINT bordro_salary_history_unique
+      UNIQUE (employee_id, effective_month, effective_year);
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_bordro_salary_history_lookup
   ON bordro_salary_history(employee_id, effective_year DESC, effective_month DESC);
@@ -44,6 +72,8 @@ CREATE POLICY bordro_salary_history_all_authenticated
   WITH CHECK (true);
 
 -- Mevcut personellerin şu anki maaşını geriye dönük başlangıç kaydı olarak ekle
+-- (agreed_salary/official_salary/effective_month/effective_year henüz NULL olan
+-- veya hiç kaydı olmayan personeller için)
 INSERT INTO bordro_salary_history (employee_id, agreed_salary, official_salary, effective_month, effective_year, note)
 SELECT
   e.id,
