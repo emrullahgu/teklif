@@ -83,16 +83,15 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_bordro_salary_history_lookup
   ON bordro_salary_history(employee_id, effective_year DESC, effective_month DESC);
 
-ALTER TABLE bordro_salary_history ENABLE ROW LEVEL SECURITY;
+-- 🔒 ÖNEMLİ: Bu proje Supabase Auth KULLANMIYOR (özel/manuel giriş sistemi
+-- var). Tüm istekler "authenticated" değil "anon" rolüyle gider. Diğer
+-- bordro_* tablolarında olduğu gibi (bkz. ACIL-disable-rls.sql) tutarlılık
+-- için RLS burada da KAPALI tutulur; "TO authenticated" kısıtlı bir policy
+-- kullanılırsa anon istekleri SESSİZCE reddedilir ve uygulama hiç hata
+-- göstermeden maaş geçmişini okuyup yazamaz hale gelir.
+ALTER TABLE bordro_salary_history DISABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS bordro_salary_history_all_authenticated ON bordro_salary_history;
-
-CREATE POLICY bordro_salary_history_all_authenticated
-  ON bordro_salary_history
-  FOR ALL
-  TO authenticated
-  USING (true)
-  WITH CHECK (true);
+GRANT ALL ON bordro_salary_history TO anon, authenticated, service_role;
 
 -- Mevcut personellerin şu anki maaşını geriye dönük başlangıç kaydı olarak ekle
 -- (agreed_salary/official_salary/effective_month/effective_year henüz NULL olan
