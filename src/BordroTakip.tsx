@@ -3477,11 +3477,11 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                     </div>
                                     <div className="flex justify-between font-bold text-green-700 text-sm">
                                         <span>Ek Ödeme:</span>
-                                        <span>{formatCurrency(currentStats.netPayable - currentStats.officialPay)}</span>
+                                        <span>{formatCurrency(selectedEmployeePreviousBalance + currentStats.netPayable - currentStats.officialPay)}</span>
                                     </div>
                                     <div className="flex justify-between font-black text-green-700 text-lg border-t-2 border-green-300 pt-1">
                                         <span>TOPLAM ÖDENECEK:</span>
-                                        <span>{formatCurrency(currentStats.netPayable)}</span>
+                                        <span>{formatCurrency(selectedEmployeePreviousBalance + currentStats.netPayable)}</span>
                                     </div>
                                 </div>
                                 <p className="text-[11px] text-gray-400 pt-1">
