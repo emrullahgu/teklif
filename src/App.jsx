@@ -1,0 +1,7734 @@
+﻿import React, { useState, useMemo, useRef } from 'react';
+import { Calculator, FileText, Settings, Search, Save, Download, Printer, X, Edit3, ChevronRight, CheckCircle, Lightbulb, Zap, Mail, TrendingDown, RefreshCw, UserPlus, Users, MapPin, Percent, UploadCloud, Sparkles, Copy, Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, FileSpreadsheet, Hammer, Plus, Trash2, Cable, Wrench, Clock, Star, Banknote, Menu, ExternalLink, Fuel, Briefcase, BarChart3, Package } from 'lucide-react';
+import { BordroWithPassword } from './bordro-main.jsx';
+import BeyazYakaBordro from './BeyazYakaBordro.tsx';
+import KesifMetraj from './KesifMetraj.jsx';
+import GorevTakip from './GorevTakip.jsx';
+import Osos from './Osos.jsx';
+import AkaryakitTakip from './AkaryakitTakip.jsx';
+import IsTakip from './IsTakip.jsx';
+import HaftalikRaporlama from './HaftalikRaporlama.jsx';
+import UrunTakip from './UrunTakip.jsx';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import emailjs from 'emailjs-com';
+import html2pdf from 'html2pdf.js';
+import html2canvas from 'html2canvas';
+import { supabase } from './supabaseClient';
+import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableCell, TableRow, WidthType, BorderStyle, Packer } from 'docx';
+import { saveAs } from 'file-saver';
+import FaturaData from '../fatura/Fatura.json';
+import FaturaData2 from '../fatura/Fatura2.json';
+import KabloFiyatData from './serer-kablo-fiyat.json';
+import HazirPaketler from './hazir-paketler.json';
+import faturaLogo from '../public/fatura_logo.png';
+
+// Fatura verilerini birleştir ve normalize et
+const normalizedFatura1 = FaturaData.map(item => ({
+  urun: item.ÜRÜN || '',
+  marka: item.MARKA || 'Genel',
+  birimFiyat: item["BİRİM FİYAT"] || 0,
+  miktar: item.MİKTAR || 0,
+  olcu: item.ÖLÇÜ || 'Adet',
+  aciklama: '',
+  tarih: item.TARİH || '',
+  kaynak: 'Fatura1'
+}));
+
+const normalizedFatura2 = FaturaData2.map(item => ({
+  urun: item["Ürün/hizmet"] || '',
+  marka: 'Genel',
+  birimFiyat: item["Birim fiyatı"] || 0,
+  miktar: item.Miktar || 0,
+  olcu: 'Adet',
+  aciklama: item["Ürün/hizmet açıklaması"] || '',
+  kdvOrani: item["KDV oranı"] || 20,
+  kaynak: 'Fatura2'
+}));
+
+// Tüm fatura verilerini birleştir
+const CombinedFaturaData = [...normalizedFatura1, ...normalizedFatura2];
+
+// EMO 2026 Bölgesel Azaltma Katsayıları Listesi (Sabit Veri)
+const REGION_LIST = [
+  { name: "Adana (Merkez)", coeff: 1.00 },
+  { name: "Adana (Çevre İlçeler)", coeff: 0.75 },
+  { name: "Adıyaman", coeff: 0.75 },
+  { name: "Afyon", coeff: 0.60 },
+  { name: "Ağrı", coeff: 0.75 },
+  { name: "Aksaray", coeff: 0.60 },
+  { name: "Amasya", coeff: 0.75 },
+  { name: "Ankara (Büyükşehir)", coeff: 1.00 },
+  { name: "Antalya (Merkez)", coeff: 1.00 },
+  { name: "Alanya", coeff: 1.00 },
+  { name: "Artvin", coeff: 0.75 },
+  { name: "Aydın (Merkez)", coeff: 1.00 },
+  { name: "Aydın (Diğer İlçeler)", coeff: 0.75 },
+  { name: "Balıkesir", coeff: 0.75 },
+  { name: "Bartın", coeff: 0.75 },
+  { name: "Batman", coeff: 0.75 },
+  { name: "Bayburt", coeff: 0.75 },
+  { name: "Bilecik", coeff: 0.75 },
+  { name: "Bingöl", coeff: 0.75 },
+  { name: "Bitlis", coeff: 0.75 },
+  { name: "Bolu", coeff: 0.75 },
+  { name: "Burdur", coeff: 0.75 },
+  { name: "Bursa (Merkez)", coeff: 1.00 },
+  { name: "Çanakkale", coeff: 0.75 },
+  { name: "Çankırı", coeff: 0.60 },
+  { name: "Çorum", coeff: 0.75 },
+  { name: "Denizli (Merkez)", coeff: 1.00 },
+  { name: "Diyarbakır (Merkez)", coeff: 1.00 },
+  { name: "Düzce", coeff: 0.75 },
+  { name: "Elazığ", coeff: 0.75 },
+  { name: "Erzincan", coeff: 0.60 },
+  { name: "Erzurum (Büyükşehir)", coeff: 0.75 },
+  { name: "Eskişehir (Merkez)", coeff: 1.00 },
+  { name: "Gaziantep (Merkez)", coeff: 1.00 },
+  { name: "Giresun", coeff: 0.75 },
+  { name: "Gümüşhane", coeff: 0.75 },
+  { name: "Hakkari", coeff: 0.75 },
+  { name: "Hatay", coeff: 1.00 },
+  { name: "Iğdır", coeff: 0.75 },
+  { name: "Isparta", coeff: 1.00 },
+  { name: "İstanbul", coeff: 1.00 },
+  { name: "İzmir (Merkez İlçeler)", coeff: 1.00 },
+  { name: "İzmir (Aliağa/Kemalpaşa/Ödemiş)", coeff: 1.00 },
+  { name: "İzmir (Diğer İlçeler)", coeff: 0.75 },
+  { name: "K.Maraş", coeff: 0.75 },
+  { name: "Karabük", coeff: 0.75 },
+  { name: "Karaman", coeff: 0.75 },
+  { name: "Kars", coeff: 0.75 },
+  { name: "Kastamonu", coeff: 0.60 },
+  { name: "Kayseri (Büyükşehir)", coeff: 0.75 },
+  { name: "Kırıkkale", coeff: 0.60 },
+  { name: "Kırşehir", coeff: 0.60 },
+  { name: "Kilis", coeff: 0.75 },
+  { name: "Kocaeli (Merkez)", coeff: 1.00 },
+  { name: "Konya (Büyükşehir)", coeff: 0.75 },
+  { name: "Kütahya", coeff: 0.75 },
+  { name: "Malatya", coeff: 0.75 },
+  { name: "Manisa (Merkez/Akhisar)", coeff: 1.00 },
+  { name: "Manisa (Diğer İlçeler)", coeff: 0.75 },
+  { name: "Mardin", coeff: 0.75 },
+  { name: "Mersin (Merkez)", coeff: 1.00 },
+  { name: "Muğla", coeff: 1.00 },
+  { name: "Muş", coeff: 0.75 },
+  { name: "Nevşehir", coeff: 0.60 },
+  { name: "Niğde", coeff: 0.75 },
+  { name: "Ordu", coeff: 0.75 },
+  { name: "Osmaniye", coeff: 0.75 },
+  { name: "Rize", coeff: 0.75 },
+  { name: "Sakarya", coeff: 0.75 },
+  { name: "Samsun (Merkez)", coeff: 1.00 },
+  { name: "Siirt", coeff: 0.75 },
+  { name: "Sinop", coeff: 0.75 },
+  { name: "Sivas", coeff: 0.60 },
+  { name: "Şanlıurfa", coeff: 0.75 },
+  { name: "Şırnak", coeff: 0.75 },
+  { name: "Tekirdağ (Trakya)", coeff: 0.75 },
+  { name: "Tokat", coeff: 0.60 },
+  { name: "Trabzon (Merkez)", coeff: 1.00 },
+  { name: "Trabzon (İlçeler)", coeff: 0.75 },
+  { name: "Tunceli", coeff: 0.75 },
+  { name: "Uşak (Merkez)", coeff: 1.00 },
+  { name: "Van", coeff: 0.75 },
+  { name: "Yalova", coeff: 0.75 },
+  { name: "Yozgat", coeff: 0.60 },
+  { name: "Zonguldak", coeff: 0.75 },
+  { name: "Diğer (Varsayılan)", coeff: 1.00 }
+];
+
+// EMO 2026 Periyodik Kontrol Fiyat Sabitleri (Kısım V - Test ve Ölçüm Hizmetleri)
+const PERIODIC_PRICES = {
+  // YG/TM Gözle Kontrol (Kısım V, Sıra 16) - Bina Tipi 2 Hücreli Baz Alındı
+  yg_base_limit: 400, // kVA
+  yg_base_price: 53997.00,
+  yg_tier1_limit: 5000, // kVA
+  yg_tier1_increment: 16.37, // 401-5000 arası artış
+  yg_tier2_increment: 7.27,  // 5000 üzeri artış
+
+  // AG İç Tesisat (Kısım V, Sıra 1.5 - 5. Sınıf Yapılar)
+  ag_area_limit: 500, // m2
+  ag_base_price: 42748.00,
+  ag_increment: 7.89, // m2 başına artış
+
+  // Topraklama (Kısım V, Sıra 2.2 - AG Tesisleri)
+  topraklama_base_limit: 3, // nokta
+  topraklama_base_price: 7041.00,
+  topraklama_increment: 645.00, // nokta başına (50'ye kadar)
+
+  // Yıldırımdan Korunma (Kısım V, Sıra 11)
+  paratoner_base_limit: 1, // tesisat
+  paratoner_base_price: 10832.00,
+  paratoner_increment: 5282.00,
+
+  // RCD Testleri (Kısım V, Sıra 9)
+  rcd_base_limit: 3, // adet
+  rcd_base_price: 6960.00,
+  rcd_increment: 410.00, 
+
+  // Keşif Bedeli
+  kesif_bedeli: 6500.00
+};
+
+const App = () => {
+  // --- State Definitions ---
+  const [activeTab, setActiveTab] = useState(() => {
+    // Sayfa yenilendiğinde son aktif sekmeyi geri yükle
+    return localStorage.getItem('activeTab') || 'dashboard';
+  }); // 'manual', 'periodic', 'kesif', 'ges', 'saved', 'proposal', 'dashboard', 'bordro', 'gorev', 'osos', 'akaryakıt', 'is-takip'
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // ActiveTab değiştiğinde localStorage'a kaydet
+  React.useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
+  
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  // AI States
+  const [aiOutput, setAiOutput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [aiActiveFeature, setAiActiveFeature] = useState(null); // 'email' or 'tips'
+  const [isAiWizardOpen, setIsAiWizardOpen] = useState(false);
+  const [aiWizardPrompt, setAiWizardPrompt] = useState("");
+  const [isEmailGeneratorOpen, setIsEmailGeneratorOpen] = useState(false);
+  const [generatedEmail, setGeneratedEmail] = useState("");
+
+  const [logo, setLogo] = useState(null); // Logo state
+  
+  // Teklif Sayacı ve Sabit Sicil No
+  const [proposalCount, setProposalCount] = useState(1);
+  const ODA_SICIL_NO = "92558";
+  
+  // Para Birimi Seçeneği
+  const [currency, setCurrency] = useState('TRY'); // 'TRY', 'USD', 'EUR'
+  const [previousCurrency, setPreviousCurrency] = useState('TRY');
+  const [exchangeRates, setExchangeRates] = useState({
+    USD: 40.00, // TL/USD
+    EUR: 49.00  // TL/EUR
+  });
+
+  // Gemini API key - Environment variable'dan al (Production için Netlify'da ayarlanmalı)
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  
+  // Editor Mode States
+  const [editorMode, setEditorMode] = useState(false);
+  const [editableContent, setEditableContent] = useState('');
+  const [gesEditorMode, setGesEditorMode] = useState(false);
+  const [gesEditableContent, setGesEditableContent] = useState('');
+  const [emailConfig, setEmailConfig] = useState({
+    serviceId: '',
+    templateId: '',
+    userId: '',
+    recipientEmail: ''
+  });
+  
+  const proposalRef = useRef(null); // PDF/Word export için referans
+
+  // Manuel Giriş Form State
+  const [manualForm, setManualForm] = useState({
+    name: '',
+    sector: '',
+    contactName: '',
+    powerStr: '',
+    type: 'bina', // 'bina' or 'direk'
+    region: 'İzmir (Aliağa/Kemalpaşa/Ödemiş)', // Varsayılan görüntülenen isim
+    regionCoeff: 1.00, // Varsayılan katsayı
+    customDiscount: 70 // Kullanıcıya özel iskonto
+  });
+
+  // Default Parameters (EMO 2026)
+  const [params, setParams] = useState({
+    baseFee: 8802.00,        // 400 kVA (2 hücre) Sabit
+    rate1: 5.34,             // 401-5000 kVA birim fiyat
+    rate2: 4.10,             // >5000 kVA birim fiyat
+    
+    // Direk Tipi / Küçük Güçler (EMO 2026 Kısım III - Madde 3.1)
+    poleFee1: 3887.00,       // 0-50 kVA
+    poleFee2: 4921.00,       // 51-160 kVA
+    poleFee3: 6770.00,       // 161-400 kVA
+
+    discountRate: 70,        // % (Varsayılan)
+    regionCoeff: 1.00,       // Bölge Katsayısı (BK) (Varsayılan)
+    year: 2026
+  });
+
+  // Periyodik Kontrol States
+  const [periodicCustomer, setPeriodicCustomer] = useState({
+    name: '',
+    city: '',
+    contactName: '',
+    date: new Date().toLocaleDateString('tr-TR')
+  });
+
+  const [periodicInputs, setPeriodicInputs] = useState({
+    trafoGucu: 0,
+    yapiAlani: 0,
+    topraklamaAdet: 0,
+    paratonerAdet: 0,
+    rcdAdet: 0,
+    iskonto: 70
+  });
+
+  const [periodicResults, setPeriodicResults] = useState({
+    yg: { total: 0, desc: "" },
+    ag: { total: 0, desc: "" },
+    topraklama: { total: 0, desc: "" },
+    paratoner: { total: 0, desc: "" },
+    rcd: { total: 0, desc: "" },
+    subTotal: 0,
+    kesif: PERIODIC_PRICES.kesif_bedeli,
+    grandTotal: 0,
+    discountAmount: 0,
+    finalPrice: 0
+  });
+
+  // Periyodik Kontrol Edit Mode
+  const [periodicEditorMode, setPeriodicEditorMode] = useState(false);
+  const [periodicEditableContent, setPeriodicEditableContent] = useState('');
+
+  // Keşif Metraj States
+  const [kesifCustomer, setKesifCustomer] = useState({
+    name: '',
+    address: '',
+    contactName: '',
+    phone: '',
+    date: new Date().toLocaleDateString('tr-TR')
+  });
+
+  const [kesifProducts, setKesifProducts] = useState([]);
+  const [kesifSettings, setKesifSettings] = useState({
+    iskonto: 0,
+    kdvOrani: 20
+  });
+
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productQuantity, setProductQuantity] = useState(1);
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  
+  // Ürün Tipi: 'normal', 'kablo' veya 'hizmet'
+  const [productType, setProductType] = useState('normal');
+  const [selectedCategoryForKesif, setSelectedCategoryForKesif] = useState('');
+  const [selectedCableForKesif, setSelectedCableForKesif] = useState(null);
+  const [kesifFiyatSecimi, setKesifFiyatSecimi] = useState('fiyat1');
+  
+  // Hizmet/İşçilik için state'ler
+  const [hizmetAdi, setHizmetAdi] = useState('');
+  const [hizmetFiyat, setHizmetFiyat] = useState(0);
+  const [hizmetMiktar, setHizmetMiktar] = useState(1);
+  const [hizmetBirim, setHizmetBirim] = useState('Gün');
+  const [hizmetAciklama, setHizmetAciklama] = useState('');
+
+  // Hazır Paket States
+  const [showHazirPaketModal, setShowHazirPaketModal] = useState(false);
+  const [selectedHazirPaket, setSelectedHazirPaket] = useState(null);
+  const [paketKarMarji, setPaketKarMarji] = useState(30); // %30 varsayılan kar marjı
+
+  // Hızlı Teklif Özellikleri States
+  const [favoriteProducts, setFavoriteProducts] = useState(() => {
+    const saved = localStorage.getItem('favoriteProducts');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [recentProducts, setRecentProducts] = useState(() => {
+    const saved = localStorage.getItem('recentProducts');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [quickAddMode, setQuickAddMode] = useState(false);
+  const [quickAddText, setQuickAddText] = useState('');
+  const [profitMargin, setProfitMargin] = useState(30); // Kar marjı %
+  const [showProfitCalculator, setShowProfitCalculator] = useState(false);
+  const [costPrice, setCostPrice] = useState(0);
+  const [savedQuotations, setSavedQuotations] = useState(() => {
+    const saved = localStorage.getItem('savedQuotations');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [showSavedQuotations, setShowSavedQuotations] = useState(false);
+
+  // Merkezi Teklif Kaydetme Sistemi - Tüm Teklif Türleri
+  const [allSavedProposals, setAllSavedProposals] = useState({
+    yg: [],
+    periodic: [],
+    kesif: [],
+    ges: []
+  });
+  const [showAllProposals, setShowAllProposals] = useState(false);
+  const [proposalFilterType, setProposalFilterType] = useState('all'); // 'all', 'yg', 'periodic', 'kesif', 'ges'
+
+  // GES Teklifi States
+  const [gesForm, setGesForm] = useState({
+    customerName: 'MUHAMMET BÜLBÜL',
+    location: 'Kemalpaşa / İZMİR',
+    usdRate: 34.50,
+    offerDate: new Date().toISOString().split('T')[0],
+    autoPower: 25, // kW
+    laborRate: 10,
+    transportRate: 1,
+    overheadRate: 1,
+    marginRate: 20,
+    vatRate: 20
+  });
+
+  const [gesItems, setGesItems] = useState([]);
+
+  const [gesDB] = useState({
+    // Eski veriler (yedek)
+    panelPrice: 127.44,
+    inverter: 2997,
+    battery: 952.19,
+    cable: 1.0,
+    connector: 0.5,
+    panelMount: 25,
+    transport: 250,
+    
+    // Yeni Veritabanı - Kategorize Edilmiş Fiyatlar (%35 iskontolu)
+    batteries: {
+      'orbit_51v_100ah_hv': { name: 'ORBİT 51.2 V 100 Ah LiFePO4 Akü-High Voltage-Metal Kasa', price: 920.40, brand: 'ORBİT' },
+      'orbit_51v_50ah_hv': { name: 'ORBİT 51.2 V 050 Ah LiFePO4 Akü-High Voltage-Metal Kasa', price: 651.96, brand: 'ORBİT' },
+      'orbit_51v_100ah_lv': { name: 'ORBİT 51.2 V 100 Ah LiFePO4 Akü-Low Voltage-Ekranlı-Metal Kasa', price: 936.00, brand: 'ORBİT' },
+      'orbit_51v_280ah_lv': { name: 'ORBİT 51.2 V 280 Ah LiFePO4 Akü-Low Voltage-Metal Kasa', price: 2373.19, brand: 'ORBİT' },
+      'orbit_48v_100ah_wall': { name: 'ORBİT 48 V 100 Ah LiFePO4 Akü-Ekranlı Duvar Tipi', price: 950.72, brand: 'ORBİT' },
+      'orbit_48v_100ah_metal': { name: 'ORBİT 48 V 100 Ah LiFePO4 Akü-Ekranlı-Metal Kasa', price: 901.68, brand: 'ORBİT' },
+      'orbit_24v_100ah': { name: 'ORBİT 24 V 100 Ah LiFePO4 Akü-ABS Kasa', price: 479.11, brand: 'ORBİT' },
+      'orbit_24v_210ah': { name: 'ORBİT 24 V 210 Ah LiFePO4 Akü-ABS Kasa', price: 937.47, brand: 'ORBİT' },
+      'orbit_12v_100ah': { name: 'ORBİT 12 V 100 Ah LiFePO4 Akü-ABS Kasa', price: 275.34, brand: 'ORBİT' },
+      'orbit_12v_200ah': { name: 'ORBİT 12 V 200 Ah LiFePO4 Akü-ABS Kasa', price: 479.01, brand: 'ORBİT' },
+      'orbit_12v_420ah': { name: 'ORBİT 12 V 420 Ah LiFePO4 Akü-ABS Kasa', price: 937.47, brand: 'ORBİT' }
+    },
+    
+    bms: {
+      'pace_100a': { name: 'BMS-PACE HV -BCU 100A', price: 1068.60, brand: 'PACE' },
+      'pace_200a': { name: 'BMS-PACE HV-BCU 200A', price: 1514.76, brand: 'PACE' }
+    },
+    
+    panels: {
+      'set_600w': { name: 'PV - GÜNEŞ PANELİ- SET SOLAR 600 WP', price: 170.28, brand: 'SET SOLAR' },
+      'set_460w': { name: 'PV - GÜNEŞ PANELİ- SET SOLAR 460 WP', price: 127.51, brand: 'SET SOLAR' }
+    },
+    
+    inverters: {
+      // Hibrit İnverterler
+      'deye_5kw_mono': { name: 'DEYE 05 KW MONOFAZE HİBRİT İNVERTER', price: 1296.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_8kw_mono': { name: 'DEYE 08 KW MONOFAZE HİBRİT İNVERTER', price: 2052.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_12kw_tri': { name: 'DEYE 12 KW TRİFAZE HİBRİT İNVERTER', price: 2808.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_20kw_hv': { name: 'DEYE 20 KW HIGH VOLTAGE (HV) TRİFAZE HİBRİT İNVERTER', price: 2976.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_20kw_lv': { name: 'DEYE 20 KW LOW VOLTAGE (LV) TRİFAZE HİBRİT İNVERTER', price: 4170.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_25kw_hv': { name: 'DEYE 25 KW HIGH VOLTAGE (HV) TRİFAZE HİBRİT İNVERTER', price: 3552.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_50kw_hv': { name: 'DEYE 50 KW HIGH VOLTAGE TRİFAZE HİBRİT İNVERTER', price: 7080.00, brand: 'DEYE', type: 'hibrit' },
+      'deye_80kw': { name: 'Deye 80kW Hibrit İnverter', price: 10043.28, brand: 'DEYE', type: 'hibrit' },
+      'srp_6kw_mono': { name: 'SRP 06 KW MONOFAZE HİBRİT İNVERTER-LV', price: 1423.50, brand: 'SRP', type: 'hibrit' },
+      'srp_15kw_tri': { name: 'SRP 15 KW TRİFAZE HİBRİT İNVERTER-LV', price: 3590.34, brand: 'SRP', type: 'hibrit' },
+      'srp_30kw_tri': { name: 'SRP 30 KW TRİFAZE HİBRİT İNVERTER-HV', price: 4952.22, brand: 'SRP', type: 'hibrit' },
+      
+      // Offgrid İnverterler
+      'orbit_6.2kw_parallel': { name: 'ORBİT 6.2 KW TAM SİNÜS OFFGRİD İNVERTER-12 PCS PARALLEL', price: 407.99, brand: 'ORBİT', type: 'offgrid' },
+      'orbit_6.2kw_single': { name: 'ORBİT 6.2 KW TAM SİNÜS OFFGRİD İNVERTER-NON PARALLEL', price: 364.84, brand: 'ORBİT', type: 'offgrid' },
+      'srp_5kw_mono': { name: 'SRP 05 KW MONOFAZE OFFGRİD İNVERTER-LV', price: 420.95, brand: 'SRP', type: 'offgrid' },
+      
+      // Ongrid İnverterler
+      'huawei_50ktl': { name: 'HUAWEİ 50 KTL İNVERTER', price: 3946.80, brand: 'HUAWEI', type: 'ongrid' }
+    },
+    
+    cabinets: {
+      'cabinet_5': { name: 'KABİNET-05 GÖZLÜ', price: 612.60, brand: 'ORBİT' },
+      'cabinet_8': { name: 'KABİNET-08 GÖZLÜ', price: 634.67, brand: 'ORBİT' },
+      'cabinet_12': { name: 'KABİNET-12 GÖZLÜ', price: 819.70, brand: 'ORBİT' },
+      'cabinet_16': { name: 'KABİNET-16 GÖZLÜ', price: 1100.10, brand: 'ORBİT' }
+    },
+    
+    cables: {
+      'dc_cable': { name: 'KABLO-DC (Metre)', price: 0.78, brand: 'Genel' },
+      'mc4_connector': { name: 'KONNEKTÖR-MC4', price: 1.63, brand: 'SCTUBLE' }
+    },
+    
+    accessories: {
+      'pole_positive': { name: 'KUTUP BAŞI KONNEKTÖRÜ-POZİTİF', price: 3.51, brand: 'ORBİT' },
+      'pole_negative': { name: 'KUTUP BAŞI KONNEKTÖRÜ-NEGATİF', price: 3.51, brand: 'ORBİT' },
+      'charger_12v': { name: '12V-12A BATTERY CHARGER', price: 31.98, brand: 'ORBİT' },
+      'charger_24v': { name: '24V-100A BATTERY CHARGER', price: 520.03, brand: 'Genel' }
+    },
+    
+    evChargers: {
+      'ev_22kw_single': { name: 'ELEKTRİKLİ ARAÇ ŞARJ İSTASYONU- 22 kW AC (BİREYSEL KULLANIM İÇİN)', price: 616.44, brand: 'BESTCHARGE' },
+      'ev_22kw_shared': { name: 'ELEKTRİKLİ ARAÇ ŞARJ İSTASYONU- 22 kW AC (OCCP-PAYLAŞIMLI)', price: 732.60, brand: 'BESTCHARGE' }
+    }
+  });
+
+  // Teklifleri Supabase'den yükle
+  React.useEffect(() => {
+    loadAllProposals();
+  }, []);
+
+  // GES başlangıç paketi yükle
+  React.useEffect(() => {
+    if (gesItems.length === 0) {
+      loadCommercialGESPackage();
+    }
+  }, []);
+
+  const loadAllProposals = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('proposals')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Tip'e göre grupla
+      const grouped = {
+        yg: data?.filter(p => p.type === 'yg') || [],
+        periodic: data?.filter(p => p.type === 'periodic') || [],
+        kesif: data?.filter(p => p.type === 'kesif') || [],
+        ges: data?.filter(p => p.type === 'ges') || []
+      };
+      
+      setAllSavedProposals(grouped);
+    } catch (error) {
+      console.error('Teklif yükleme hatası:', error);
+    }
+  };
+
+  // Gelişmiş Ürün Filtreleme States
+  const [markaFilter, setMarkaFilter] = useState('tumu');
+  const [kategoriFilter, setKategoriFilter] = useState('tumu');
+  const [kaynakFilter, setKaynakFilter] = useState('tumu'); // Yeni: Veri kaynağı filtresi
+  const [fiyatAraligi, setFiyatAraligi] = useState({ min: 0, max: 100000 });
+  const [siralama, setSiralama] = useState('alfabetik'); // 'alfabetik', 'fiyat-artan', 'fiyat-azalan', 'populer'
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  // Ürün İstatistikleri ve Analizleri
+  const productStats = useMemo(() => {
+    // Marka sayıları
+    const markaCounts = {};
+    CombinedFaturaData.forEach(p => {
+      const marka = p.marka || 'Bilinmeyen';
+      markaCounts[marka] = (markaCounts[marka] || 0) + 1;
+    });
+
+    // En popüler ürünler (keşifte en çok kullanılanlar)
+    const urunKullanimSayilari = {};
+    kesifProducts.forEach(kp => {
+      urunKullanimSayilari[kp.urun] = (urunKullanimSayilari[kp.urun] || 0) + 1;
+    });
+
+    // Kategorilere göre sınıflandırma
+    const kategoriler = {
+      'Kablolar': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('kablo') || p.urun?.toLowerCase().includes('nvy') || p.urun?.toLowerCase().includes('nyy') || p.urun?.toLowerCase().includes('ttr') || p.urun?.toLowerCase().includes('kordon')),
+      'Otomatlar': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('otomat') || p.urun?.toLowerCase().includes('sigorta')),
+      'Prizler': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('priz')),
+      'Anahtarlar': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('anahtar') || p.urun?.toLowerCase().includes('komütatör')),
+      'Aydınlatma': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('armatür') || p.urun?.toLowerCase().includes('led') || p.urun?.toLowerCase().includes('ampul') || p.urun?.toLowerCase().includes('aplik') || p.urun?.toLowerCase().includes('projektör')),
+      'Pano Malzemeleri': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('pano') || p.urun?.toLowerCase().includes('kutu') || p.urun?.toLowerCase().includes('tava')),
+      'Kablo Kanalı': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('kanal') || p.urun?.toLowerCase().includes('oluk')),
+      'Tesisat Malzemeleri': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('buat') || p.urun?.toLowerCase().includes('boru') || p.urun?.toLowerCase().includes('klips')),
+      'Kompanzasyon': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('kompanzasyon') || p.urun?.toLowerCase().includes('kondansatör') || p.urun?.toLowerCase().includes('reaktif') || p.urun?.toLowerCase().includes('kontaktör')),
+      'Hizmetler': CombinedFaturaData.filter(p => p.urun?.toLowerCase().includes('işçilik') || p.urun?.toLowerCase().includes('hizmet') || p.urun?.toLowerCase().includes('montaj'))
+    };
+
+    // Fiyat aralıkları
+    const fiyatAraliklari = {
+      '0-50': CombinedFaturaData.filter(p => p.birimFiyat <= 50),
+      '51-100': CombinedFaturaData.filter(p => p.birimFiyat > 50 && p.birimFiyat <= 100),
+      '101-500': CombinedFaturaData.filter(p => p.birimFiyat > 100 && p.birimFiyat <= 500),
+      '500-5000': CombinedFaturaData.filter(p => p.birimFiyat > 500 && p.birimFiyat <= 5000),
+      '5000+': CombinedFaturaData.filter(p => p.birimFiyat > 5000)
+    };
+
+    // Ortalama fiyat hesaplama - sadece geçerli fiyatları kullan
+    const validPrices = CombinedFaturaData.filter(p => p.birimFiyat && p.birimFiyat > 0);
+    const avgPrice = validPrices.length > 0 
+      ? validPrices.reduce((sum, p) => sum + p.birimFiyat, 0) / validPrices.length 
+      : 0;
+
+    return {
+      toplamUrun: CombinedFaturaData.length,
+      markalar: Object.keys(markaCounts).sort(),
+      markaCounts,
+      enPopulerMarkalar: Object.entries(markaCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5),
+      kategoriler,
+      kategoriSayilari: Object.entries(kategoriler).map(([k, v]) => ({ ad: k, adet: v.length })),
+      fiyatAraliklari,
+      ortalamaFiyat: avgPrice,
+      enPahali: [...CombinedFaturaData].sort((a, b) => (b.birimFiyat || 0) - (a.birimFiyat || 0)).slice(0, 10),
+      enUcuz: [...CombinedFaturaData].filter(p => p.birimFiyat > 0).sort((a, b) => a.birimFiyat - b.birimFiyat).slice(0, 10),
+      enCokKullanilanlar: Object.entries(urunKullanimSayilari)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+    };
+  }, [kesifProducts]);
+
+  // Gelişmiş Ürün Filtreleme
+  const filteredProducts = useMemo(() => {
+    if (!productSearch && markaFilter === 'tumu' && kategoriFilter === 'tumu' && kaynakFilter === 'tumu') return [];
+    
+    let filtered = CombinedFaturaData;
+
+    // Arama
+    if (productSearch) {
+      const searchLower = productSearch.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.urun?.toLowerCase().includes(searchLower) || 
+        p.marka?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Marka filtresi
+    if (markaFilter !== 'tumu') {
+      filtered = filtered.filter(p => p.marka === markaFilter);
+    }
+
+    // Kaynak filtresi (Fatura1 veya Fatura2)
+    if (kaynakFilter !== 'tumu') {
+      filtered = filtered.filter(p => p.kaynak === kaynakFilter);
+    }
+
+    // Kategori filtresi
+    if (kategoriFilter !== 'tumu') {
+      const kategoriUrunler = productStats.kategoriler[kategoriFilter] || [];
+      filtered = filtered.filter(p => kategoriUrunler.some(ku => ku.urun === p.urun));
+    }
+
+    // Fiyat aralığı filtresi
+    filtered = filtered.filter(p => {
+      const fiyat = p.birimFiyat || 0;
+      return fiyat >= fiyatAraligi.min && fiyat <= fiyatAraligi.max;
+    });
+
+    // Sıralama
+    switch(siralama) {
+      case 'fiyat-artan':
+        filtered.sort((a, b) => (a.birimFiyat || 0) - (b.birimFiyat || 0));
+        break;
+      case 'fiyat-azalan':
+        filtered.sort((a, b) => (b.birimFiyat || 0) - (a.birimFiyat || 0));
+        break;
+      case 'populer':
+        // En çok kullanılan ürünleri öne çıkar
+        const kullanimlar = {};
+        kesifProducts.forEach(kp => {
+          kullanimlar[kp.urun] = (kullanimlar[kp.urun] || 0) + 1;
+        });
+        filtered.sort((a, b) => (kullanimlar[b.urun] || 0) - (kullanimlar[a.urun] || 0));
+        break;
+      default: // alfabetik
+        filtered.sort((a, b) => (a.urun || '').localeCompare(b.urun || '', 'tr'));
+    }
+
+    return filtered.slice(0, 50); // İlk 50 sonuç
+  }, [productSearch, markaFilter, kategoriFilter, kaynakFilter, fiyatAraligi, siralama, productStats, kesifProducts]);
+
+  // Keşif Metraj Editor Mode
+  const [kesifEditorMode, setKesifEditorMode] = useState(false);
+  const [kesifEditableContent, setKesifEditableContent] = useState('');
+
+  // --- Helpers ---
+
+  // Helper to parse power string "2000+2000+1600" -> 5600
+  const parsePower = (str) => {
+    if (!str) return 0;
+    return str.toString().split('+').reduce((acc, curr) => acc + parseInt(curr.trim() || 0), 0);
+  };
+
+  // Merkezi Teklif Kaydetme Fonksiyonları
+  const saveProposal = async (type, data, name) => {
+    try {
+      const newProposal = {
+        type: type, // 'yg', 'periodic', 'kesif'
+        name: name || `${type.toUpperCase()} Teklif ${Date.now()}`,
+        data: data
+      };
+
+      const { data: saved, error } = await supabase
+        .from('proposals')
+        .insert([newProposal])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // State'i güncelle
+      const updated = { ...allSavedProposals };
+      updated[type] = [...updated[type], saved];
+      setAllSavedProposals(updated);
+      
+      alert('✅ Teklif başarıyla kaydedildi!');
+      return saved;
+    } catch (error) {
+      console.error('Teklif kaydetme hatası:', error);
+      alert('❌ Teklif kaydedilemedi!');
+      return null;
+    }
+  };
+
+  const loadProposal = (proposal) => {
+    switch(proposal.type) {
+      case 'yg':
+        setManualForm(proposal.data.form);
+        setParams(proposal.data.params);
+        const calculated = calculateCompanyFees(proposal.data.form);
+        generateProposal(calculated);
+        setActiveTab('manual');
+        break;
+      case 'periodic':
+        setPeriodicCustomer(proposal.data.customer);
+        setPeriodicInputs(proposal.data.inputs);
+        calculatePeriodicPrices();
+        setActiveTab('periodic');
+        break;
+      case 'kesif':
+        setKesifCustomer(proposal.data.customer);
+        setKesifProducts(proposal.data.products);
+        setKesifSettings(proposal.data.settings);
+        setActiveTab('kesif');
+        break;
+      case 'ges':
+        if (proposal.data.form) {
+          setGesForm(proposal.data.form);
+        }
+        if (proposal.data.items && Array.isArray(proposal.data.items)) {
+          setGesItems(proposal.data.items);
+        }
+        setActiveTab('ges');
+        break;
+    }
+    setShowAllProposals(false);
+    alert(`✅ "${proposal.name}" teklifi yüklendi!`);
+  };
+
+  const deleteProposal = async (type, id) => {
+    if (!confirm('Bu teklifi silmek istediğinize emin misiniz?')) return;
+    
+    try {
+      // Supabase'den sil
+      const { error } = await supabase
+        .from('proposals')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      // Local state'i güncelle
+      const updated = { ...allSavedProposals };
+      updated[type] = updated[type].filter(p => p.id !== id);
+      setAllSavedProposals(updated);
+      
+      alert('✅ Teklif başarıyla silindi!');
+    } catch (error) {
+      console.error('Teklif silme hatası:', error);
+      alert('❌ Teklif silinemedi!');
+    }
+  };
+
+  // YG Teklifi Kaydetme
+  const saveYGProposal = () => {
+    if (!manualForm.name) {
+      alert('Lütfen firma bilgilerini doldurun!');
+      return;
+    }
+    const name = prompt('Teklif adı girin:', `${manualForm.name} - YG Teklifi`);
+    if (!name) return;
+
+    const data = {
+      form: manualForm,
+      params: params,
+      calculated: calculateCompanyFees({
+        ...manualForm,
+        id: 'MANUEL'
+      })
+    };
+    saveProposal('yg', data, name);
+    alert('✅ YG Teklifi kaydedildi!');
+  };
+
+  // Periyodik Kontrol Teklifi Kaydetme
+  const savePeriodicProposal = () => {
+    if (!periodicCustomer.name) {
+      alert('Lütfen müşteri bilgilerini doldurun!');
+      return;
+    }
+    const name = prompt('Teklif adı girin:', `${periodicCustomer.name} - Periyodik Kontrol`);
+    if (!name) return;
+
+    const data = {
+      customer: periodicCustomer,
+      inputs: periodicInputs,
+      results: periodicResults
+    };
+    saveProposal('periodic', data, name);
+    alert('✅ Periyodik Kontrol Teklifi kaydedildi!');
+  };
+
+  // Keşif Metraj Teklifi Kaydetme (güncelleme)
+  const saveKesifProposal = () => {
+    if (kesifProducts.length === 0) {
+      alert('Kaydedilecek ürün yok!');
+      return;
+    }
+
+    const name = prompt('Teklif adı girin:', `${kesifCustomer.name || 'Keşif'} - Malzeme Teklifi`);
+    if (!name) return;
+
+    const data = {
+      customer: kesifCustomer,
+      products: kesifProducts,
+      settings: kesifSettings,
+      totals: calculateKesifTotals()
+    };
+
+    saveProposal('kesif', data, name);
+    alert('✅ Keşif Metraj Teklifi kaydedildi!');
+  };
+
+  // GES Teklifi Kaydetme
+  const saveGESProposal = () => {
+    if (gesItems.length === 0) {
+      alert('Kaydedilecek malzeme yok!');
+      return;
+    }
+
+    const name = prompt('Teklif adı girin:', `${gesForm.customerName || 'GES'} - Güneş Enerjisi Teklifi`);
+    if (!name) return;
+
+    const totals = calculateGESTotals();
+    const data = {
+      form: gesForm,
+      items: gesItems,
+      totals: totals
+    };
+
+    saveProposal('ges', data, name);
+    alert('✅ GES Teklifi kaydedildi!');
+  };
+
+  // GES Fonksiyonları
+  const loadDefaultGESPackage = () => {
+    const kw = parseFloat(gesForm.autoPower) || 12;
+    const panelCount = Math.ceil((kw * 1000) / 600); // 600W panel kullanımı
+    
+    const items = [
+      { brand: gesDB.panels.set_600w.brand, desc: gesDB.panels.set_600w.name, qty: panelCount, price: gesDB.panels.set_600w.price },
+      { brand: gesDB.inverters.deye_12kw_tri.brand, desc: gesDB.inverters.deye_12kw_tri.name, qty: 1, price: gesDB.inverters.deye_12kw_tri.price },
+      { brand: gesDB.batteries.orbit_51v_100ah_hv.brand, desc: gesDB.batteries.orbit_51v_100ah_hv.name, qty: 2, price: gesDB.batteries.orbit_51v_100ah_hv.price },
+      { brand: gesDB.cables.dc_cable.brand, desc: gesDB.cables.dc_cable.name + ' (Kırmızı)', qty: 50, price: gesDB.cables.dc_cable.price },
+      { brand: gesDB.cables.dc_cable.brand, desc: gesDB.cables.dc_cable.name + ' (Siyah)', qty: 50, price: gesDB.cables.dc_cable.price },
+      { brand: gesDB.cables.mc4_connector.brand, desc: gesDB.cables.mc4_connector.name, qty: 10, price: gesDB.cables.mc4_connector.price },
+      { brand: 'ABB', desc: 'Pano & Sigorta Takımı - DC/AC koruma', qty: 1, price: 1250 },
+      { brand: 'DEYE', desc: 'Deye Smart Meter + Wi-Fi', qty: 1, price: 103 },
+      { brand: 'Konstrüksiyon', desc: 'Alüminyum Alt Yapı Seti', qty: panelCount, price: 25 },
+      { brand: 'Lojistik', desc: 'Nakliye Hizmeti', qty: 1, price: 250 }
+    ];
+    
+    setGesItems(items);
+    setGesForm({...gesForm, autoPower: kw});
+  };
+
+  const loadCommercialGESPackage = () => {
+    const items = [
+      { brand: gesDB.panels.set_600w.brand, desc: gesDB.panels.set_600w.name, qty: 42, price: gesDB.panels.set_600w.price },
+      { brand: gesDB.inverters.deye_25kw_hv.brand, desc: gesDB.inverters.deye_25kw_hv.name, qty: 1, price: gesDB.inverters.deye_25kw_hv.price },
+      { brand: gesDB.batteries.orbit_51v_100ah_hv.brand, desc: gesDB.batteries.orbit_51v_100ah_hv.name, qty: 20, price: gesDB.batteries.orbit_51v_100ah_hv.price },
+      { brand: gesDB.bms.pace_100a.brand, desc: gesDB.bms.pace_100a.name, qty: 2, price: gesDB.bms.pace_100a.price },
+      { brand: gesDB.cabinets.cabinet_16.brand, desc: gesDB.cabinets.cabinet_16.name, qty: 1, price: gesDB.cabinets.cabinet_16.price },
+      { brand: gesDB.cables.mc4_connector.brand, desc: gesDB.cables.mc4_connector.name, qty: 30, price: gesDB.cables.mc4_connector.price },
+      { brand: gesDB.cables.dc_cable.brand, desc: gesDB.cables.dc_cable.name, qty: 200, price: gesDB.cables.dc_cable.price },
+      { brand: 'Hizmet', desc: 'Ticari Sistem Montaj ve Mühendislik', qty: 1, price: 2000.00 }
+    ];
+    
+    setGesItems(items);
+    setGesForm({...gesForm, autoPower: 25});
+  };
+
+  const addNewGESRow = () => {
+    setGesItems([...gesItems, { brand: '', desc: '', qty: 1, price: 0 }]);
+  };
+
+  const removeGESRow = (index) => {
+    const updated = gesItems.filter((_, i) => i !== index);
+    setGesItems(updated);
+  };
+
+  const updateGESItem = (index, field, value) => {
+    const updated = [...gesItems];
+    updated[index][field] = value;
+    setGesItems(updated);
+  };
+
+  const calculateGESTotals = () => {
+    const materialTotal = gesItems.reduce((sum, item) => sum + ((item.qty || 0) * (item.price || 0)), 0);
+    
+    const laborRate = parseFloat(gesForm.laborRate) / 100;
+    const transportRate = parseFloat(gesForm.transportRate) / 100;
+    const overheadRate = parseFloat(gesForm.overheadRate) / 100;
+    const marginRate = parseFloat(gesForm.marginRate) / 100;
+    const vatRate = parseFloat(gesForm.vatRate) / 100;
+    const usdToTl = parseFloat(gesForm.usdRate) || 1;
+
+    const laborCost = materialTotal * laborRate;
+    const transportCost = materialTotal * transportRate;
+    const overheadCost = materialTotal * overheadRate;
+    
+    const directCost = materialTotal + laborCost + transportCost + overheadCost;
+    const marginAmount = directCost * marginRate;
+    const grandTotalExVat = directCost + marginAmount;
+    const vatAmount = grandTotalExVat * vatRate;
+    const finalTotal = grandTotalExVat + vatAmount;
+
+    return {
+      materialTotal,
+      laborCost,
+      transportCost,
+      overheadCost,
+      directCost,
+      marginAmount,
+      grandTotalExVat,
+      vatAmount,
+      finalTotal,
+      tlTotal: finalTotal * usdToTl
+    };
+  };
+
+  const formatMoney = (amount, currency = '$') => {
+    return currency + amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  // GES PDF Export
+  const handleGESPDFExport = async () => {
+    if (!gesForm.customerName || gesItems.length === 0) {
+      alert('Lütfen müşteri bilgilerini doldurun ve malzeme ekleyin.');
+      return;
+    }
+    
+    const pages = document.querySelectorAll('.ges-pdf-page');
+    if (!pages || pages.length === 0) {
+      alert('İçerik bulunamadı.');
+      return;
+    }
+    
+    const fileName = `GES_Teklif_${gesForm.customerName.replace(/[^a-z0-9ğüşıöçĞÜŞİÖÇ]/gi, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
+    const targetWidthPx = 793;
+    const SCALE_FACTOR = 2;
+
+    // Loading indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.innerHTML = `
+      <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-center; flex-direction: column;">
+        <div style="background: white; padding: 30px; border-radius: 10px; text-align: center;">
+          <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+          <p style="margin-top: 20px; font-size: 16px; font-weight: bold;">PDF oluşturuluyor...</p>
+          <p style="margin-top: 10px; font-size: 14px; color: #666;">Lütfen bekleyin</p>
+        </div>
+      </div>
+      <style>
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      </style>
+    `;
+    document.body.appendChild(loadingDiv);
+
+    try {
+      // Logo yükle ve base64'e çevir
+      const loadLogo = async () => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve({
+              data: canvas.toDataURL('image/png'),
+              width: img.width,
+              height: img.height
+            });
+          };
+          img.onerror = () => {
+            // Hata durumunda alternatif logo dene
+            const altImg = new Image();
+            altImg.crossOrigin = 'anonymous';
+            altImg.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = altImg.width;
+              canvas.height = altImg.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(altImg, 0, 0);
+              resolve({
+                data: canvas.toDataURL('image/png'),
+                width: altImg.width,
+                height: altImg.height
+              });
+            };
+            altImg.onerror = () => {
+              // Logo yüklenemezse boş logo kullan
+              resolve({
+                data: '',
+                width: 0,
+                height: 0
+              });
+            };
+            altImg.src = '/kobinerji_logo.png';
+          };
+          img.src = faturaLogo;
+        });
+      };
+
+      const logoInfo = await loadLogo();
+      
+      // Logo boyutlarını hesapla
+      const maxLogoWidth = 60;
+      const maxLogoHeight = 24;
+      let logoWidth = 0;
+      let logoHeight = 0;
+      
+      if (logoInfo.width > 0 && logoInfo.height > 0) {
+        const logoAspectRatio = logoInfo.width / logoInfo.height;
+        logoWidth = maxLogoWidth;
+        logoHeight = logoWidth / logoAspectRatio;
+        
+        if (logoHeight > maxLogoHeight) {
+          logoHeight = maxLogoHeight;
+          logoWidth = logoHeight * logoAspectRatio;
+        }
+      }
+
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      });
+
+      // Her sayfayı ayrı ayrı işle
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        
+        // Logoları gizle
+        const logos = page.querySelectorAll('img');
+        logos.forEach(logo => { logo.style.visibility = 'hidden'; });
+        
+        // Geçici stil ayarları
+        const originalWidth = page.style.width;
+        const originalMargin = page.style.margin;
+        const originalBoxShadow = page.style.boxShadow;
+        
+        page.style.width = '210mm';
+        page.style.margin = '0 auto';
+        page.style.boxShadow = 'none';
+        page.classList.add('pdf-exporting');
+
+        // html2canvas ile yakalama
+        const canvas = await html2canvas(page, {
+          scale: SCALE_FACTOR,
+          width: targetWidthPx,
+          windowWidth: targetWidthPx,
+          useCORS: true,
+          allowTaint: false,
+          letterRendering: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const imgWidth = 210;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        // İlk sayfa değilse yeni sayfa ekle
+        if (i > 0) {
+          pdf.addPage();
+        }
+
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+        
+        // Logo varsa ekle
+        if (logoInfo.data && logoWidth > 0 && logoHeight > 0) {
+          pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
+        }
+
+        // Logoları tekrar göster
+        logos.forEach(logo => { logo.style.visibility = 'visible'; });
+
+        // Stil ayarlarını geri al
+        page.style.width = originalWidth;
+        page.style.margin = originalMargin;
+        page.style.boxShadow = originalBoxShadow;
+        page.classList.remove('pdf-exporting');
+      }
+
+      pdf.save(fileName);
+      
+      // Remove loading indicator
+      document.body.removeChild(loadingDiv);
+      
+    } catch (error) {
+      console.error('PDF oluşturma hatası:', error);
+      
+      // Remove loading indicator
+      if (document.body.contains(loadingDiv)) {
+        document.body.removeChild(loadingDiv);
+      }
+      
+      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.\n\nHata detayı: ' + error.message);
+    }
+  };
+
+  // Hızlı Teklif Yardımcı Fonksiyonları
+  const addToRecentProducts = (product) => {
+    const newRecent = [product, ...recentProducts.filter(p => p.urun !== product.urun)].slice(0, 20);
+    setRecentProducts(newRecent);
+    localStorage.setItem('recentProducts', JSON.stringify(newRecent));
+  };
+
+  const toggleFavorite = (product) => {
+    const isFavorite = favoriteProducts.some(p => p.urun === product.urun);
+    let newFavorites;
+    if (isFavorite) {
+      newFavorites = favoriteProducts.filter(p => p.urun !== product.urun);
+    } else {
+      newFavorites = [...favoriteProducts, product];
+    }
+    setFavoriteProducts(newFavorites);
+    localStorage.setItem('favoriteProducts', JSON.stringify(newFavorites));
+  };
+
+  const isFavorite = (product) => {
+    return favoriteProducts.some(p => p.urun === product.urun);
+  };
+
+  const addFavoriteToKesif = (product, quantity = 1) => {
+    const newProduct = {
+      id: Date.now(),
+      sira: kesifProducts.length + 1,
+      type: 'normal',
+      urun: product.urun,
+      marka: product.marka,
+      birimFiyat: product.birimFiyat,
+      miktar: quantity,
+      olcu: product.olcu,
+      toplam: product.birimFiyat * quantity
+    };
+    setKesifProducts([...kesifProducts, newProduct]);
+    addToRecentProducts(product);
+  };
+
+  // Hızlı Giriş Parser - İYİLEŞTİRİLMİŞ: 3 FORMAT DESTEĞİ
+  const parseQuickAddText = (text) => {
+    const lines = text.split('\n').filter(l => l.trim());
+    const products = [];
+    const errors = [];
+    
+    lines.forEach((line, idx) => {
+      line = line.trim();
+      if (!line) return;
+      
+      let parts = [];
+      
+      // Format tespiti: | veya , veya TAB
+      if (line.includes('|')) {
+        parts = line.split('|').map(p => p.trim());
+      } else if (line.includes('\t')) {
+        // Excel'den kopyala-yapıştır (TAB ile ayrılmış)
+        parts = line.split('\t').map(p => p.trim());
+      } else if (line.includes(',')) {
+        parts = line.split(',').map(p => p.trim());
+      } else {
+        errors.push(`Satır ${idx + 1}: Ayırıcı bulunamadı (| veya , veya TAB)`);
+        return;
+      }
+      
+      if (parts.length < 2) {
+        errors.push(`Satır ${idx + 1}: Yetersiz veri (en az Ürün ve Miktar gerekli)`);
+        return;
+      }
+      
+      const urunAdi = parts[0];
+      const miktar = parseFloat(parts[1]) || 1;
+      const fiyat = parts.length >= 3 ? parseFloat(parts[2]) : null;
+      const birim = parts.length >= 4 ? parts[3] : 'Adet';
+      const marka = parts.length >= 5 ? parts[4] : '';
+      
+      if (!urunAdi || urunAdi === '') {
+        errors.push(`Satır ${idx + 1}: Ürün adı boş`);
+        return;
+      }
+      
+      if (miktar <= 0 || isNaN(miktar)) {
+        errors.push(`Satır ${idx + 1}: Geçersiz miktar (${parts[1]})`);
+        return;
+      }
+      
+      // Ürünü katalogda akıllı ara
+      const foundProduct = CombinedFaturaData.find(p => {
+        const urunLower = p.urun?.toLowerCase() || '';
+        const aramaLower = urunAdi.toLowerCase();
+        return urunLower.includes(aramaLower) || aramaLower.includes(urunLower);
+      });
+      
+      let usedPrice = fiyat;
+      let usedMarka = marka;
+      let usedBirim = birim;
+      
+      if (!fiyat || fiyat <= 0 || isNaN(fiyat)) {
+        if (foundProduct) {
+          usedPrice = foundProduct.birimFiyat;
+          usedMarka = foundProduct.marka;
+          usedBirim = foundProduct.olcu;
+        } else {
+          errors.push(`Satır ${idx + 1}: "${urunAdi}" için fiyat bulunamadı`);
+          return;
+        }
+      }
+      
+      // Kar marjı uygula
+      const finalPrice = profitMargin > 0 
+        ? usedPrice * (1 + profitMargin / 100)
+        : usedPrice;
+      
+      products.push({
+        id: Date.now() + products.length * 100,
+        sira: kesifProducts.length + products.length + 1,
+        type: 'normal',
+        urun: foundProduct ? foundProduct.urun : urunAdi,
+        marka: foundProduct ? foundProduct.marka : (usedMarka || 'Manuel Giriş'),
+        maliyetFiyat: usedPrice,
+        birimFiyat: parseFloat(finalPrice.toFixed(2)),
+        miktar: miktar,
+        olcu: usedBirim,
+        toplam: parseFloat((finalPrice * miktar).toFixed(2)),
+        karMarji: profitMargin
+      });
+    });
+    
+    return { products, errors };
+  };
+
+  const handleQuickAdd = () => {
+    if (!quickAddText.trim()) {
+      alert('⚠️ Lütfen ürün bilgilerini girin!');
+      return;
+    }
+    
+    const { products, errors } = parseQuickAddText(quickAddText);
+    
+    if (products.length > 0) {
+      setKesifProducts([...kesifProducts, ...products]);
+      setQuickAddText('');
+      setQuickAddMode(false);
+      
+      let message = `✅ HIZLI GİRİŞ BAŞARILI!\n\n`;
+      message += `📊 ${products.length} ürün eklendi`;
+      if (profitMargin > 0) {
+        message += `\n💰 %${profitMargin} kar marjı uygulandı`;
+      }
+      if (errors.length > 0) {
+        message += `\n\n⚠️ ${errors.length} satırda hata:\n${errors.slice(0, 5).join('\n')}`;
+      }
+      alert(message);
+    } else {
+      alert(`❌ Hiçbir ürün eklenemedi!\n\n${errors.slice(0, 10).join('\n')}\n\nDoğru format:\nÜrün | Miktar | Fiyat\nÜrün, Miktar, Fiyat\nExcel'den kopyala-yapıştır`);
+    }
+  };
+
+  // Kar marjı hesaplayıcı
+  const calculateSellingPrice = (cost, margin) => {
+    return cost * (1 + margin / 100);
+  };
+
+  const addWithProfitMargin = () => {
+    if (costPrice <= 0) return;
+    const sellingPrice = calculateSellingPrice(costPrice, profitMargin);
+    alert(`Maliyet: ${costPrice.toFixed(2)} TL\nKar Marjı: %${profitMargin}\nSatış Fiyatı: ${sellingPrice.toFixed(2)} TL`);
+  };
+
+  // Excel İçe Aktarma - İYİLEŞTİRİLMİŞ VERSİYON
+  const handleExcelImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+        if (jsonData.length === 0) {
+          alert('⚠️ Excel dosyası boş!');
+          return;
+        }
+
+        // AKILLI SÜTUN ALGILAMA
+        const firstRow = jsonData[0];
+        const columns = Object.keys(firstRow);
+        
+        // Sütun isimleri için olası varyasyonlar
+        const urunVariants = ['Ürün', 'urun', 'ÜRÜN', 'Urun Adi', 'Malzeme', 'Product', 'Ürün Adı'];
+        const miktarVariants = ['Miktar', 'miktar', 'MIKTAR', 'Quantity', 'Adet', 'Amount'];
+        const fiyatVariants = ['Fiyat', 'fiyat', 'FİYAT', 'Birim Fiyat', 'BirimFiyat', 'Price', 'Tutar'];
+        const birimVariants = ['Birim', 'birim', 'BİRİM', 'Unit', 'Ölçü', 'olcu'];
+        const markaVariants = ['Marka', 'marka', 'MARKA', 'Brand', 'Üretici'];
+        
+        // Otomatik sütun eşleştirme
+        const findColumn = (variants) => {
+          for (let variant of variants) {
+            if (columns.find(col => col.toLowerCase() === variant.toLowerCase())) {
+              return columns.find(col => col.toLowerCase() === variant.toLowerCase());
+            }
+          }
+          return null;
+        };
+        
+        const urunCol = findColumn(urunVariants);
+        const miktarCol = findColumn(miktarVariants);
+        const fiyatCol = findColumn(fiyatVariants);
+        const birimCol = findColumn(birimVariants);
+        const markaCol = findColumn(markaVariants);
+        
+        if (!urunCol) {
+          alert('❌ Excel\'de "Ürün" sütunu bulunamadı!\n\nGeçerli sütun isimleri: ' + urunVariants.join(', '));
+          return;
+        }
+
+        const importedProducts = [];
+        const errors = [];
+        let successCount = 0;
+        let skippedCount = 0;
+
+        jsonData.forEach((row, idx) => {
+          const urunAdi = row[urunCol];
+          const miktar = parseFloat(row[miktarCol] || 1);
+          const fiyat = parseFloat(row[fiyatCol] || 0);
+          const birim = row[birimCol] || 'Adet';
+          const marka = row[markaCol] || 'Genel';
+
+          // Validasyon
+          if (!urunAdi || urunAdi.trim() === '') {
+            skippedCount++;
+            errors.push(`Satır ${idx + 2}: Ürün adı boş`);
+            return;
+          }
+
+          if (miktar <= 0 || isNaN(miktar)) {
+            skippedCount++;
+            errors.push(`Satır ${idx + 2}: Geçersiz miktar (${miktar})`);
+            return;
+          }
+
+          // Katalogda akıllı arama
+          let foundProduct = null;
+          let usedPrice = fiyat;
+
+          if (fiyat <= 0 || isNaN(fiyat)) {
+            // Fiyat yoksa katalogdan ara
+            foundProduct = CombinedFaturaData.find(p => 
+              p.urun?.toLowerCase().includes(urunAdi.toLowerCase()) ||
+              urunAdi.toLowerCase().includes(p.urun?.toLowerCase())
+            );
+            
+            if (foundProduct) {
+              usedPrice = foundProduct.birimFiyat;
+            } else {
+              skippedCount++;
+              errors.push(`Satır ${idx + 2}: "${urunAdi}" için fiyat bulunamadı`);
+              return;
+            }
+          }
+
+          // Kar marjı uygula
+          const finalPrice = profitMargin > 0 
+            ? usedPrice * (1 + profitMargin / 100)
+            : usedPrice;
+
+          importedProducts.push({
+            id: Date.now() + idx * 100,
+            sira: kesifProducts.length + importedProducts.length + 1,
+            type: 'normal',
+            urun: foundProduct ? foundProduct.urun : urunAdi,
+            marka: foundProduct ? foundProduct.marka : marka,
+            maliyetFiyat: usedPrice,
+            birimFiyat: parseFloat(finalPrice.toFixed(2)),
+            miktar: miktar,
+            olcu: birim || (foundProduct ? foundProduct.olcu : 'Adet'),
+            toplam: parseFloat((finalPrice * miktar).toFixed(2)),
+            karMarji: profitMargin,
+            kaynakDosya: file.name
+          });
+          successCount++;
+        });
+
+        // Sonuç raporu
+        if (importedProducts.length > 0) {
+          setKesifProducts([...kesifProducts, ...importedProducts]);
+          
+          let message = `✅ EXCEL İMPORT BAŞARILI!\n\n`;
+          message += `📊 Toplam Satır: ${jsonData.length}\n`;
+          message += `✅ Başarılı: ${successCount} ürün\n`;
+          if (skippedCount > 0) {
+            message += `⚠️ Atlanan: ${skippedCount} satır\n`;
+          }
+          if (profitMargin > 0) {
+            message += `💰 Kar Marjı: %${profitMargin} uygulandı\n`;
+          }
+          message += `\n📁 Dosya: ${file.name}`;
+          
+          if (errors.length > 0 && errors.length <= 5) {
+            message += `\n\n⚠️ Hatalar:\n${errors.slice(0, 5).join('\n')}`;
+          }
+          
+          alert(message);
+        } else {
+          alert(`❌ Hiçbir ürün eklenemedi!\n\n${errors.slice(0, 5).join('\n')}`);
+        }
+      } catch (error) {
+        console.error('Excel import hatası:', error);
+        alert(`❌ Excel dosyası okunamadı!\n\nHata: ${error.message}\n\nLütfen dosya formatını kontrol edin:\n- İlk satırda başlıklar olmalı\n- "Ürün", "Miktar", "Fiyat" sütunları gerekli`);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    
+    // Input'u temizle (aynı dosya tekrar seçilebilsin)
+    e.target.value = '';
+  };
+
+  // Teklifi Kaydet
+  const saveCurrentQuotation = () => {
+    // Merkezi kaydetme sistemini kullan
+    saveKesifProposal();
+  };
+
+  // Kaydedilmiş Teklifi Yükle
+  const loadSavedQuotation = (quotation) => {
+    setKesifCustomer(quotation.customer);
+    setKesifProducts(quotation.products);
+    setKesifSettings(quotation.settings);
+    setShowSavedQuotations(false);
+    alert(`✅ "${quotation.name}" teklifi yüklendi!`);
+  };
+
+  // Kaydedilmiş Teklifi Sil
+  const deleteSavedQuotation = (id) => {
+    if (!confirm('Bu teklifi silmek istediğinize emin misiniz?')) return;
+    const updated = savedQuotations.filter(q => q.id !== id);
+    setSavedQuotations(updated);
+    localStorage.setItem('savedQuotations', JSON.stringify(updated));
+  };
+
+  // Tüm Fiyatlara Kar Marjı Uygula - İYİLEŞTİRİLMİŞ
+  const applyProfitMarginToAll = () => {
+    if (kesifProducts.length === 0) {
+      alert('⚠️ Listede ürün yok!');
+      return;
+    }
+    
+    const margin = prompt(
+      `💰 KAR MARJI UYGULA\n\nŞu anda ${kesifProducts.length} ürün listenizde.\n\nUygulamak istediğiniz kar marjını % olarak girin:`,
+      profitMargin.toString()
+    );
+    
+    if (margin === null) return; // İptal
+    
+    const marginValue = parseFloat(margin);
+    if (isNaN(marginValue)) {
+      alert('❌ Geçersiz kar marjı değeri!');
+      return;
+    }
+    
+    if (marginValue < 0) {
+      if (!confirm(`⚠️ Negatif kar marjı (%${marginValue}) uygulamak istediğinizden emin misiniz? Bu fiyatları düşürecektir.`)) {
+        return;
+      }
+    }
+    
+    const updated = kesifProducts.map(p => {
+      // Eğer maliyet fiyatı varsa ondan hesapla, yoksa mevcut fiyattan
+      const basePrice = p.maliyetFiyat || p.birimFiyat;
+      const newPrice = basePrice * (1 + marginValue / 100);
+      return { 
+        ...p, 
+        birimFiyat: parseFloat(newPrice.toFixed(2)), 
+        toplam: parseFloat((newPrice * p.miktar).toFixed(2)),
+        karMarji: marginValue,
+        maliyetFiyat: p.maliyetFiyat || basePrice
+      };
+    });
+    
+    setKesifProducts(updated);
+    setProfitMargin(marginValue); // Varsayılan kar marjını güncelle
+    
+    const totalIncrease = updated.reduce((sum, p) => sum + p.toplam, 0) - 
+                          kesifProducts.reduce((sum, p) => sum + p.toplam, 0);
+    
+    alert(
+      `✅ KAR MARJI UYGULANDILAR!\n\n` +
+      `📊 Ürün Sayısı: ${kesifProducts.length}\n` +
+      `💰 Uygulanan Marj: %${marginValue}\n` +
+      `📈 Toplam Artış: ${totalIncrease.toFixed(2)} TL`
+    );
+  };
+
+  // Keşif Metraj Fonksiyonları - İYİLEŞTİRİLMİŞ
+  const addProductToKesif = () => {
+    if (productType === 'normal') {
+      // Normal ürün ekleme
+      if (!selectedProduct || productQuantity <= 0) {
+        alert('⚠️ Lütfen bir ürün seçin ve miktar girin!');
+        return;
+      }
+      
+      // KAR MARJI OTOMATİK UYGULA
+      const maliyetFiyat = selectedProduct.birimFiyat;
+      const satisFiyat = profitMargin > 0 
+        ? maliyetFiyat * (1 + profitMargin / 100)
+        : maliyetFiyat;
+      
+      const newProduct = {
+        id: Date.now(),
+        sira: kesifProducts.length + 1,
+        type: 'normal',
+        urun: selectedProduct.urun,
+        marka: selectedProduct.marka,
+        maliyetFiyat: maliyetFiyat,
+        birimFiyat: parseFloat(satisFiyat.toFixed(2)),
+        miktar: productQuantity,
+        olcu: selectedProduct.olcu,
+        toplam: parseFloat((satisFiyat * productQuantity).toFixed(2)),
+        karMarji: profitMargin
+      };
+
+      setKesifProducts([...kesifProducts, newProduct]);
+      
+      // Son kullanılanlara ekle
+      addToRecentProducts(selectedProduct);
+      
+      setSelectedProduct(null);
+      setProductSearch('');
+      setProductQuantity(1);
+      setShowProductDropdown(false);
+      
+      // Başarı mesajı
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-bounce';
+      toast.textContent = '✅ Ürün eklendi!';
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2000);
+    } else if (productType === 'kablo') {
+      // Kablo ekleme
+      if (!selectedCableForKesif || productQuantity <= 0) return;
+      
+      const fiyat = kesifFiyatSecimi === 'fiyat1' ? selectedCableForKesif.fiyat1 : (selectedCableForKesif.fiyat2 || selectedCableForKesif.fiyat1);
+      const kategori = KabloFiyatData.kategoriler.find(k => k.urunler.some(u => u.kod === selectedCableForKesif.kod));
+      
+      const newProduct = {
+        id: Date.now(),
+        sira: kesifProducts.length + 1,
+        type: 'kablo',
+        urun: selectedCableForKesif.ad,
+        marka: `${kategori?.ad || 'Kablo'} - ${selectedCableForKesif.kesit} mm²`,
+        birimFiyat: fiyat,
+        miktar: productQuantity,
+        olcu: selectedCableForKesif.birim,
+        toplam: fiyat * productQuantity,
+        kategori: kategori?.ad || '',
+        kesit: selectedCableForKesif.kesit
+      };
+
+      setKesifProducts([...kesifProducts, newProduct]);
+      setSelectedCableForKesif(null);
+      setSelectedCategoryForKesif('');
+      setProductQuantity(1);
+    } else if (productType === 'hizmet') {
+      // Hizmet/İşçilik ekleme
+      if (!hizmetAdi || hizmetFiyat <= 0 || hizmetMiktar <= 0) return;
+      
+      const newProduct = {
+        id: Date.now(),
+        sira: kesifProducts.length + 1,
+        type: 'hizmet',
+        urun: hizmetAdi,
+        marka: 'Hizmet/İşçilik',
+        birimFiyat: hizmetFiyat,
+        miktar: hizmetMiktar,
+        olcu: hizmetBirim,
+        toplam: hizmetFiyat * hizmetMiktar,
+        aciklama: hizmetAciklama
+      };
+
+      setKesifProducts([...kesifProducts, newProduct]);
+      setHizmetAdi('');
+      setHizmetFiyat(0);
+      setHizmetMiktar(1);
+      setHizmetBirim('Gün');
+      setHizmetAciklama('');
+    }
+  };
+
+  const removeProductFromKesif = (id) => {
+    const updated = kesifProducts.filter(p => p.id !== id);
+    // Re-number the rows
+    const reNumbered = updated.map((p, idx) => ({ ...p, sira: idx + 1 }));
+    setKesifProducts(reNumbered);
+  };
+
+  const updateProductQuantity = (id, newQuantity) => {
+    const updated = kesifProducts.map(p => 
+      p.id === id ? { ...p, miktar: newQuantity, toplam: p.birimFiyat * newQuantity } : p
+    );
+    setKesifProducts(updated);
+  };
+
+  const updateProductPrice = (id, newPrice) => {
+    const updated = kesifProducts.map(p => 
+      p.id === id ? { ...p, birimFiyat: newPrice, toplam: newPrice * p.miktar } : p
+    );
+    setKesifProducts(updated);
+  };
+
+  const updateProductName = (id, newName) => {
+    const updated = kesifProducts.map(p => 
+      p.id === id ? { ...p, urun: newName } : p
+    );
+    setKesifProducts(updated);
+  };
+
+  const updateProductDetail = (id, newDetail) => {
+    const updated = kesifProducts.map(p => 
+      p.id === id ? { ...p, marka: newDetail } : p
+    );
+    setKesifProducts(updated);
+  };
+
+  // TOPLU DÜZENLEME - İYİLEŞTİRİLMİŞ
+  const applyBulkPriceAdjustment = (percentage) => {
+    if (percentage === 0) {
+      alert('⚠️ Lütfen bir yüzde değeri girin!');
+      return;
+    }
+    
+    if (!confirm(`Tüm ürünlere %${percentage} ${percentage > 0 ? 'zam' : 'indirim'} uygulamak istediğinizden emin misiniz?`)) {
+      return;
+    }
+    
+    const updated = kesifProducts.map(p => {
+      const newPrice = p.birimFiyat * (1 + percentage / 100);
+      return { 
+        ...p, 
+        birimFiyat: parseFloat(newPrice.toFixed(2)), 
+        toplam: parseFloat((newPrice * p.miktar).toFixed(2)),
+        sonGuncelleme: new Date().toLocaleString('tr-TR')
+      };
+    });
+    setKesifProducts(updated);
+    alert(`✅ ${kesifProducts.length} ürüne %${percentage} ayarlama uygulandı!`);
+  };
+  
+  // TOPLU SİLME
+  const removeSelectedProducts = (selectedIds) => {
+    if (selectedIds.length === 0) {
+      alert('⚠️ Lütfen silinecek ürünleri seçin!');
+      return;
+    }
+    
+    if (!confirm(`${selectedIds.length} ürünü silmek istediğinizden emin misiniz?`)) {
+      return;
+    }
+    
+    const updated = kesifProducts.filter(p => !selectedIds.includes(p.id));
+    const reNumbered = updated.map((p, idx) => ({ ...p, sira: idx + 1 }));
+    setKesifProducts(reNumbered);
+    alert(`✅ ${selectedIds.length} ürün silindi!`);
+  };
+  
+  // TOPLU ÇOĞALTMA
+  const duplicateProduct = (productId) => {
+    const product = kesifProducts.find(p => p.id === productId);
+    if (!product) return;
+    
+    const newProduct = {
+      ...product,
+      id: Date.now(),
+      sira: kesifProducts.length + 1
+    };
+    
+    setKesifProducts([...kesifProducts, newProduct]);
+    alert('✅ Ürün kopyalandı!');
+  };
+
+  // Hazır Paket Ekleme Fonksiyonu
+  const addHazirPaketToKesif = () => {
+    if (!selectedHazirPaket) return;
+
+    const paket = HazirPaketler.paketler.find(p => p.id === selectedHazirPaket);
+    if (!paket) return;
+
+    let addedCount = 0;
+    const newProducts = [];
+
+    paket.urunler.forEach((paketUrun) => {
+      // CombinedFaturaData'dan ürünü ara
+      const foundProduct = CombinedFaturaData.find(fp => 
+        fp.urun?.toLowerCase().includes(paketUrun.urun.toLowerCase()) ||
+        paketUrun.urun.toLowerCase().includes(fp.urun?.toLowerCase())
+      );
+
+      if (foundProduct) {
+        // Liste fiyatına (iskontosuz) kar marjı ekle
+        const listeFiyat = foundProduct.birimFiyat || 0;
+        const satisFiyat = listeFiyat * (1 + paketKarMarji / 100);
+
+        const newProduct = {
+          id: Date.now() + addedCount,
+          sira: kesifProducts.length + addedCount + 1,
+          type: 'normal',
+          urun: foundProduct.urun,
+          birim: paketUrun.birim || foundProduct.olcu || 'Adet',
+          miktar: paketUrun.miktar,
+          birimFiyat: parseFloat(satisFiyat.toFixed(2)),
+          toplam: parseFloat((satisFiyat * paketUrun.miktar).toFixed(2)),
+          aciklama: paketUrun.aciklama || '',
+          marka: foundProduct.marka || '',
+          paketAdi: paket.ad
+        };
+        newProducts.push(newProduct);
+        addedCount++;
+      } else {
+        // Ürün bulunamadıysa, varsayılan fiyat ile ekle
+        const defaultPrice = 100 * (1 + paketKarMarji / 100);
+        const newProduct = {
+          id: Date.now() + addedCount,
+          sira: kesifProducts.length + addedCount + 1,
+          type: 'normal',
+          urun: paketUrun.urun,
+          birim: paketUrun.birim || 'Adet',
+          miktar: paketUrun.miktar,
+          birimFiyat: parseFloat(defaultPrice.toFixed(2)),
+          toplam: parseFloat((defaultPrice * paketUrun.miktar).toFixed(2)),
+          aciklama: paketUrun.aciklama || '',
+          marka: '---',
+          paketAdi: paket.ad
+        };
+        newProducts.push(newProduct);
+        addedCount++;
+      }
+    });
+
+    setKesifProducts([...kesifProducts, ...newProducts]);
+    setShowHazirPaketModal(false);
+    setSelectedHazirPaket(null);
+    alert(`${paket.ad} paketi eklendi! ${addedCount} ürün listeye eklendi.`);
+  };
+
+  const calculateKesifTotals = () => {
+    const subTotal = kesifProducts.reduce((sum, p) => sum + p.toplam, 0);
+    const iskontoAmount = subTotal * (kesifSettings.iskonto / 100);
+    const afterDiscount = subTotal - iskontoAmount;
+    const kdvAmount = afterDiscount * (kesifSettings.kdvOrani / 100);
+    const grandTotal = afterDiscount + kdvAmount;
+
+    return {
+      subTotal,
+      iskontoAmount,
+      afterDiscount,
+      kdvAmount,
+      grandTotal
+    };
+  };
+
+  // AI Gemini API Fonksiyonları
+  const callGeminiAPI = async (prompt, systemInstruction, useJson = true) => {
+    try {
+      // Model: gemini-2.0-flash-exp (güncel experimental model)
+      const model = "gemini-2.0-flash-exp";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      
+      const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        ...(useJson && { 
+          generationConfig: { 
+            responseMimeType: "application/json",
+            temperature: 0.7
+          } 
+        })
+      };
+
+      console.log("API Request:", { model, promptLength: prompt.length });
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log("API Response Status:", response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("API Error Details:", errorData);
+        
+        if (response.status === 429) {
+          throw new Error("API rate limit aşıldı. Lütfen birkaç dakika bekleyin.");
+        } else if (response.status === 401) {
+          throw new Error("API key geçersiz. Lütfen ayarları kontrol edin.");
+        } else if (response.status === 404) {
+          throw new Error("API endpoint bulunamadı. Model adı güncel olmayabilir.");
+        } else {
+          throw new Error(`API hatası: ${response.status} - ${errorData?.error?.message || response.statusText}`);
+        }
+      }
+      
+      const result = await response.json();
+      console.log("API Response Data:", result);
+      
+      if (!result.candidates || result.candidates.length === 0) {
+        throw new Error("API'den yanıt alınamadı. Model yanıt üretemedi.");
+      }
+      
+      return result.candidates?.[0]?.content?.parts?.[0]?.text;
+    } catch (error) {
+      console.error("Gemini API Error:", error);
+      if (error.message) {
+        throw error; // Özel hata mesajını koru
+      }
+      throw new Error("API bağlantısı kurulamadı. İnternet bağlantınızı kontrol edin.");
+    }
+  };
+
+  // AI Keşif Sihirbazı - Proje tanımından otomatik ürün listesi oluşturma
+  const handleAiWizard = async () => {
+    if (!aiWizardPrompt.trim()) {
+      setAiError("Lütfen proje tanımı girin!");
+      return;
+    }
+    
+    setAiLoading(true);
+    setAiError(null);
+    
+    try {
+      // Katalog verilerini hazırla - daha küçük örnek
+      const catalogSample = CombinedFaturaData.slice(0, 200).map(d => ({
+        urun: d.urun,
+        marka: d.marka,
+        olcu: d.olcu
+      }));
+      
+      const systemPrompt = `Sen uzman bir elektrik mühendisisin. Kullanıcının proje tanımına göre gerekli malzeme listesi oluştur.
+
+Katalog örnekleri: ${JSON.stringify(catalogSample.slice(0, 50))}
+
+KURALLAR:
+1. Katalogdaki ürün isimlerine benzer ürünler öner (NYY, NYM, NVV, kablo, sigorta, priz, anahtar vb.)
+2. Gerçekçi miktarlar tahmin et
+3. SADECE bu JSON formatında yanıt ver: [{"urun": "3x2.5 NYY", "miktar": 50, "birim": "metre", "aciklama": "Ana hat"}]
+4. 5-15 ürün öner
+5. Yanıt başka bir şey içermemeli, sadece JSON array`;
+
+      console.log("AI Wizard - Prompt gönderiliyor...");
+      const responseText = await callGeminiAPI(aiWizardPrompt, systemPrompt, true);
+      console.log("AI Wizard - Yanıt alındı:", responseText);
+      
+      if (!responseText) {
+        throw new Error("API'den yanıt alınamadı");
+      }
+
+      let suggestedItems;
+      try {
+        suggestedItems = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("JSON parse hatası:", parseError, "Yanıt:", responseText);
+        throw new Error("AI yanıtı işlenemedi. Format hatası.");
+      }
+
+      if (!Array.isArray(suggestedItems)) {
+        throw new Error("AI geçersiz format döndürdü");
+      }
+      
+      let addedCount = 0;
+      const newProducts = [];
+      
+      suggestedItems.forEach(suggested => {
+        if (!suggested.urun) return;
+        
+        // Fuzzy match - daha esnek eşleştirme
+        const searchTerms = suggested.urun.toLowerCase().split(' ');
+        const matched = CombinedFaturaData.find(d => {
+          const urunLower = d.urun?.toLowerCase() || '';
+          return searchTerms.some(term => urunLower.includes(term) && term.length > 2);
+        });
+        
+        if (matched) {
+          const newProduct = {
+            id: Date.now() + addedCount,
+            sira: kesifProducts.length + newProducts.length + 1,
+            type: 'normal',
+            urun: matched.urun,
+            birim: suggested.birim || matched.olcu || 'Adet',
+            miktar: suggested.miktar || 1,
+            birimFiyat: matched.birimFiyat,
+            toplam: matched.birimFiyat * (suggested.miktar || 1),
+            aciklama: suggested.aciklama || 'AI Sihirbazı önerisi',
+            marka: matched.marka || ''
+          };
+          
+          newProducts.push(newProduct);
+          addedCount++;
+        }
+      });
+      
+      if (newProducts.length > 0) {
+        setKesifProducts(prev => [...prev, ...newProducts]);
+        setAiWizardPrompt("");
+        setIsAiWizardOpen(false);
+        alert(`✨ ${addedCount} ürün AI Sihirbazı tarafından eklendi!`);
+      } else {
+        setAiError("Katalogda eşleşen ürün bulunamadı. Daha genel terimler kullanın.");
+      }
+      
+    } catch (error) {
+      console.error("AI Wizard hatası:", error);
+      setAiError(error.message || "Bir hata oluştu. Lütfen tekrar deneyin.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // AI Teklif Mektubu Oluşturucu
+  const handleGenerateProposalEmail = async () => {
+    if (kesifProducts.length === 0) {
+      alert("Lütfen önce keşif listesine ürün ekleyin!");
+      return;
+    }
+    
+    setAiLoading(true);
+    setIsEmailGeneratorOpen(true);
+    setGeneratedEmail("");
+    
+    try {
+      const totals = calculateKesifTotals();
+      const productList = kesifProducts.map(p => 
+        `${p.urun} (${p.marka}) - ${p.miktar} ${p.birim} x ${p.birimFiyat.toFixed(2)} TL = ${p.toplam.toFixed(2)} TL`
+      ).join("\n");
+      
+      const systemPrompt = `
+        Sen profesyonel bir elektrik mühendisisin ve müşterilere teklif sunuyorsun.
+        Aşağıdaki bilgilere göre profesyonel, ikna edici ve detaylı bir teklif mektubu oluştur.
+        
+        KURALLLAR:
+        1. Resmi ve profesyonel bir dil kullan
+        2. Firma adı: ${kesifCustomer.name || 'Değerli Müşterimiz'}
+        3. Mail konusu ile başla
+        4. Malzeme listesini tablo formatında göster
+        5. Fiyat detaylarını açıkla (ara toplam, iskonto, KDV, genel toplam)
+        6. Geçerlilik süresi, ödeme koşulları ve garanti bilgilerini ekle
+        7. Türkçe yaz
+      `;
+      
+      const userPrompt = `
+        FİRMA BİLGİLERİ:
+        - Firma Adı: ${kesifCustomer.name || 'Belirtilmemiş'}
+        - Adres: ${kesifCustomer.address || 'Belirtilmemiş'}
+        - İletişim: ${kesifCustomer.contactPerson || 'Belirtilmemiş'}
+        
+        MALZEME LİSTESİ:
+        ${productList}
+        
+        FİYAT DETAYLARI:
+        - Ara Toplam: ${totals.subTotal.toFixed(2)} TL
+        - İskonto (%${kesifSettings.iskonto}): -${totals.iskontoAmount.toFixed(2)} TL
+        - İskonto Sonrası: ${totals.afterDiscount.toFixed(2)} TL
+        - KDV (%${kesifSettings.kdvOrani}): +${totals.kdvAmount.toFixed(2)} TL
+        - GENEL TOPLAM: ${totals.grandTotal.toFixed(2)} TL
+        
+        Profesyonel bir teklif mektubu oluştur.
+      `;
+      
+      const emailText = await callGeminiAPI(userPrompt, systemPrompt, false);
+      setGeneratedEmail(emailText);
+      
+    } catch (error) {
+      console.error(error);
+      setGeneratedEmail("❌ E-posta oluşturulamadı. Lütfen tekrar deneyin.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleKesifSubmit = (e) => {
+    e.preventDefault();
+    if (kesifProducts.length === 0) {
+      alert('Lütfen en az bir ürün ekleyin!');
+      return;
+    }
+    setSelectedCompany({
+      ...kesifCustomer,
+      type: 'kesif',
+      products: kesifProducts,
+      settings: kesifSettings,
+      totals: calculateKesifTotals()
+    });
+    setActiveTab('proposal');
+  };
+
+  // Periyodik Kontrol Hesaplama Motoru
+  const calculatePeriodicPrices = () => {
+    // 1. YG/TM Kontrolü
+    let ygTotal = 0;
+    let ygDesc = "";
+    if (periodicInputs.trafoGucu <= PERIODIC_PRICES.yg_base_limit) {
+      ygTotal = PERIODIC_PRICES.yg_base_price;
+      ygDesc = `${PERIODIC_PRICES.yg_base_limit} kVA'ya kadar sabit.`;
+    } else {
+      ygTotal = PERIODIC_PRICES.yg_base_price;
+      let remaining = periodicInputs.trafoGucu - PERIODIC_PRICES.yg_base_limit;
+      
+      if (periodicInputs.trafoGucu <= PERIODIC_PRICES.yg_tier1_limit) {
+        ygTotal += remaining * PERIODIC_PRICES.yg_tier1_increment;
+        ygDesc = `Sabit + (${remaining} kVA x ${PERIODIC_PRICES.yg_tier1_increment} TL)`;
+      } else {
+        const tier1Amount = (PERIODIC_PRICES.yg_tier1_limit - PERIODIC_PRICES.yg_base_limit);
+        ygTotal += tier1Amount * PERIODIC_PRICES.yg_tier1_increment;
+        const tier2Amount = periodicInputs.trafoGucu - PERIODIC_PRICES.yg_tier1_limit;
+        ygTotal += tier2Amount * PERIODIC_PRICES.yg_tier2_increment;
+        ygDesc = `Sabit + (4600 kVA x ${PERIODIC_PRICES.yg_tier1_increment}) + (${tier2Amount} kVA x ${PERIODIC_PRICES.yg_tier2_increment})`;
+      }
+    }
+
+    // 2. AG İç Tesisat
+    let agTotal = 0;
+    let agDesc = "";
+    if (periodicInputs.yapiAlani <= PERIODIC_PRICES.ag_area_limit) {
+      agTotal = PERIODIC_PRICES.ag_base_price;
+      agDesc = `${PERIODIC_PRICES.ag_area_limit} m²'ye kadar sabit.`;
+    } else {
+      const extraArea = periodicInputs.yapiAlani - PERIODIC_PRICES.ag_area_limit;
+      agTotal = PERIODIC_PRICES.ag_base_price + (extraArea * PERIODIC_PRICES.ag_increment);
+      agDesc = `Sabit + (${extraArea} m² x ${PERIODIC_PRICES.ag_increment} TL)`;
+    }
+
+    // 3. Topraklama
+    let topTotal = 0;
+    let topDesc = "";
+    if (periodicInputs.topraklamaAdet <= PERIODIC_PRICES.topraklama_base_limit) {
+      topTotal = PERIODIC_PRICES.topraklama_base_price;
+      topDesc = `${PERIODIC_PRICES.topraklama_base_limit} noktaya kadar sabit.`;
+    } else {
+      const extraPoints = periodicInputs.topraklamaAdet - PERIODIC_PRICES.topraklama_base_limit;
+      topTotal = PERIODIC_PRICES.topraklama_base_price + (extraPoints * PERIODIC_PRICES.topraklama_increment);
+      topDesc = `Sabit + (${extraPoints} nokta x ${PERIODIC_PRICES.topraklama_increment} TL)`;
+    }
+
+    // 4. Paratoner
+    let paraTotal = 0;
+    let paraDesc = "";
+    if (periodicInputs.paratonerAdet <= PERIODIC_PRICES.paratoner_base_limit) {
+      paraTotal = PERIODIC_PRICES.paratoner_base_price;
+      paraDesc = "1 tesisat sabit.";
+    } else {
+      const extraPara = periodicInputs.paratonerAdet - PERIODIC_PRICES.paratoner_base_limit;
+      paraTotal = PERIODIC_PRICES.paratoner_base_price + (extraPara * PERIODIC_PRICES.paratoner_increment);
+      paraDesc = `Sabit + (${extraPara} tesisat x ${PERIODIC_PRICES.paratoner_increment} TL)`;
+    }
+
+    // 5. RCD Testleri
+    let rcdTotal = 0;
+    let rcdDesc = "";
+    if (periodicInputs.rcdAdet <= PERIODIC_PRICES.rcd_base_limit) {
+      rcdTotal = PERIODIC_PRICES.rcd_base_price;
+      rcdDesc = `${PERIODIC_PRICES.rcd_base_limit} adete kadar sabit.`;
+    } else {
+      const extraRcd = periodicInputs.rcdAdet - PERIODIC_PRICES.rcd_base_limit;
+      rcdTotal = PERIODIC_PRICES.rcd_base_price + (extraRcd * PERIODIC_PRICES.rcd_increment);
+      rcdDesc = `Sabit + (${extraRcd} adet x ${PERIODIC_PRICES.rcd_increment} TL)`;
+    }
+
+    const subTotal = ygTotal + agTotal + topTotal + paraTotal + rcdTotal;
+    const grandTotal = subTotal + PERIODIC_PRICES.kesif_bedeli;
+    const discountVal = (grandTotal * periodicInputs.iskonto) / 100;
+    const final = grandTotal - discountVal;
+
+    setPeriodicResults({
+      yg: { total: ygTotal, desc: ygDesc },
+      ag: { total: agTotal, desc: agDesc },
+      topraklama: { total: topTotal, desc: topDesc },
+      paratoner: { total: paraTotal, desc: paraDesc },
+      rcd: { total: rcdTotal, desc: rcdDesc },
+      subTotal: subTotal,
+      kesif: PERIODIC_PRICES.kesif_bedeli,
+      grandTotal: grandTotal,
+      discountAmount: discountVal,
+      finalPrice: final
+    });
+  };
+
+  // Para birimi değişikliği işleyicisi
+  const handleCurrencyChange = (newCurrency) => {
+    if (newCurrency === previousCurrency) return;
+    
+    // Dönüşüm oranını hesapla
+    let conversionRate = 1;
+    if (previousCurrency === 'TRY' && newCurrency === 'USD') {
+      conversionRate = 1 / exchangeRates.USD;
+    } else if (previousCurrency === 'TRY' && newCurrency === 'EUR') {
+      conversionRate = 1 / exchangeRates.EUR;
+    } else if (previousCurrency === 'USD' && newCurrency === 'TRY') {
+      conversionRate = exchangeRates.USD;
+    } else if (previousCurrency === 'EUR' && newCurrency === 'TRY') {
+      conversionRate = exchangeRates.EUR;
+    } else if (previousCurrency === 'USD' && newCurrency === 'EUR') {
+      conversionRate = exchangeRates.USD / exchangeRates.EUR;
+    } else if (previousCurrency === 'EUR' && newCurrency === 'USD') {
+      conversionRate = exchangeRates.EUR / exchangeRates.USD;
+    }
+    
+    // Tüm params fiyatlarını dönüştür
+    setParams(prev => ({
+      ...prev,
+      baseFee: parseFloat((prev.baseFee * conversionRate).toFixed(2)),
+      rate1: parseFloat((prev.rate1 * conversionRate).toFixed(2)),
+      rate2: parseFloat((prev.rate2 * conversionRate).toFixed(2)),
+      poleFee1: parseFloat((prev.poleFee1 * conversionRate).toFixed(2)),
+      poleFee2: parseFloat((prev.poleFee2 * conversionRate).toFixed(2)),
+      poleFee3: parseFloat((prev.poleFee3 * conversionRate).toFixed(2))
+    }));
+    
+    // Eğer seçili firma varsa, onun fiyatlarını da güncelle
+    if (selectedCompany) {
+      setSelectedCompany(prev => ({
+        ...prev,
+        nominalFee: parseFloat((prev.nominalFee * conversionRate).toFixed(2)),
+        discountAmount: parseFloat((prev.discountAmount * conversionRate).toFixed(2)),
+        offerPrice: parseFloat((prev.offerPrice * conversionRate).toFixed(2))
+      }));
+    }
+    
+    setPreviousCurrency(newCurrency);
+    setCurrency(newCurrency);
+  };
+  
+  const formatCurrency = (val) => {
+    if (val === null || val === undefined || isNaN(val)) return "0,00";
+    const currencySymbols = { 'TRY': 'TL', 'USD': '$', 'EUR': '€' };
+    const symbol = currencySymbols[currency] || 'TL';
+    if (val < 100) return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val) + ' ' + symbol;
+    const formatted = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+    return formatted + ' ' + symbol;
+  };
+  
+  const formatNumber = (val) => {
+    if (val === null || val === undefined || isNaN(val)) return "0";
+    return new Intl.NumberFormat('tr-TR').format(val);
+  };
+
+  // Helper to calculate fees for a single company object
+  const calculateCompanyFees = (companyData) => {
+      const totalKVA = parsePower(companyData.powerStr);
+      let nominalFee = 0;
+      
+      // EMO 2026 Hesaplama Mantığı
+      if (companyData.type === 'direk' || (totalKVA < 400 && companyData.type !== 'bina')) {
+          // Direk Tipi Trafo Merkezleri (EMO 2026 Kısım III - Madde 3.1)
+          if (totalKVA <= 50) {
+              nominalFee = params.poleFee1;
+          } else if (totalKVA <= 160) {
+              nominalFee = params.poleFee2;
+          } else if (totalKVA <= 400) {
+              nominalFee = params.poleFee3;
+          } else {
+              // 400 kVA üzeri direk tipi EMO listesinde net değilse bina tipi baz alınır
+              nominalFee = params.baseFee + ((totalKVA - 400) * params.rate1);
+          }
+      } else {
+          // Bina Tipi Trafo Merkezleri (EMO 2026 - Kısım III - Madde 5.2)
+          if (totalKVA <= 400) {
+             // Madde 5.2.1: İlk 400 kVA (2 hücre)
+             nominalFee = params.baseFee;
+          } else if (totalKVA <= 5000) {
+             // Madde 5.2.2: 401 kVA - 5 MVA arası artan her kVA için
+             nominalFee = params.baseFee + ((totalKVA - 400) * params.rate1);
+          } else {
+             // Madde 5.2.3: 5 MVA üzeri artan her kVA için
+             // İlk 400 sabit + (4600 * rate1) + (kalan * rate2)
+             nominalFee = params.baseFee + (4600 * params.rate1) + ((totalKVA - 5000) * params.rate2);
+          }
+      }
+
+      // Bölge Katsayısı Uygulaması
+      const appliedRegionCoeff = companyData.regionCoeff !== undefined ? companyData.regionCoeff : params.regionCoeff;
+      nominalFee = nominalFee * appliedRegionCoeff;
+
+      // İskonto Uygulaması - manualForm.customDiscount kullan
+      const appliedDiscountRate = manualForm.customDiscount !== undefined ? manualForm.customDiscount : 
+                                   (companyData.discountRate !== undefined ? companyData.discountRate : params.discountRate);
+
+      const discountAmount = nominalFee * (appliedDiscountRate / 100);
+      const offerPrice = nominalFee - discountAmount;
+
+      return {
+        ...companyData,
+        totalKVA,
+        nominalFee,
+        discountAmount,
+        offerPrice,
+        regionCoeff: appliedRegionCoeff,
+        appliedDiscountRate,
+        refNo: `${params.year}-YG-${ODA_SICIL_NO}-${proposalCount.toString().padStart(3, '0')}` // Referans Numarası Oluşturma
+      };
+  };
+
+  // --- Handlers ---
+  const generateProposal = (company) => {
+    setSelectedCompany(company);
+    setAiOutput(""); 
+    setAiActiveFeature(null);
+    setActiveTab('proposal');
+    setProposalCount(prev => prev + 1);
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!selectedCompany) return;
+    
+    const pages = document.querySelectorAll('.pdf-page');
+    if (!pages || pages.length === 0) {
+      alert('İçerik bulunamadı.');
+      return;
+    }
+    
+    const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
+    const targetWidthPx = 793;
+    const SCALE_FACTOR = 2;
+
+    try {
+      // Logo yükle ve base64'e çevir (boyutlarıyla birlikte)
+      const loadLogo = async () => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve({
+              data: canvas.toDataURL('image/png'),
+              width: img.width,
+              height: img.height
+            });
+          };
+          img.onerror = reject;
+          img.src = faturaLogo;
+        });
+      };
+
+      const logoInfo = await loadLogo();
+      
+      // Logo boyutlarını hesapla (aspect ratio koruyarak)
+      const maxLogoWidth = 60; // mm (1.5x)
+      const maxLogoHeight = 24; // mm (1.5x)
+      const logoAspectRatio = logoInfo.width / logoInfo.height;
+      let logoWidth = maxLogoWidth;
+      let logoHeight = logoWidth / logoAspectRatio;
+      
+      if (logoHeight > maxLogoHeight) {
+        logoHeight = maxLogoHeight;
+        logoWidth = logoHeight * logoAspectRatio;
+      }
+
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      });
+
+      // Her sayfayı ayrı yakalayıp PDF'e ekle
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        
+        // Logoları gizle
+        const logos = page.querySelectorAll('img[src="/fatura_logo.png"]');
+        logos.forEach(logo => { logo.style.visibility = 'hidden'; });
+        
+        // Geçici stil ayarları
+        const originalWidth = page.style.width;
+        const originalMargin = page.style.margin;
+        const originalBoxShadow = page.style.boxShadow;
+        
+        page.style.width = '210mm';
+        page.style.margin = '0 auto';
+        page.style.boxShadow = 'none';
+        page.classList.add('pdf-exporting');
+
+        // html2canvas ile yakalama
+        const canvas = await html2canvas(page, {
+          scale: SCALE_FACTOR,
+          width: targetWidthPx,
+          windowWidth: targetWidthPx,
+          useCORS: true,
+          allowTaint: false,
+          letterRendering: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const imgWidth = 210; // A4 genişlik mm
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        // İlk sayfa için yeni sayfa ekleme
+        if (i > 0) {
+          pdf.addPage();
+        }
+
+        // Görseli PDF'e ekle
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+        
+        // Logoyu yüksek kalitede ekle (sol üst köşe, aspect ratio korunarak)
+        pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
+
+        // Logoları tekrar göster
+        logos.forEach(logo => { logo.style.visibility = 'visible'; });
+
+        // Stil ayarlarını geri al
+        page.style.width = originalWidth;
+        page.style.margin = originalMargin;
+        page.style.boxShadow = originalBoxShadow;
+        page.classList.remove('pdf-exporting');
+      }
+
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('PDF oluşturma hatası:', error);
+      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+    }
+  };
+
+  const handleDownloadWord = async () => {
+    if (!selectedCompany) return;
+    
+    try {
+      const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.docx`;
+      
+      // Tablo satırlarını oluştur
+      const createTableRow = (label, value) => {
+        return new TableRow({
+          children: [
+            new TableCell({
+              children: [new Paragraph({ text: label })],
+              width: { size: 40, type: WidthType.PERCENTAGE }
+            }),
+            new TableCell({
+              children: [new Paragraph({ text: value })],
+              width: { size: 60, type: WidthType.PERCENTAGE }
+            })
+          ]
+        });
+      };
+
+      // Detaylı hesaplama tablosu
+      const calculationRows = [];
+      
+      if (selectedCompany.type !== 'direk' && selectedCompany.totalKVA >= 400) {
+        calculationRows.push(createTableRow('İlk 400 kVA (Sabit)', formatCurrency(params.baseFee)));
+        
+        if (selectedCompany.totalKVA > 400 && selectedCompany.totalKVA <= 5000) {
+          calculationRows.push(createTableRow(
+            `401 - ${selectedCompany.totalKVA} kVA Arası`, 
+            formatCurrency((selectedCompany.totalKVA - 400) * params.rate1)
+          ));
+        } else if (selectedCompany.totalKVA > 5000) {
+          calculationRows.push(createTableRow('401 - 5000 kVA Arası', formatCurrency(4600 * params.rate1)));
+          calculationRows.push(createTableRow('5000 kVA Üzeri', formatCurrency((selectedCompany.totalKVA - 5000) * params.rate2)));
+        }
+      } else {
+        const poleType = selectedCompany.totalKVA <= 50 ? '0-50 kVA' : 
+                        selectedCompany.totalKVA <= 160 ? '51-160 kVA' : '161-400 kVA';
+        calculationRows.push(createTableRow(poleType + ' Sabit Bedel', formatCurrency(selectedCompany.nominalFee / selectedCompany.regionCoeff)));
+      }
+
+      if (selectedCompany.regionCoeff !== 1) {
+        calculationRows.push(createTableRow(
+          `Bölgesel Katsayı (x${(selectedCompany.regionCoeff || 1.0).toFixed(2)})`,
+          formatCurrency(selectedCompany.nominalFee - (selectedCompany.nominalFee / selectedCompany.regionCoeff))
+        ));
+      }
+
+      // Word belgesi oluştur
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              margin: {
+                top: 1440, // 1 inch = 1440 twips
+                right: 1440,
+                bottom: 1440,
+                left: 1440
+              }
+            }
+          },
+          children: [
+            // Başlık
+            new Paragraph({
+              text: "FİYAT TEKLİFİ",
+              heading: HeadingLevel.HEADING_1,
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 300 }
+            }),
+            new Paragraph({
+              text: `Ref: ${selectedCompany.refNo}`,
+              alignment: AlignmentType.RIGHT,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: new Date().toLocaleDateString('tr-TR'),
+              alignment: AlignmentType.RIGHT,
+              spacing: { after: 300 }
+            }),
+            
+            // Giriş
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Sayın ${selectedCompany.contactName ? `${selectedCompany.contactName} - ` : ''}${selectedCompany.name} Yetkilisi,`,
+                  bold: true
+                })
+              ],
+              spacing: { after: 200 }
+            }),
+            new Paragraph({
+              text: `Tesisinize yönelik YG İşletme Sorumluluğu hizmeti fiyat teklifi, Kobinerji Mühendislik tarafından talep ettiğiniz trafo kurulu gücü ve TMMOB Elektrik Mühendisleri Odası'nın (EMO) ${params.year} yılı Ücret Tanımları (KISIM III) esas alınarak, rekabetçi piyasa koşulları doğrultusunda aşağıda sunulmuştur.`,
+              spacing: { after: 400 }
+            }),
+            
+            // 1. Bölüm: Tesis Bilgileri
+            new Paragraph({
+              text: "1. Tesis Bilgileri ve Toplam Kurulu Güç",
+              heading: HeadingLevel.HEADING_2,
+              spacing: { before: 200, after: 200 }
+            }),
+            new Paragraph({
+              text: `• Trafo Güçleri Dağılımı: ${selectedCompany.powerStr} kVA`,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: `• Toplam Kurulu Güç: ${selectedCompany.totalKVA} kVA (${(selectedCompany.totalKVA / 1000).toFixed(2)} MVA)`,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: `• Tesis Tipi: ${selectedCompany.type === 'direk' ? 'Direk Tipi Trafo Merkezi' : 'Bina Tipi Trafo Merkezi'}`,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: `• Bölge/Katsayı: ${selectedCompany.region || 'Belirtilmemiş'} (x${(selectedCompany.regionCoeff || 1.0).toFixed(2)})`,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: `• Sektör: ${selectedCompany.sector}`,
+              spacing: { after: 400 }
+            }),
+            
+            // 2. Bölüm: Hesaplama
+            new Paragraph({
+              text: `2. EMO ${params.year} Yılı Aylık Asgari Ücret Hesaplaması`,
+              heading: HeadingLevel.HEADING_2,
+              spacing: { before: 200, after: 200 }
+            }),
+            
+            // Hesaplama Tablosu
+            new Table({
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({ text: "Kapasite Aralığı", bold: true })],
+                      shading: { fill: "bbdefb" }
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: "Tutar (TL)", bold: true })],
+                      shading: { fill: "bbdefb" }
+                    })
+                  ]
+                }),
+                ...calculationRows,
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({ text: `EMO ${params.year} TOPLAM NOMİNAL TARİFE`, bold: true })],
+                      shading: { fill: "c8f0c8" }
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: formatCurrency(selectedCompany.nominalFee), bold: true })],
+                      shading: { fill: "c8f0c8" }
+                    })
+                  ]
+                })
+              ],
+              width: { size: 100, type: WidthType.PERCENTAGE }
+            }),
+            
+            new Paragraph({ text: "", spacing: { after: 400 } }),
+            
+            // 3. Bölüm: İskonto ve Teklif
+            new Paragraph({
+              text: "3. Uygulanan İskonto ve Nihai Teklif",
+              heading: HeadingLevel.HEADING_2,
+              spacing: { before: 200, after: 200 }
+            }),
+            new Paragraph({
+              text: `Piyasa koşullarına uyum sağlamak amacıyla, işletmenize özel %${selectedCompany.appliedDiscountRate || params.discountRate} iskonto uygulanmıştır.`,
+              spacing: { after: 300 }
+            }),
+            
+            // Nihai Teklif Tablosu
+            new Table({
+              rows: [
+                createTableRow('EMO Nominal Tarife:', formatCurrency(selectedCompany.nominalFee)),
+                createTableRow(`İskonto Tutarı (%${selectedCompany.appliedDiscountRate || params.discountRate}):`, `- ${formatCurrency(selectedCompany.discountAmount)}`),
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({ text: "AYLIK TEKLİF FİYATI:", bold: true })],
+                      shading: { fill: "c8e6c9" }
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ text: `${formatCurrency(selectedCompany.offerPrice)} + KDV`, bold: true, color: "1b5e20" })]
+                      })],
+                      shading: { fill: "c8e6c9" }
+                    })
+                  ]
+                })
+              ],
+              width: { size: 100, type: WidthType.PERCENTAGE }
+            }),
+            
+            new Paragraph({ text: "", spacing: { after: 400 } }),
+            
+            // Açıklamalar
+            new Paragraph({
+              text: "Açıklamalar:",
+              bold: true,
+              spacing: { before: 400, after: 200 }
+            }),
+            new Paragraph({
+              text: `1. Bu teklif ${params.year} yılı boyunca geçerli olmak üzere aylık periyotlarla hazırlanmıştır.`,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "2. İşletme sorumluluğu hizmetinin SMM tarafından üstlenilmesi halinde YG tesisi en az ayda bir kez denetlenmelidir.",
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "3. Enerji tüketiminin izlenmesi ve kompanzasyon tesisinin sağlıklı çalışıp çalışmadığının denetlenmesi bu hizmetin SORUMLULUK KAPSAMINDADIR.",
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "4. EMO tarafından hazırlanan Elektrik Yüksek Gerilim Tesisleri İşletme Sorumluluğu Yönetmeliği bu sözleşmenin ayrılmaz bir parçasıdır.",
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "5. İşveren olarak sizin yükümlülüğünüz, İşletme Sorumlusunun görevlerini yerine getirebilmesi için gerekli imalatları/hizmetleri sağlamak, talep edilen güvenlik malzemelerini almak ve uyarılarına riayet etmektir.",
+              spacing: { after: 400 }
+            }),
+            
+            // Footer
+            new Paragraph({
+              text: "Saygılarımızla,",
+              spacing: { before: 600, after: 100 }
+            }),
+            new Paragraph({
+              text: "Kobinerji Mühendislik",
+              bold: true,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: "www.kobinerji.com.tr • info@kobinerji.com.tr",
+              spacing: { after: 50 }
+            }),
+            new Paragraph({
+              text: "Tel: +90 535 714 52 88 | İzmir, Türkiye"
+            })
+          ]
+        }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, fileName);
+    } catch (error) {
+      console.error('Word belgesi oluşturma hatası:', error);
+      alert('Word belgesi oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleManualSubmit = (e) => {
+    e.preventDefault();
+    const manualCompany = {
+        id: 'MANUEL', 
+        name: manualForm.name,
+        sector: manualForm.sector,
+        powerStr: manualForm.powerStr,
+        contactName: manualForm.contactName,
+        type: manualForm.type,
+        region: manualForm.region, // Bölge adı
+        regionCoeff: manualForm.regionCoeff, // Manuel formdan gelen özel katsayı
+        discountRate: manualForm.customDiscount // Manuel formdan gelen özel iskonto
+    };
+    const calculated = calculateCompanyFees(manualCompany);
+    generateProposal(calculated);
+  };
+
+  const handleRegionChange = (e) => {
+    const selectedRegionName = e.target.value;
+    const selectedRegion = REGION_LIST.find(r => r.name === selectedRegionName);
+    if (selectedRegion) {
+        setManualForm({
+            ...manualForm,
+            region: selectedRegionName,
+            regionCoeff: selectedRegion.coeff
+        });
+    }
+  };
+
+  // --- Logo Upload Handler ---
+  const handleLogoUpload = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setLogo(reader.result);
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  // --- Gemini API Handler ---
+  const handleGeminiCall = async (type) => {
+    if (!selectedCompany) return;
+    
+    setAiLoading(true);
+    setAiError(null);
+    setAiActiveFeature(type);
+    setAiOutput("");
+
+    const systemPrompt = "Sen Kobinerji Mühendislik şirketinin deneyimli bir satış mühendisisin. Dilin Türkçe, kurumsal, nazik ve profesyonel olmalı.";
+    let userPrompt = "";
+
+    if (type === 'email') {
+        userPrompt = `
+          Aşağıdaki bilgilerle müşteriye gönderilmek üzere bir e-posta taslağı hazırla.
+          Müşteri Firma: ${selectedCompany.name}
+          Yetkili Kişi: ${selectedCompany.contactName || 'İlgili Yetkili'}
+          Hizmet: Yüksek Gerilim İşletme Sorumluluğu
+          Toplam Güç: ${selectedCompany.totalKVA} kVA
+          Teklif Tutarı: ${formatCurrency(selectedCompany.offerPrice)} + KDV (Aylık)
+          
+          E-posta, teklifin ekte sunulduğunu belirtmeli, Kobinerji'nin uzmanlığına vurgu yapmalı ve işbirliği temennisiyle bitmeli. Konu satırı da ekle.
+        `;
+    } else if (type === 'tips') {
+        userPrompt = `
+          ${selectedCompany.sector} sektöründe faaliyet gösteren ve ${selectedCompany.totalKVA} kVA trafo gücüne sahip bir işletme için;
+          Yüksek Gerilim işletme güvenliği, enerji verimliliği ve bakım konularında 3 adet kısa, çarpıcı ve teknik tavsiye maddesi yaz.
+          Bu tavsiyeler müşteriye katma değer sağladığımızı hissettirmeli.
+        `;
+    }
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            })
+        });
+
+        if (!response.ok) throw new Error('API Hatası');
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "İçerik oluşturulamadı.";
+        setAiOutput(text);
+    } catch (error) {
+        console.error("AI Error:", error);
+        setAiError("Bağlantı hatası oluştu. Lütfen tekrar deneyin.");
+    } finally {
+        setAiLoading(false);
+    }
+  };
+
+  const copyToClipboard = () => {
+      if (aiOutput) {
+          navigator.clipboard.writeText(aiOutput);
+          alert("Metin kopyalandı!");
+      }
+  };
+
+  // --- Excel Export Handler ---
+  const handleExcelExport = () => {
+    if (!selectedCompany) return;
+    
+    const workbook = XLSX.utils.book_new();
+    
+    // Teklif Bilgileri Sayfası
+    const proposalData = [
+      ['YÜKSEKKGERİLİM İŞLETME SORUMLULUĞU TEKLİFİ'],
+      [],
+      ['Referans No:', selectedCompany.refNo],
+      ['Tarih:', new Date().toLocaleDateString('tr-TR')],
+      [],
+      ['FİRMA BİLGİLERİ'],
+      ['Firma Unvanı:', selectedCompany.name],
+      ['Yetkili:', selectedCompany.contactName],
+      ['Sektör:', selectedCompany.sector],
+      ['Tesis Tipi:', selectedCompany.type === 'direk' ? 'Direk Tipi' : 'Bina Tipi'],
+      ['Bölge:', selectedCompany.region || 'Belirtilmemiş'],
+      ['Bölge Katsayısı:', selectedCompany.regionCoeff],
+      [],
+      ['GÜÇ BİLGİLERİ'],
+      ['Trafo Güçleri:', selectedCompany.powerStr + ' kVA'],
+      ['Toplam Kurulu Güç:', selectedCompany.totalKVA + ' kVA'],
+      ['Toplam Kurulu Güç (MVA):', (selectedCompany.totalKVA / 1000).toFixed(2)],
+      [],
+      ['MALİ BİLGİLER'],
+      ['EMO Nominal Ücret:', formatCurrency(selectedCompany.nominalFee)],
+      ['İskonto Oranı:', '%' + (selectedCompany.appliedDiscountRate || params.discountRate)],
+      ['İskonto Tutarı:', formatCurrency(selectedCompany.discountAmount)],
+      ['AYLIK TEKLİF FİYATI:', formatCurrency(selectedCompany.offerPrice) + ' + KDV'],
+      [],
+      ['Kobinerji Mühendislik'],
+      ['www.kobinerji.com.tr • info@kobinerji.com.tr'],
+      ['Tel: +90 535 714 52 88 | İzmir, Türkiye']
+    ];
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(proposalData);
+    
+    // Sütun genişlikleri
+    worksheet['!cols'] = [
+      { wch: 25 },
+      { wch: 50 }
+    ];
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Teklif');
+    
+    // Dosya adı
+    const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.xlsx`;
+    
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  // --- Email Gönderme Handler ---
+  const handleSendEmail = async () => {
+    if (!selectedCompany) {
+      alert('Lütfen önce bir teklif oluşturun.');
+      return;
+    }
+    
+    const recipientEmail = prompt('Alıcı e-posta adresini girin:');
+    if (!recipientEmail) return;
+    
+    try {
+      // EmailJS yapılandırması - Kullanıcının kendi hesabını oluşturması gerekir
+      const serviceID = 'service_xxxxxxx'; // EmailJS Service ID
+      const templateID = 'template_xxxxxxx'; // EmailJS Template ID
+      const userID = 'user_xxxxxxxxxx'; // EmailJS User ID
+      
+      const templateParams = {
+        to_email: recipientEmail,
+        company_name: selectedCompany.name,
+        contact_name: selectedCompany.contactName,
+        ref_no: selectedCompany.refNo,
+        total_power: selectedCompany.totalKVA,
+        offer_price: formatCurrency(selectedCompany.offerPrice),
+        date: new Date().toLocaleDateString('tr-TR')
+      };
+      
+      await emailjs.send(serviceID, templateID, templateParams, userID);
+      alert('E-posta başarıyla gönderildi!');
+    } catch (error) {
+      console.error('Email Error:', error);
+      alert('E-posta gönderilemedi. Lütfen EmailJS yapılandırmasını kontrol edin.');
+    }
+  };
+
+  // --- Editor Toggle Handler ---
+  const toggleEditorMode = () => {
+    if (!editorMode && selectedCompany) {
+      // Editor moduna geçerken mevcut içeriği al
+      const element = document.getElementById('printable-paper');
+      if (element) {
+        setEditableContent(element.innerHTML);
+      }
+    }
+    setEditorMode(!editorMode);
+  };
+
+  // GES Editor Mode Toggle
+  const toggleGesEditorMode = () => {
+    if (!gesEditorMode) {
+      const element = document.getElementById('ges-printable-area');
+      if (element) {
+        setGesEditableContent(element.innerHTML);
+      }
+    }
+    setGesEditorMode(!gesEditorMode);
+  };
+
+  // Periyodik Kontrol Edit Mode Toggle
+  const togglePeriodicEditorMode = () => {
+    if (!periodicEditorMode) {
+      const element = document.getElementById('periodic-proposal-area');
+      if (element) {
+        setPeriodicEditableContent(element.innerHTML);
+      }
+    }
+    setPeriodicEditorMode(!periodicEditorMode);
+  };
+
+  // Periyodik Kontrol PDF Export
+  const handlePeriodicPDFExport = async () => {
+    if (!periodicCustomer.name) {
+      alert('Lütfen müşteri bilgilerini doldurun.');
+      return;
+    }
+    
+    const pages = document.querySelectorAll('.periodic-pdf-page');
+    if (!pages || pages.length === 0) {
+      alert('İçerik bulunamadı.');
+      return;
+    }
+    
+    const fileName = `Periyodik_Kontrol_Teklif_${periodicCustomer.name.replace(/[^a-z0-9ğüşıöçĞÜŞİÖÇ]/gi, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
+    const targetWidthPx = 793;
+    const SCALE_FACTOR = 2;
+
+    try {
+      // Logo yükle ve base64'e çevir (boyutlarıyla birlikte)
+      const loadLogo = async () => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve({
+              data: canvas.toDataURL('image/png'),
+              width: img.width,
+              height: img.height
+            });
+          };
+          img.onerror = reject;
+          img.src = faturaLogo;
+        });
+      };
+
+      const logoInfo = await loadLogo();
+      
+      // Logo boyutlarını hesapla (aspect ratio koruyarak)
+      const maxLogoWidth = 60; // mm (1.5x)
+      const maxLogoHeight = 24; // mm (1.5x)
+      const logoAspectRatio = logoInfo.width / logoInfo.height;
+      let logoWidth = maxLogoWidth;
+      let logoHeight = logoWidth / logoAspectRatio;
+      
+      if (logoHeight > maxLogoHeight) {
+        logoHeight = maxLogoHeight;
+        logoWidth = logoHeight * logoAspectRatio;
+      }
+
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      });
+
+      // Her sayfayı ayrı yakalayıp PDF'e ekle
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        
+        // Logoları gizle
+        const logos = page.querySelectorAll('img[src="/fatura_logo.png"]');
+        logos.forEach(logo => { logo.style.visibility = 'hidden'; });
+        
+        // Geçici stil ayarları
+        const originalWidth = page.style.width;
+        const originalMargin = page.style.margin;
+        const originalBoxShadow = page.style.boxShadow;
+        
+        page.style.width = '210mm';
+        page.style.margin = '0 auto';
+        page.style.boxShadow = 'none';
+        page.classList.add('pdf-exporting');
+
+        // html2canvas ile yakalama
+        const canvas = await html2canvas(page, {
+          scale: SCALE_FACTOR,
+          width: targetWidthPx,
+          windowWidth: targetWidthPx,
+          useCORS: true,
+          allowTaint: false,
+          letterRendering: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const imgWidth = 210; // A4 genişlik mm
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        // İlk sayfa için yeni sayfa ekleme
+        if (i > 0) {
+          pdf.addPage();
+        }
+
+        // Görseli PDF'e ekle
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, '', 'FAST');
+        
+        // Logoyu yüksek kalitede ekle (sol üst köşe, aspect ratio korunarak)
+        pdf.addImage(logoInfo.data, 'PNG', 10, 10, logoWidth, logoHeight, '', 'FAST');
+
+        // Logoları tekrar göster
+        logos.forEach(logo => { logo.style.visibility = 'visible'; });
+
+        // Stil ayarlarını geri al
+        page.style.width = originalWidth;
+        page.style.margin = originalMargin;
+        page.style.boxShadow = originalBoxShadow;
+        page.classList.remove('pdf-exporting');
+      }
+
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('PDF oluşturma hatası:', error);
+      alert('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+    }
+  };
+
+  // --- Gelişmiş PDF Export ---
+  const handleAdvancedPDFExport = () => {
+    if (!selectedCompany) return;
+    
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    
+    // Başlık
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FİYAT TEKLİFİ', pageWidth / 2, margin, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Ref: ${selectedCompany.refNo}`, pageWidth - margin, margin + 10, { align: 'right' });
+    doc.text(new Date().toLocaleDateString('tr-TR'), pageWidth - margin, margin + 15, { align: 'right' });
+    
+    // Firma Bilgileri
+    let yPos = margin + 30;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Sayın ${selectedCompany.contactName || ''} - ${selectedCompany.name} Yetkilisi,`, margin, yPos);
+    
+    yPos += 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const introText = `Tesisinize yönelik YG İşletme Sorumluluğu hizmeti fiyat teklifi, Kobinerji Mühendislik tarafından EMO ${params.year} yılı Ücret Tanımları esas alınarak sunulmuştur.`;
+    const splitText = doc.splitTextToSize(introText, pageWidth - 2 * margin);
+    doc.text(splitText, margin, yPos);
+    
+    yPos += splitText.length * 5 + 10;
+    
+    // Tablo
+    doc.autoTable({
+      startY: yPos,
+      head: [['Özellik', 'Değer']],
+      body: [
+        ['Toplam Kurulu Güç', `${selectedCompany.totalKVA} kVA`],
+        ['Tesis Tipi', selectedCompany.type === 'direk' ? 'Direk Tipi' : 'Bina Tipi'],
+        ['Bölge', selectedCompany.region || 'Belirtilmemiş'],
+        ['Sektör', selectedCompany.sector],
+        ['EMO Nominal Ücret', formatCurrency(selectedCompany.nominalFee)],
+        ['İskonto Oranı', `%${selectedCompany.appliedDiscountRate || params.discountRate}`],
+        ['İskonto Tutarı', formatCurrency(selectedCompany.discountAmount)],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [30, 58, 138] }
+    });
+    
+    // Nihai Teklif
+    yPos = doc.lastAutoTable.finalY + 15;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AYLIK TEKLİF FİYATI:', margin, yPos);
+    doc.text(`${formatCurrency(selectedCompany.offerPrice)} + KDV`, pageWidth - margin, yPos, { align: 'right' });
+    
+    // Footer
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Kobinerji Mühendislik', pageWidth / 2, pageHeight - 15, { align: 'center' });
+    doc.text('www.kobinerji.com.tr • info@kobinerji.com.tr | Tel: +90 535 714 52 88 | İzmir, Türkiye', pageWidth / 2, pageHeight - 10, { align: 'center' });
+    
+    // Kaydet
+    const fileName = `YG_Teklif_${selectedCompany.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.pdf`;
+    doc.save(fileName);
+  };
+
+  // --- UI Components ---
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans">
+      <style>{`
+        @media print {
+          @page { 
+            margin: 0; 
+            size: A4 portrait; 
+          }
+          body * { 
+            visibility: hidden; 
+          }
+          #printable-paper, #printable-paper * { 
+            visibility: visible; 
+          }
+          * {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          #printable-paper {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background: white;
+            z-index: 9999;
+          }
+          #printable-paper > div {
+            box-shadow: none !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+          }
+          .page-break { 
+            page-break-before: always !important;
+            page-break-after: always !important;
+            margin: 0 !important;
+          }
+          .no-print, .no-print-border { 
+            display: none !important; 
+            border: none !important;
+          }
+        }
+        
+        /* PDF Export specific styles */
+        .pdf-page {
+          page-break-after: always;
+          page-break-inside: avoid;
+        }
+
+        /* PDF export quality tweaks (html2pdf) */
+        .pdf-exporting {
+          background: #ffffff !important;
+        }
+        .pdf-exporting#printable-paper {
+          width: 210mm !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+        }
+        .pdf-exporting .pdf-page {
+          box-shadow: none !important;
+          margin: 0 auto !important;
+          width: 210mm !important;
+          min-height: 297mm !important;
+          background: #ffffff !important;
+        }
+        .pdf-exporting .no-print,
+        .pdf-exporting .print-hide {
+          display: none !important;
+        }
+      `}</style>
+      
+      {/* Header */}
+      <header className="bg-blue-900 text-white shadow-lg no-print">
+        <div className="container mx-auto px-3 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="flex items-center space-x-2 md:space-x-3">
+            <Calculator className="h-6 w-6 md:h-8 md:w-8 text-yellow-400" />
+            <div>
+              <h1 className="text-base md:text-xl font-bold">Kobinerji Mühendislik</h1>
+              <p className="text-[10px] md:text-xs text-blue-200">Enerji Çözümlerinde Güvenilir İş Ortağınız</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+            <div className="hidden sm:flex px-2 md:px-3 py-1 bg-blue-800 rounded-full text-[10px] md:text-xs text-blue-200 items-center">
+                <Sparkles className="w-3 h-3 mr-1 text-yellow-400"/>
+                Gemini AI Destekli
+            </div>
+            <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="flex items-center space-x-1 md:space-x-2 bg-blue-800 hover:bg-blue-700 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition text-xs md:text-sm"
+            >
+              <Settings className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Parametreler</span>
+              <span className="sm:hidden">Ayarlar</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Settings Panel (Collapsible) */}
+      {isSettingsOpen && (
+        <div className="bg-white border-b border-gray-200 shadow-inner">
+          <div className="container mx-auto px-3 md:px-6 py-4 md:py-6">
+            <h3 className="font-semibold text-gray-700 mb-3 md:mb-4 flex items-center text-sm md:text-base">
+              <Edit3 className="h-3 w-3 md:h-4 md:w-4 mr-2" />
+              Hesaplama Parametreleri (EMO 2026)
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Sabit Ücret (Bina 0-400)</label>
+                <div className="relative">
+                  <input 
+                    type="number" 
+                    value={params.baseFee} 
+                    onChange={(e) => setParams({...params, baseFee: parseFloat(e.target.value) || 0})}
+                    className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                  />
+                  <span className="absolute right-3 top-2 text-gray-400 text-sm">TL</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Birim Fiyat (401-5000)</label>
+                <div className="relative">
+                  <input 
+                    type="number" 
+                    value={params.rate1} 
+                    onChange={(e) => setParams({...params, rate1: parseFloat(e.target.value) || 0})}
+                    className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                  />
+                  <span className="absolute right-3 top-2 text-gray-400 text-sm">TL/kVA</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Birim Fiyat (&gt;5000 kVA)</label>
+                <div className="relative">
+                  <input 
+                    type="number" 
+                    value={params.rate2} 
+                    onChange={(e) => setParams({...params, rate2: parseFloat(e.target.value) || 0})}
+                    className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                  />
+                  <span className="absolute right-3 top-2 text-gray-400 text-sm">TL/kVA</span>
+                </div>
+              </div>
+               <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Global Bölge Katsayısı (BK)</label>
+                <div className="relative">
+                  <input 
+                    type="number"
+                    step="0.05"
+                    value={params.regionCoeff} 
+                    onChange={(e) => setParams({...params, regionCoeff: parseFloat(e.target.value) || 1.0})}
+                    className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                  />
+                  <span className="absolute right-3 top-2 text-gray-400 text-sm">x</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Örn: İzmir: 1.00, Adana: 0.75 (Liste dışı için)</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Global İskonto</label>
+                <div className="relative">
+                  <input 
+                    type="number" 
+                    value={params.discountRate} 
+                    onChange={(e) => setParams({...params, discountRate: parseFloat(e.target.value) || 0})}
+                    className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-blue-700 font-bold" 
+                  />
+                  <span className="absolute right-3 top-2 text-gray-400 text-sm">%</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Para Birimi</label>
+                <select 
+                  value={currency} 
+                  onChange={(e) => handleCurrencyChange(e.target.value)}
+                  className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-blue-700"
+                >
+                  <option value="TRY">🇹🇷 Türk Lirası (TL)</option>
+                  <option value="USD">🇺🇸 Dolar ($)</option>
+                  <option value="EUR">🇪🇺 Euro (€)</option>
+                </select>
+              </div>
+              {/* Kur Oranları */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-600 mb-2">💱 Kur Oranları (1 TL = ? Yabancı Para)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500">USD Kuru</label>
+                    <div className="relative">
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={exchangeRates.USD} 
+                        onChange={(e) => setExchangeRates({...exchangeRates, USD: parseFloat(e.target.value) || 1})}
+                        className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                      />
+                      <span className="absolute right-3 top-2 text-gray-400 text-xs">TL/$</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">EUR Kuru</label>
+                    <div className="relative">
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={exchangeRates.EUR} 
+                        onChange={(e) => setExchangeRates({...exchangeRates, EUR: parseFloat(e.target.value) || 1})}
+                        className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                      />
+                      <span className="absolute right-3 top-2 text-gray-400 text-xs">TL/€</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-yellow-600 mt-1">⚠️ Para birimini değiştirdiğinizde tüm fiyatlar otomatik dönüştürülecektir.</p>
+              </div>
+              {/* Direk Tipi Ayarları */}
+              <div className="md:col-span-3 border-t pt-4 mt-2">
+                 <p className="text-xs font-bold text-gray-500 mb-2">DİREK TİPİ TRAFOLAR (EMO Madde 3.1)</p>
+                 <div className="grid grid-cols-3 gap-4">
+                    <div>
+                        <label className="text-xs text-gray-500">0-50 kVA</label>
+                        <input type="number" value={params.poleFee1} onChange={(e) => setParams({...params, poleFee1: parseFloat(e.target.value) || 0})} className="w-full border p-1 rounded text-xs" />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">51-160 kVA</label>
+                        <input type="number" value={params.poleFee2} onChange={(e) => setParams({...params, poleFee2: parseFloat(e.target.value) || 0})} className="w-full border p-1 rounded text-xs" />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">161-400 kVA</label>
+                        <input type="number" value={params.poleFee3} onChange={(e) => setParams({...params, poleFee3: parseFloat(e.target.value) || 0})} className="w-full border p-1 rounded text-xs" />
+                    </div>
+                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div className={`fixed top-0 left-0 h-full w-72 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        <div className="flex flex-col h-full">
+          {/* Sidebar Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 flex justify-between items-center">
+            <h2 className="text-white font-bold text-lg">Menü</h2>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="text-white hover:bg-white/20 p-2 rounded-lg transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Sidebar Navigation */}
+          <nav className="flex-1 overflow-y-auto p-4">
+            <ul className="space-y-2">
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'dashboard' 
+                      ? 'bg-indigo-100 text-indigo-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-5 h-5" />
+                  <span>Dashboard & İstatistikler</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('gorev'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'gorev' 
+                      ? 'bg-indigo-100 text-indigo-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  <span>Görev Takip</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('manual'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'manual' 
+                      ? 'bg-blue-100 text-blue-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <UserPlus className="w-5 h-5" />
+                  <span>YG Trafo İşletme Sorumlusu Teklif</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('periodic'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'periodic' 
+                      ? 'bg-green-100 text-green-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  <span>Periyodik Kontrol</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('kesif'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'kesif' 
+                      ? 'bg-orange-100 text-orange-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Hammer className="w-5 h-5" />
+                  <span>Keşif Metraj (Malzeme + Kablo)</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('ges'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'ges' 
+                      ? 'bg-yellow-100 text-yellow-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Zap className="w-5 h-5" />
+                  <span>GES Teklifi</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('bordro'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'bordro' 
+                      ? 'bg-teal-100 text-teal-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Banknote className="w-5 h-5" />
+                  <span>Bordro</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('beyaz-yaka'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'beyaz-yaka' 
+                      ? 'bg-indigo-100 text-indigo-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Users className="w-5 h-5" />
+                  <span>Beyaz Yaka Bordro</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('osos'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'osos' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <FileText className="w-5 h-5" />
+                  <span>OSOS</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('akaryakıt'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'akaryakıt' 
+                      ? 'bg-orange-100 text-orange-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Fuel className="w-5 h-5" />
+                  <span>Akaryakıt Takip</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('is-takip'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'is-takip' 
+                      ? 'bg-purple-100 text-purple-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Briefcase className="w-5 h-5" />
+                  <span>İş Takip</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('haftalik-raporlama'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'haftalik-raporlama' 
+                      ? 'bg-indigo-100 text-indigo-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <BarChart3 className="w-5 h-5" />
+                  <span>Haftalık Raporlama</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('urun-takip'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'urun-takip' 
+                      ? 'bg-purple-100 text-purple-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Package className="w-5 h-5" />
+                  <span>Ürün Takip</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveTab('saved'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'saved' 
+                      ? 'bg-purple-100 text-purple-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Save className="w-5 h-5" />
+                  <div className="flex items-center justify-between flex-1">
+                    <span>Kaydedilen Teklifler</span>
+                    {(allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length) > 0 && (
+                      <span className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded-full">
+                        {allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { if(selectedCompany) { setActiveTab('proposal'); setIsSidebarOpen(false); } }}
+                  disabled={!selectedCompany}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'proposal' 
+                      ? 'bg-blue-100 text-blue-700 shadow-sm font-semibold' 
+                      : selectedCompany ? 'text-gray-700 hover:bg-gray-100' : 'text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  <FileText className="w-5 h-5" />
+                  <div className="flex items-center justify-between flex-1">
+                    <span>Teklif Önizleme</span>
+                    {selectedCompany && (
+                      <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
+                        {selectedCompany.name.substring(0, 8)}...
+                      </span>
+                    )}
+                  </div>
+                </button>
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-2 md:px-6 py-4 md:py-8">
+        
+        {/* Menu Button */}
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed top-4 left-4 z-30 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg shadow-lg transition-all no-print"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+
+        {/* GES Teklifi Tab */}
+        {activeTab === 'ges' && (
+          <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4 md:gap-6 h-auto lg:h-[calc(100vh-200px)]">
+            {/* Sol Panel - Editör */}
+            <div className="w-full lg:w-5/12 bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden">
+              <div className="bg-gradient-to-r from-yellow-600 to-orange-600 px-4 md:px-6 py-3 md:py-4 border-b border-yellow-800 shrink-0">
+                <h2 className="text-base md:text-lg font-bold text-white flex items-center">
+                  <Zap className="mr-2 h-4 w-4 md:h-5 md:w-5"/>
+                  GES Teklifi Editörü
+                </h2>
+                <p className="text-yellow-100 text-[10px] md:text-xs mt-1">Güneş Enerjisi Sistemi Fiyat Teklifi</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Genel Ayarlar */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h3 className="text-sm font-bold text-blue-800 uppercase mb-3">Genel Ayarlar</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input 
+                      type="text" 
+                      placeholder="Müşteri Adı"
+                      value={gesForm.customerName}
+                      onChange={(e) => setGesForm({...gesForm, customerName: e.target.value})}
+                      className="px-3 py-2 text-sm border rounded w-full"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Lokasyon"
+                      value={gesForm.location}
+                      onChange={(e) => setGesForm({...gesForm, location: e.target.value})}
+                      className="px-3 py-2 text-sm border rounded w-full"
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="Dolar Kuru"
+                      value={gesForm.usdRate}
+                      onChange={(e) => setGesForm({...gesForm, usdRate: parseFloat(e.target.value)})}
+                      step="0.01"
+                      className="px-3 py-2 text-sm border rounded w-full"
+                    />
+                    <input 
+                      type="date"
+                      value={gesForm.offerDate}
+                      onChange={(e) => setGesForm({...gesForm, offerDate: e.target.value})}
+                      className="px-3 py-2 text-sm border rounded w-full"
+                    />
+                  </div>
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Logo Yükle</label>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (e) => setLogo(e.target.result);
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-100 file:text-blue-700"
+                    />
+                  </div>
+                </div>
+
+                {/* Hızlı Paket Yükleyici */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Kurulu Güç (kW)</label>
+                      <input 
+                        type="number"
+                        value={gesForm.autoPower}
+                        onChange={(e) => setGesForm({...gesForm, autoPower: parseFloat(e.target.value)})}
+                        className="px-3 py-2 text-sm border rounded w-full"
+                      />
+                    </div>
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={loadDefaultGESPackage}
+                        className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded text-xs font-semibold transition h-[38px]"
+                        title="12kW Ev Tipi Paket"
+                      >
+                        <Users className="w-3 h-3 inline mr-1"/>
+                        Ev Tipi
+                      </button>
+                      <button 
+                        onClick={loadCommercialGESPackage}
+                        className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded text-xs font-semibold transition h-[38px]"
+                        title="25kW Ticari Paket"
+                      >
+                        <Hammer className="w-3 h-3 inline mr-1"/>
+                        Ticari (25kW)
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">* Paket butonları mevcut listeyi silip standart şablonları yükler</p>
+                </div>
+
+                {/* Malzeme Listesi */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-sm font-bold text-gray-800 uppercase">Malzeme Listesi</h3>
+                    <button 
+                      onClick={addNewGESRow}
+                      className="text-green-600 text-xs font-bold hover:underline flex items-center"
+                    >
+                      <Plus className="w-3 h-3 mr-1"/>
+                      Manuel Satır Ekle
+                    </button>
+                  </div>
+
+                  {/* Hızlı Ürün Ekleme */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border border-blue-200 mb-3">
+                    <h4 className="text-xs font-bold text-blue-800 mb-2 flex items-center">
+                      <Sparkles className="w-3 h-3 mr-1"/>
+                      Hızlı Ürün Ekle (Veritabanından)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [category, key] = e.target.value.split('|');
+                            const product = gesDB[category][key];
+                            setGesItems([...gesItems, {
+                              brand: product.brand,
+                              desc: product.name,
+                              qty: 1,
+                              price: product.price
+                            }]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="text-xs border border-blue-300 rounded px-2 py-1.5 bg-white"
+                      >
+                        <option value="">🔋 Akü Seç</option>
+                        {Object.entries(gesDB.batteries).map(([key, prod]) => (
+                          <option key={key} value={`batteries|${key}`}>
+                            {prod.name} - ${prod.price}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [category, key] = e.target.value.split('|');
+                            const product = gesDB[category][key];
+                            setGesItems([...gesItems, {
+                              brand: product.brand,
+                              desc: product.name,
+                              qty: 1,
+                              price: product.price
+                            }]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="text-xs border border-blue-300 rounded px-2 py-1.5 bg-white"
+                      >
+                        <option value="">⚡ İnverter Seç</option>
+                        {Object.entries(gesDB.inverters).map(([key, prod]) => (
+                          <option key={key} value={`inverters|${key}`}>
+                            {prod.name} - ${prod.price}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [category, key] = e.target.value.split('|');
+                            const product = gesDB[category][key];
+                            setGesItems([...gesItems, {
+                              brand: product.brand,
+                              desc: product.name,
+                              qty: 1,
+                              price: product.price
+                            }]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="text-xs border border-blue-300 rounded px-2 py-1.5 bg-white"
+                      >
+                        <option value="">☀️ Panel Seç</option>
+                        {Object.entries(gesDB.panels).map(([key, prod]) => (
+                          <option key={key} value={`panels|${key}`}>
+                            {prod.name} - ${prod.price}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [category, key] = e.target.value.split('|');
+                            const product = gesDB[category][key];
+                            setGesItems([...gesItems, {
+                              brand: product.brand,
+                              desc: product.name,
+                              qty: 1,
+                              price: product.price
+                            }]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="text-xs border border-blue-300 rounded px-2 py-1.5 bg-white"
+                      >
+                        <option value="">📦 Kabinet Seç</option>
+                        {Object.entries(gesDB.cabinets).map(([key, prod]) => (
+                          <option key={key} value={`cabinets|${key}`}>
+                            {prod.name} - ${prod.price}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [category, key] = e.target.value.split('|');
+                            const product = gesDB[category][key];
+                            setGesItems([...gesItems, {
+                              brand: product.brand,
+                              desc: product.name,
+                              qty: 1,
+                              price: product.price
+                            }]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="text-xs border border-blue-300 rounded px-2 py-1.5 bg-white"
+                      >
+                        <option value="">🔌 Kablo/Konnektör</option>
+                        {Object.entries(gesDB.cables).map(([key, prod]) => (
+                          <option key={key} value={`cables|${key}`}>
+                            {prod.name} - ${prod.price}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [category, key] = e.target.value.split('|');
+                            const product = gesDB[category][key];
+                            setGesItems([...gesItems, {
+                              brand: product.brand,
+                              desc: product.name,
+                              qty: 1,
+                              price: product.price
+                            }]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="text-xs border border-blue-300 rounded px-2 py-1.5 bg-white"
+                      >
+                        <option value="">🔧 Aksesuar Seç</option>
+                        {Object.entries(gesDB.accessories).map(([key, prod]) => (
+                          <option key={key} value={`accessories|${key}`}>
+                            {prod.name} - ${prod.price}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [category, key] = e.target.value.split('|');
+                            const product = gesDB[category][key];
+                            setGesItems([...gesItems, {
+                              brand: product.brand,
+                              desc: product.name,
+                              qty: 1,
+                              price: product.price
+                            }]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="text-xs border border-blue-300 rounded px-2 py-1.5 bg-white"
+                      >
+                        <option value="">🔌 BMS Seç</option>
+                        {Object.entries(gesDB.bms).map(([key, prod]) => (
+                          <option key={key} value={`bms|${key}`}>
+                            {prod.name} - ${prod.price}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [category, key] = e.target.value.split('|');
+                            const product = gesDB[category][key];
+                            setGesItems([...gesItems, {
+                              brand: product.brand,
+                              desc: product.name,
+                              qty: 1,
+                              price: product.price
+                            }]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="text-xs border border-blue-300 rounded px-2 py-1.5 bg-white"
+                      >
+                        <option value="">🚗 EV Şarj İstasyonu</option>
+                        {Object.entries(gesDB.evChargers).map(([key, prod]) => (
+                          <option key={key} value={`evChargers|${key}`}>
+                            {prod.name} - ${prod.price}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-xs text-blue-600 mt-2">
+                      ℹ️ Veritabanından seçtiğiniz ürünler otomatik olarak marka, açıklama ve fiyat bilgileriyle eklenir
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {gesItems.map((item, idx) => (
+                      <div key={idx} className="bg-white p-3 rounded border border-gray-200 shadow-sm hover:shadow-md transition">
+                        <div className="flex gap-2 mb-2">
+                          <input 
+                            type="text" 
+                            placeholder="Marka"
+                            value={item.brand}
+                            onChange={(e) => updateGESItem(idx, 'brand', e.target.value)}
+                            className="w-1/4 border px-2 py-1 rounded text-xs focus:ring-2 focus:ring-yellow-300 outline-none"
+                          />
+                          <input 
+                            type="text" 
+                            placeholder="Ürün Açıklaması"
+                            value={item.desc}
+                            onChange={(e) => updateGESItem(idx, 'desc', e.target.value)}
+                            className="w-3/4 border px-2 py-1 rounded text-xs focus:ring-2 focus:ring-yellow-300 outline-none"
+                          />
+                          <button 
+                            onClick={() => removeGESRow(idx)}
+                            className="text-red-500 px-2 hover:bg-red-50 rounded transition"
+                            title="Sil"
+                          >
+                            <Trash2 className="w-4 h-4"/>
+                          </button>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1 flex items-center border rounded px-2 bg-gray-50">
+                            <span className="text-xs text-gray-500 mr-1">Adet:</span>
+                            <input 
+                              type="number"
+                              value={item.qty}
+                              onChange={(e) => updateGESItem(idx, 'qty', parseFloat(e.target.value))}
+                              className="w-full bg-transparent py-1 outline-none text-right text-sm focus:bg-white"
+                            />
+                          </div>
+                          <div className="flex-1 flex items-center border rounded px-2 bg-gray-50">
+                            <span className="text-xs text-gray-500 mr-1">Birim($):</span>
+                            <input 
+                              type="number"
+                              step="0.01"
+                              value={item.price}
+                              onChange={(e) => updateGESItem(idx, 'price', parseFloat(e.target.value))}
+                              className="w-full bg-transparent py-1 outline-none text-right text-sm focus:bg-white"
+                            />
+                          </div>
+                          <div className="flex-1 flex items-center border rounded px-2 bg-blue-50">
+                            <span className="text-xs text-blue-700 mr-1">Toplam:</span>
+                            <span className="text-sm font-bold text-blue-800">${((item.qty || 0) * (item.price || 0)).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Maliyet & Kar Ayarları */}
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <h3 className="text-sm font-bold text-yellow-800 uppercase mb-3">Ek Hizmetler & Kar Marjı</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="flex-1">Montaj ve İşçilik (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.laborRate}
+                        onChange={(e) => setGesForm({...gesForm, laborRate: parseFloat(e.target.value) || 0})}
+                        className="w-20 text-right border rounded px-2 py-1"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="flex-1">Nakliye ve Lojistik (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.transportRate}
+                        onChange={(e) => setGesForm({...gesForm, transportRate: parseFloat(e.target.value) || 0})}
+                        className="w-20 text-right border rounded px-2 py-1"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="flex-1">Müh. Hizmetleri & Teknik Destek (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.overheadRate}
+                        onChange={(e) => setGesForm({...gesForm, overheadRate: parseFloat(e.target.value) || 0})}
+                        className="w-20 text-right border rounded px-2 py-1"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center gap-2 font-bold">
+                      <span className="flex-1">KAR ORANI (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.marginRate}
+                        onChange={(e) => setGesForm({...gesForm, marginRate: parseFloat(e.target.value) || 0})}
+                        className="w-20 text-right border border-yellow-400 bg-white rounded px-2 py-1"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center gap-2 border-t border-yellow-200 pt-2">
+                      <span className="flex-1">KDV (%)</span>
+                      <input 
+                        type="number"
+                        value={gesForm.vatRate}
+                        onChange={(e) => setGesForm({...gesForm, vatRate: parseFloat(e.target.value) || 0})}
+                        className="w-20 text-right border rounded px-2 py-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Kaydet ve Export Butonları */}
+                <div className="space-y-2">
+                  <button 
+                    onClick={toggleGesEditorMode}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <Edit3 className="w-5 h-5 mr-2"/>
+                    {gesEditorMode ? '📝 Düzenleme Modundan Çık' : '✏️ Düzenleme Modu'}
+                  </button>
+                  
+                  <button 
+                    onClick={saveGESProposal}
+                    disabled={gesItems.length === 0}
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <Save className="w-5 h-5 mr-2"/>
+                    Teklifi Kaydet
+                  </button>
+                  
+                  <button 
+                    onClick={handleGESPDFExport}
+                    disabled={gesItems.length === 0}
+                    className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <FileText className="w-5 h-5 mr-2"/>
+                    PDF İndir
+                  </button>
+                  
+                  <button 
+                    onClick={() => window.print()}
+                    disabled={gesItems.length === 0}
+                    className="w-full bg-gray-700 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <Printer className="w-5 h-5 mr-2"/>
+                    Yazdır
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Sağ Panel - Önizleme */}
+            <div className="w-7/12 bg-gray-200 rounded-xl overflow-auto p-8 flex flex-col items-center gap-6">
+              
+              {/* Editor Mode Banner */}
+              {gesEditorMode && (
+                <div className="w-full space-y-2">
+                  <div className="bg-indigo-600 text-white px-4 py-3 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Edit3 className="w-5 h-5 mr-2"/>
+                      <span className="font-semibold">Düzenleme Modu Aktif - Metinleri doğrudan düzenleyebilirsiniz</span>
+                    </div>
+                    <button 
+                      onClick={toggleGesEditorMode}
+                      className="bg-white text-indigo-600 px-4 py-1 rounded hover:bg-indigo-50 transition"
+                    >
+                      Kaydet ve Çık
+                    </button>
+                  </div>
+                  
+                  {/* Formatting Toolbar */}
+                  <div className="bg-white border border-gray-300 rounded-lg p-3 flex flex-wrap items-center gap-2">
+                    <button 
+                      onClick={() => document.execCommand('bold')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Kalın"
+                    >
+                      <Bold className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('italic')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="İtalik"
+                    >
+                      <Italic className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('underline')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Altı Çizili"
+                    >
+                      <Type className="w-4 h-4"/>
+                    </button>
+                    <div className="w-px h-6 bg-gray-300"></div>
+                    <select 
+                      onChange={(e) => document.execCommand('fontSize', false, e.target.value)}
+                      className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="">Yazı Boyutu</option>
+                      <option value="1">Çok Küçük</option>
+                      <option value="2">Küçük</option>
+                      <option value="3">Normal</option>
+                      <option value="4">Büyük</option>
+                      <option value="5">Çok Büyük</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              
+              <div 
+                id="ges-printable-area"
+                contentEditable={gesEditorMode}
+                suppressContentEditableWarning={true}
+                className={gesEditorMode ? 'outline-2 outline-dashed outline-indigo-400 w-full' : 'w-full'}
+              >
+              {(() => {
+                const totals = calculateGESTotals();
+                const dateObj = new Date(gesForm.offerDate);
+                
+                // Dinamik sayfalama: Her sayfada maksimum 18 ürün
+                const ITEMS_PER_PAGE = 18;
+                const totalPages = Math.ceil(gesItems.length / ITEMS_PER_PAGE) + 1; // +1 şartlar sayfası
+                const itemPages = [];
+                
+                for (let i = 0; i < gesItems.length; i += ITEMS_PER_PAGE) {
+                  itemPages.push(gesItems.slice(i, i + ITEMS_PER_PAGE));
+                }
+                
+                return (
+                  <>
+                    {/* DİNAMİK SAYFA(LAR) - Ürün Listesi */}
+                    {itemPages.map((pageItems, pageIndex) => {
+                      const isFirstPage = pageIndex === 0;
+                      const isLastItemPage = pageIndex === itemPages.length - 1;
+                      const currentPageNum = pageIndex + 1;
+                      
+                      return (
+                        <div key={pageIndex} className="ges-pdf-page bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
+                          <div>
+                          {/* Header */}
+                          <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-4">
+                            <img 
+                              src="/fatura_logo.png" 
+                              className="h-16 object-contain"
+                              alt="Kobinerji Logo"
+                              onError={(e) => { e.target.src = "/kobinerji_logo.png"; }}
+                            />
+                            <div className="text-right">
+                              <h2 className="text-2xl font-bold text-blue-700">FİYAT TEKLİFİ</h2>
+                              <p className="text-blue-600 text-xs mt-1">Güneş Enerjisi Sistemi</p>
+                              <p className="text-gray-500 text-xs mt-1">Tarih: {dateObj.toLocaleDateString('tr-TR')}</p>
+                            </div>
+                          </div>
+
+                          {/* Müşteri Bilgisi (Sadece ilk sayfada) */}
+                          {isFirstPage && (
+                            <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                              <div className="flex justify-between items-end">
+                                <div>
+                                  <span className="text-xs text-blue-600 uppercase font-semibold">Sayın Yetkili / Müşteri</span>
+                                  <h3 className="text-lg font-bold text-gray-800">{gesForm.customerName}</h3>
+                                  <p className="text-gray-600 text-sm">{gesForm.location}</p>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs text-blue-600">Para Birimi</div>
+                                  <div className="font-bold text-gray-800">USD ($)</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Tablo */}
+                          <table className="w-full mb-4 border-collapse border border-gray-300">
+                            <thead style={{backgroundColor: '#1e40af'}}>
+                              <tr>
+                                <th className="border border-gray-300 p-2 text-left font-semibold text-[9pt] w-10 text-white">No</th>
+                                <th className="border border-gray-300 p-2 text-left font-semibold text-[9pt] text-white">Marka</th>
+                                <th className="border border-gray-300 p-2 text-left font-semibold text-[9pt] w-1/2 text-white">Açıklama</th>
+                                <th className="border border-gray-300 p-2 text-center font-semibold text-[9pt] text-white">Miktar</th>
+                                <th className="border border-gray-300 p-2 text-right font-semibold text-[9pt] text-white">Birim Fiyat</th>
+                                <th className="border border-gray-300 p-2 text-right font-semibold text-[9pt] text-white">Toplam</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-gray-700 text-[9pt]">
+                              {pageItems.map((item, idx) => {
+                                const globalIdx = pageIndex * ITEMS_PER_PAGE + idx;
+                                const total = (item.qty || 0) * (item.price || 0);
+                                return (
+                                  <tr key={globalIdx}>
+                                    <td className="border border-gray-300 p-2 text-gray-500">{globalIdx + 1}</td>
+                                    <td className="border border-gray-300 p-2 font-semibold">{item.brand}</td>
+                                    <td className="border border-gray-300 p-2">{item.desc}</td>
+                                    <td className="border border-gray-300 p-2 text-center">{item.qty}</td>
+                                    <td className="border border-gray-300 p-2 text-right text-gray-600">{formatMoney(item.price)}</td>
+                                    <td className="border border-gray-300 p-2 text-right font-bold text-gray-800">{formatMoney(total)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+
+                          {/* Özet Hesaplar (Sadece son ürün sayfasında) */}
+                          {isLastItemPage && (
+                            <div className="flex justify-end mt-auto mb-8">
+                      <div className="w-1/2">
+                        <table className="w-full text-[9pt] border-collapse border border-gray-300">
+                          <tbody>
+                            <tr className="bg-gray-50">
+                              <td className="border border-gray-300 p-2 font-semibold">Malzeme Toplamı:</td>
+                              <td className="border border-gray-300 p-2 text-right font-semibold">{formatMoney(totals.materialTotal)}</td>
+                            </tr>
+                            {gesForm.laborRate > 0 && (
+                              <tr>
+                                <td className="border border-gray-300 p-2">+ Montaj ve İşçilik ({gesForm.laborRate}%):</td>
+                                <td className="border border-gray-300 p-2 text-right">{formatMoney(totals.laborCost)}</td>
+                              </tr>
+                            )}
+                            {gesForm.transportRate > 0 && (
+                              <tr>
+                                <td className="border border-gray-300 p-2">+ Nakliye ve Lojistik ({gesForm.transportRate}%):</td>
+                                <td className="border border-gray-300 p-2 text-right">{formatMoney(totals.transportCost)}</td>
+                              </tr>
+                            )}
+                            {gesForm.overheadRate > 0 && (
+                              <tr>
+                                <td className="border border-gray-300 p-2">+ Müh. Hizmetleri & Teknik Destek ({gesForm.overheadRate}%):</td>
+                                <td className="border border-gray-300 p-2 text-right">{formatMoney(totals.overheadCost)}</td>
+                              </tr>
+                            )}
+                            <tr className="bg-gray-50">
+                              <td className="border border-gray-300 p-2 font-semibold">Proje Toplam Maliyeti:</td>
+                              <td className="border border-gray-300 p-2 text-right font-semibold">{formatMoney(totals.directCost)}</td>
+                            </tr>
+                            {gesForm.marginRate > 0 && (
+                              <tr className="bg-green-50">
+                                <td className="border border-gray-300 p-2 font-semibold text-green-700">+ Kar Marjı ({gesForm.marginRate}%):</td>
+                                <td className="border border-gray-300 p-2 text-right font-semibold text-green-700">{formatMoney(totals.marginAmount)}</td>
+                              </tr>
+                            )}
+                            <tr style={{backgroundColor: '#c8f0c8'}}>
+                              <td className="border border-gray-300 p-3 font-bold text-[10pt]">GENEL TOPLAM (KDV Hariç):</td>
+                              <td className="border border-gray-300 p-3 text-right font-bold text-[10pt]">{formatMoney(totals.grandTotalExVat)}</td>
+                            </tr>
+                            {gesForm.vatRate > 0 && (
+                              <tr className="bg-blue-50">
+                                <td className="border border-gray-300 p-2 font-semibold text-blue-700">+ KDV (%{gesForm.vatRate}):</td>
+                                <td className="border border-gray-300 p-2 text-right font-semibold text-blue-700">{formatMoney(totals.vatAmount)}</td>
+                              </tr>
+                            )}
+                            <tr className="bg-yellow-600 text-white">
+                              <td className="border border-gray-300 p-3 font-bold text-[11pt]">ÖDENECEK TUTAR (KDV Dahil):</td>
+                              <td className="border border-gray-300 p-3 text-right font-bold text-[11pt]">{formatMoney(totals.finalTotal)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-200">
+                          <p className="text-[8pt] text-gray-500 text-center">Toplam Ödenecek TUTAR TL Karşılığı</p>
+                          <p className="text-[12pt] font-black text-gray-800 text-center">{formatMoney(totals.tlTotal, '₺')}</p>
+                        </div>
+                      </div>
+                            </div>
+                          )}
+
+                          </div>
+                          
+                          {/* Footer */}
+                          <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-2">
+                            <div className="text-[9pt] text-gray-600">
+                              <p className="font-bold text-gray-800 text-[9.5pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                              <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                              <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                              <p className="text-gray-400 mt-1 text-right">Sayfa {currentPageNum}/{totalPages}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* SON SAYFA - Şartlar ve Notlar */}
+                    <div className="ges-pdf-page bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800" style={{pageBreakBefore: 'always', pageBreakInside: 'avoid', pageBreakAfter: 'auto'}}>
+                    <div>
+                    {/* Header - Sayfa 2 */}
+                    <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-6">
+                      <img 
+                        src="/fatura_logo.png" 
+                        className="h-16 object-contain"
+                        alt="Kobinerji Logo"
+                        onError={(e) => { e.target.src = "/kobinerji_logo.png"; }}
+                      />
+                      <div className="text-right">
+                        <h2 className="text-xl font-bold text-gray-800">TEKLİF ŞARTLARI</h2>
+                        <p className="text-gray-500 text-xs mt-1">Güneş Enerjisi Sistemi</p>
+                      </div>
+                    </div>
+
+                    {/* Müşteri Özeti */}
+                    <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <h3 className="text-[11pt] font-bold text-blue-900 mb-2">Teklif Özeti</h3>
+                      <div className="grid grid-cols-2 gap-3 text-[9pt]">
+                        <div>
+                          <span className="text-gray-600">Müşteri:</span>
+                          <p className="font-semibold text-gray-800">{gesForm.customerName}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Lokasyon:</span>
+                          <p className="font-semibold text-gray-800">{gesForm.location}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Kurulu Güç:</span>
+                          <p className="font-semibold text-gray-800">{gesForm.autoPower} kW</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Toplam Tutar (KDV Dahil):</span>
+                          <p className="font-bold text-blue-900">{formatMoney(totals.finalTotal)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Genel Şartlar */}
+                    <div className="mb-6">
+                      <h3 className="text-[11pt] font-bold text-gray-800 mb-3 pb-2 border-b-2 border-gray-300 uppercase">Genel Şartlar ve Koşullar</h3>
+                      
+                      <div className="space-y-4">
+                        <div className="bg-gray-50 p-3 rounded">
+                          <h4 className="text-[10pt] font-bold text-gray-700 mb-2 flex items-center">
+                            <span className="text-blue-600 mr-2">1.</span> Teklif Geçerlilik Süresi
+                          </h4>
+                          <p className="text-[9pt] text-gray-700 pl-5">
+                            Bu teklif <strong>30 (otuz) gün</strong> süreyle geçerlidir. Belirtilen süre sonunda fiyatlar döviz kuru ve hammadde değişikliklerine bağlı olarak güncellenecektir.
+                          </p>
+                        </div>
+
+                        <div className="bg-gray-50 p-3 rounded">
+                          <h4 className="text-[10pt] font-bold text-gray-700 mb-2 flex items-center">
+                            <span className="text-blue-600 mr-2">2.</span> Kapsam ve Hizmetler
+                          </h4>
+                          <ul className="list-disc list-inside text-[9pt] text-gray-700 pl-5 space-y-1">
+                            <li>Tüm ekipmanların tedariki (panel, inverter, akü, kablo, bağlantı malzemeleri)</li>
+                            <li>Proje kapsamında gerekli tüm teknik hırdavat ve bağlantı malzemeleri dahildir</li>
+                            <li>Profesyonel montaj ve kurulum hizmetleri</li>
+                            <li>Sistem devreye alma ve test işlemleri</li>
+                            <li>Montaj sonrası sistem eğitimi ve kullanım kılavuzu</li>
+                          </ul>
+                        </div>
+
+                        <div className="bg-gray-50 p-3 rounded">
+                          <h4 className="text-[10pt] font-bold text-gray-700 mb-2 flex items-center">
+                            <span className="text-blue-600 mr-2">3.</span> Ekipman Kalitesi ve Belgeler
+                          </h4>
+                          <p className="text-[9pt] text-gray-700 pl-5">
+                            Tüm ekipmanlar <strong>orijinal, sıfır ve CE belgeli</strong> olup, gerekli kalite sertifikaları, test raporları ve kullanım kılavuzları ile birlikte teslim edilir. Ekipmanlar uluslararası kalite standartlarına uygundur.
+                          </p>
+                        </div>
+
+                        <div className="bg-gray-50 p-3 rounded">
+                          <h4 className="text-[10pt] font-bold text-gray-700 mb-2 flex items-center">
+                            <span className="text-blue-600 mr-2">4.</span> Garanti ve Servis
+                          </h4>
+                          <p className="text-[9pt] text-gray-700 pl-5">
+                            Sistem devreye alma sonrası <strong>1 (bir) yıl</strong> işçilik garantisi verilmektedir. Ekipman garantileri üretici firma garantileri çerçevesindedir (Genellikle paneller 25 yıl, inverterler 10 yıl, aküler 5-10 yıl).
+                          </p>
+                        </div>
+
+                        <div className="bg-gray-50 p-3 rounded">
+                          <h4 className="text-[10pt] font-bold text-gray-700 mb-2 flex items-center">
+                            <span className="text-blue-600 mr-2">5.</span> Teslimat Süresi
+                          </h4>
+                          <p className="text-[9pt] text-gray-700 pl-5">
+                            Sipariş onayı ve avans ödemesi alındıktan sonra <strong>15-20 iş günü</strong> içerisinde sistem kurulumu tamamlanacak ve devreye alınacaktır. Özel durumlar ve yüksek talep dönemlerinde teslimat süreleri uzayabilir.
+                          </p>
+                        </div>
+
+                        </div>
+
+                      </div>
+                    </div>
+
+                      {/* Footer - Son Sayfa */}
+                      <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-2">
+                        <div className="text-[9pt] text-gray-600">
+                          <p className="font-bold text-gray-800 text-[9.5pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                          <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                          <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                          <p className="text-gray-400 mt-1 text-right">Sayfa {totalPages}/{totalPages}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab Content: Kaydedilen Teklifler */}
+        {activeTab === 'saved' && (
+          <div className="max-w-7xl mx-auto">
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-2xl p-8 mb-6">
+              <h1 className="text-3xl font-bold text-white mb-2 flex items-center">
+                <Save className="mr-3 h-8 w-8"/>
+                Kaydedilen Teklifler
+              </h1>
+              <p className="text-purple-100">Tüm kaydedilmiş tekliflerinizi görüntüleyin ve yükleyin</p>
+            </div>
+
+            {/* Filtre Butonları */}
+            <div className="flex gap-3 mb-6 flex-wrap">
+              <button
+                onClick={() => setProposalFilterType('all')}
+                className={`px-6 py-3 rounded-lg font-semibold transition shadow ${
+                  proposalFilterType === 'all'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Tümü ({allSavedProposals.yg.length + allSavedProposals.periodic.length + allSavedProposals.kesif.length + allSavedProposals.ges.length})
+              </button>
+              <button
+                onClick={() => setProposalFilterType('yg')}
+                className={`px-6 py-3 rounded-lg font-semibold transition shadow ${
+                  proposalFilterType === 'yg'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                YG Teklifleri ({allSavedProposals.yg.length})
+              </button>
+              <button
+                onClick={() => setProposalFilterType('periodic')}
+                className={`px-6 py-3 rounded-lg font-semibold transition shadow ${
+                  proposalFilterType === 'periodic'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Periyodik Kontrol ({allSavedProposals.periodic.length})
+              </button>
+              <button
+                onClick={() => setProposalFilterType('kesif')}
+                className={`px-6 py-3 rounded-lg font-semibold transition shadow ${
+                  proposalFilterType === 'kesif'
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Keşif Metraj ({allSavedProposals.kesif.length})
+              </button>
+              <button
+                onClick={() => setProposalFilterType('ges')}
+                className={`px-6 py-3 rounded-lg font-semibold transition shadow ${
+                  proposalFilterType === 'ges'
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                GES Teklifleri ({allSavedProposals.ges.length})
+              </button>
+            </div>
+
+            {/* Teklifler Listesi */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* YG Teklifleri */}
+              {(proposalFilterType === 'all' || proposalFilterType === 'yg') &&
+                allSavedProposals.yg.map((proposal) => (
+                  <div key={proposal.id} className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500 hover:shadow-xl transition">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-blue-100 p-2 rounded-lg">
+                        <UserPlus className="w-6 h-6 text-blue-600"/>
+                      </div>
+                      <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold">YG Teklifi</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">{proposal.name}</h3>
+                    <div className="space-y-2 mb-4 text-sm text-gray-600">
+                      <div className="flex items-center justify-between">
+                        <span>Tarih:</span>
+                        <span className="font-semibold">{proposal.date}</span>
+                      </div>
+                      {proposal.data.form && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span>Firma:</span>
+                            <span className="font-semibold truncate max-w-[150px]">{proposal.data.form.name}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Güç:</span>
+                            <span className="font-semibold">{proposal.data.form.powerStr} kVA</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadProposal(proposal)}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        Yükle
+                      </button>
+                      <button
+                        onClick={() => deleteProposal('yg', proposal.id)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        <Trash2 className="w-4 h-4"/>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+              {/* Periyodik Kontrol Teklifleri */}
+              {(proposalFilterType === 'all' || proposalFilterType === 'periodic') &&
+                allSavedProposals.periodic.map((proposal) => (
+                  <div key={proposal.id} className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500 hover:shadow-xl transition">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-green-100 p-2 rounded-lg">
+                        <RefreshCw className="w-6 h-6 text-green-600"/>
+                      </div>
+                      <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold">Periyodik Kontrol</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">{proposal.name}</h3>
+                    <div className="space-y-2 mb-4 text-sm text-gray-600">
+                      <div className="flex items-center justify-between">
+                        <span>Tarih:</span>
+                        <span className="font-semibold">{new Date(proposal.created_at).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      {proposal.data.customer && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span>Firma:</span>
+                            <span className="font-semibold truncate max-w-[150px]">{proposal.data.customer.name}</span>
+                          </div>
+                          {proposal.data.inputs && (
+                            <div className="flex items-center justify-between">
+                              <span>Trafo Gücü:</span>
+                              <span className="font-semibold">{proposal.data.inputs.trafoGucu} kVA</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadProposal(proposal)}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        Yükle
+                      </button>
+                      <button
+                        onClick={() => deleteProposal('periodic', proposal.id)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        <Trash2 className="w-4 h-4"/>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+              {/* Keşif Metraj Teklifleri */}
+              {(proposalFilterType === 'all' || proposalFilterType === 'kesif') &&
+                allSavedProposals.kesif.map((proposal) => (
+                  <div key={proposal.id} className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-orange-500 hover:shadow-xl transition">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-orange-100 p-2 rounded-lg">
+                        <Hammer className="w-6 h-6 text-orange-600"/>
+                      </div>
+                      <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full font-semibold">Keşif Metraj</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">{proposal.name}</h3>
+                    <div className="space-y-2 mb-4 text-sm text-gray-600">
+                      <div className="flex items-center justify-between">
+                        <span>Tarih:</span>
+                        <span className="font-semibold">{new Date(proposal.created_at).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      {proposal.data.customer && (
+                        <div className="flex items-center justify-between">
+                          <span>Firma:</span>
+                          <span className="font-semibold truncate max-w-[150px]">{proposal.data.customer.name}</span>
+                        </div>
+                      )}
+                      {proposal.data.products && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span>Ürün Sayısı:</span>
+                            <span className="font-semibold">{proposal.data.products.length} kalem</span>
+                          </div>
+                          {proposal.data.totals && (
+                            <div className="flex items-center justify-between">
+                              <span>Toplam:</span>
+                              <span className="font-semibold text-orange-600">{proposal.data.totals.grandTotal.toFixed(2)} TL</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadProposal(proposal)}
+                        className="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        Yükle
+                      </button>
+                      <button
+                        onClick={() => deleteProposal('kesif', proposal.id)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        <Trash2 className="w-4 h-4"/>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+              {/* GES Teklifleri */}
+              {(proposalFilterType === 'all' || proposalFilterType === 'ges') &&
+                allSavedProposals.ges.map((proposal) => (
+                  <div key={proposal.id} className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-yellow-500 hover:shadow-xl transition">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-yellow-100 p-2 rounded-lg">
+                        <Zap className="w-6 h-6 text-yellow-600"/>
+                      </div>
+                      <span className="text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full font-semibold">GES</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">{proposal.name}</h3>
+                    <div className="space-y-2 mb-4 text-sm text-gray-600">
+                      <div className="flex items-center justify-between">
+                        <span>Tarih:</span>
+                        <span className="font-semibold">{new Date(proposal.created_at).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      {proposal.data.form && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span>Müşteri:</span>
+                            <span className="font-semibold truncate max-w-[150px]">{proposal.data.form.customerName}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Güç:</span>
+                            <span className="font-semibold">{proposal.data.form.autoPower} kW</span>
+                          </div>
+                        </>
+                      )}
+                      {proposal.data.totals && (
+                        <div className="flex items-center justify-between">
+                          <span>Toplam:</span>
+                          <span className="font-semibold text-yellow-600">${proposal.data.totals.finalTotal.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadProposal(proposal)}
+                        className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        Yükle
+                      </button>
+                      <button
+                        onClick={() => deleteProposal('ges', proposal.id)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition text-sm"
+                      >
+                        <Trash2 className="w-4 h-4"/>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            {/* Boş Durum */}
+            {allSavedProposals.yg.length === 0 && 
+             allSavedProposals.periodic.length === 0 && 
+             allSavedProposals.kesif.length === 0 && 
+             allSavedProposals.ges.length === 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+                <Save className="w-16 h-16 text-gray-300 mx-auto mb-4"/>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Henüz Kaydedilmiş Teklif Yok</h3>
+                <p className="text-gray-600 mb-6">
+                  Teklif formlarında "Kaydet" butonunu kullanarak tekliflerinizi kaydedebilirsiniz.
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => setActiveTab('manual')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition"
+                  >
+                    YG Teklifi Oluştur
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('periodic')}
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition"
+                  >
+                    Periyodik Kontrol
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('kesif')}
+                    className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-semibold transition"
+                  >
+                    Keşif Metraj
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Bordro Takip Tab */}
+        {activeTab === 'bordro' && (
+          <div className="max-w-full mx-auto">
+            <BordroWithPassword />
+          </div>
+        )}
+
+        {/* Beyaz Yaka Bordro Tab */}
+        {activeTab === 'beyaz-yaka' && (
+          <div className="max-w-full mx-auto">
+            <BeyazYakaBordro />
+          </div>
+        )}
+
+        {/* OSOS Tab */}
+        {activeTab === 'osos' && (
+          <div className="h-full">
+            <Osos />
+          </div>
+        )}
+
+        {/* Akaryakıt Takip Tab */}
+        {activeTab === 'akaryakıt' && (
+          <div className="h-full">
+            <AkaryakitTakip />
+          </div>
+        )}
+
+        {/* İş Takip Tab */}
+        {activeTab === 'is-takip' && (
+          <div className="h-full">
+            <IsTakip />
+          </div>
+        )}
+
+        {/* Haftalık Raporlama Tab */}
+        {activeTab === 'haftalik-raporlama' && (
+          <div className="h-full">
+            <HaftalikRaporlama />
+          </div>
+        )}
+
+        {/* Ürün Takip Tab */}
+        {activeTab === 'urun-takip' && (
+          <div className="h-full">
+            <UrunTakip />
+          </div>
+        )}
+
+        {/* Görev Takip Tab */}
+        {activeTab === 'gorev' && (
+          <div className="h-full">
+            <GorevTakip />
+          </div>
+        )}
+
+        {/* Dashboard Tab */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-lg p-8 text-white">
+              <h1 className="text-3xl font-bold mb-2">📊 Ürün ve Fiyat Veritabanı Dashboard</h1>
+              <p className="text-indigo-100">Tüm ürün, kablo ve fiyat verilerinizin detaylı analizi</p>
+            </div>
+
+            {/* Genel İstatistikler */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Toplam Ürün</p>
+                    <p className="text-3xl font-bold text-blue-600 mt-2">{productStats.toplamUrun}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      F1: {normalizedFatura1.length} • F2: {normalizedFatura2.length}
+                    </p>
+                  </div>
+                  <FileSpreadsheet className="w-12 h-12 text-blue-500 opacity-20"/>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Farklı Marka</p>
+                    <p className="text-3xl font-bold text-green-600 mt-2">{productStats.markalar.length}</p>
+                  </div>
+                  <Users className="w-12 h-12 text-green-500 opacity-20"/>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-purple-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Kablo Kategorisi</p>
+                    <p className="text-3xl font-bold text-purple-600 mt-2">{KabloFiyatData.kategoriler.length}</p>
+                  </div>
+                  <Cable className="w-12 h-12 text-purple-500 opacity-20"/>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-orange-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Ort. Ürün Fiyatı</p>
+                    <p className="text-3xl font-bold text-orange-600 mt-2">{productStats.ortalamaFiyat.toFixed(2)} ₺</p>
+                  </div>
+                  <TrendingDown className="w-12 h-12 text-orange-500 opacity-20"/>
+                </div>
+              </div>
+
+              {/* Veri Kaynakları */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg shadow-lg p-6 border-l-4 border-indigo-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-semibold">Veri Kaynağı</p>
+                    <p className="text-lg font-bold text-indigo-600 mt-2">2 Fatura</p>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-xs text-gray-600">Fatura1: {normalizedFatura1.length}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        <span className="text-xs text-gray-600">Fatura2: {normalizedFatura2.length}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <FileText className="w-12 h-12 text-indigo-500 opacity-20"/>
+                </div>
+              </div>
+            </div>
+
+            {/* Kategori Dağılımı */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <FileSpreadsheet className="w-6 h-6 mr-2 text-indigo-600"/>
+                  Kategori Dağılımı
+                </h3>
+                <div className="space-y-3">
+                  {productStats.kategoriSayilari.map(({ ad, adet }) => (
+                    <div key={ad} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700 font-medium">{ad}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-indigo-100 rounded-full h-2 w-32">
+                          <div
+                            className="bg-indigo-600 h-2 rounded-full"
+                            style={{ width: `${(adet / productStats.toplamUrun) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-bold text-indigo-600">{adet}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top 5 Markalar */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <Users className="w-6 h-6 mr-2 text-green-600"/>
+                  En Popüler Markalar
+                </h3>
+                <div className="space-y-3">
+                  {productStats.enPopulerMarkalar.map(([marka, adet], idx) => (
+                    <div key={marka} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-gray-400">#{idx + 1}</span>
+                        <span className="text-sm text-gray-700 font-medium">{marka}</span>
+                      </div>
+                      <span className="text-sm font-bold text-green-600 bg-green-100 px-3 py-1 rounded-full">{adet} ürün</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Fiyat Analizi */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* En Pahalı Ürünler */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <TrendingDown className="w-6 h-6 mr-2 text-red-600"/>
+                  En Pahalı 10 Ürün
+                </h3>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {productStats.enPahali.map((urun, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition">
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-gray-800">{urun.ÜRÜN}</p>
+                        <p className="text-xs text-gray-500">{urun.MARKA}</p>
+                      </div>
+                      <span className="text-sm font-bold text-red-600">{urun["BİRİM FİYAT"]} ₺</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* En Ucuz Ürünler */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <TrendingDown className="w-6 h-6 mr-2 text-green-600"/>
+                  En Ekonomik 10 Ürün
+                </h3>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {productStats.enUcuz.map((urun, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition">
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-gray-800">{urun.ÜRÜN}</p>
+                        <p className="text-xs text-gray-500">{urun.MARKA}</p>
+                      </div>
+                      <span className="text-sm font-bold text-green-600">{urun["BİRİM FİYAT"]} ₺</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Kablo Fiyat Bilgileri */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <Cable className="w-6 h-6 mr-2 text-purple-600"/>
+                Serer Kablo Fiyat Listesi Özeti
+              </h3>
+              <div className="bg-purple-50 p-4 rounded-lg mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-600">Firma</p>
+                    <p className="font-bold text-purple-800">{KabloFiyatData.firma}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Telefon</p>
+                    <p className="font-bold text-purple-800">{KabloFiyatData.telefon}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Web</p>
+                    <p className="font-bold text-purple-800">{KabloFiyatData.web}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">KDV</p>
+                    <p className="font-bold text-red-600">{KabloFiyatData.kdvDahil ? 'Dahil' : `Hariç (%${KabloFiyatData.kdvOrani})`}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {KabloFiyatData.kategoriler.map((kategori) => (
+                  <div key={kategori.id} className="border border-purple-200 rounded-lg p-4 hover:shadow-md transition">
+                    <h4 className="font-bold text-purple-800 mb-1">{kategori.ad}</h4>
+                    <p className="text-xs text-gray-600 mb-3">{kategori.aciklama}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">{kategori.urunler.length} çeşit kablo</span>
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">ID: {kategori.id}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Keşif Projelerinde Kullanım */}
+            {kesifProducts.length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                  <Hammer className="w-6 h-6 mr-2 text-orange-600"/>
+                  Mevcut Keşif Projesindeki Ürün Analizi
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div className="bg-orange-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">Toplam Kalem</p>
+                    <p className="text-2xl font-bold text-orange-600">{kesifProducts.length}</p>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">Malzeme</p>
+                    <p className="text-2xl font-bold text-blue-600">{kesifProducts.filter(p => p.type === 'normal').length}</p>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">Kablo</p>
+                    <p className="text-2xl font-bold text-purple-600">{kesifProducts.filter(p => p.type === 'kablo').length}</p>
+                  </div>
+                </div>
+                {productStats.enCokKullanilanlar.length > 0 && (
+                  <div>
+                    <h4 className="font-bold text-gray-700 mb-3">En Çok Kullanılan Ürünler:</h4>
+                    <div className="space-y-2">
+                      {productStats.enCokKullanilanlar.map(([urun, adet]) => (
+                        <div key={urun} className="flex items-center justify-between p-3 bg-gray-50 rounded hover:bg-gray-100 transition">
+                          <span className="text-sm font-medium text-gray-800">{urun}</span>
+                          <span className="text-sm font-bold text-orange-600 bg-orange-100 px-3 py-1 rounded-full">{adet}x kullanıldı</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab Content: Manuel Giriş */}
+        {activeTab === 'manual' && (
+           <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+             <div className="bg-blue-900 px-6 py-4 border-b border-blue-800">
+                <h2 className="text-lg font-bold text-white flex items-center">
+                    <UserPlus className="mr-2 h-5 w-5"/>
+                    Teklif Bilgileri Girişi
+                </h2>
+                <p className="text-blue-200 text-xs mt-1">Firma bilgilerini ve EMO parametrelerini girerek teklif hesaplayın.</p>
+             </div>
+             
+             <form onSubmit={handleManualSubmit} className="p-8 space-y-6">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Firma Unvanı</label>
+                        <input 
+                            required
+                            type="text" 
+                            placeholder="Örn: ABC Endüstri San. ve Tic. A.Ş."
+                            value={manualForm.name}
+                            onChange={(e) => setManualForm({...manualForm, name: e.target.value})}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                        />
+                    </div>
+
+                    <div className="col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Yetkili Adı Soyadı</label>
+                        <input 
+                            required
+                            type="text" 
+                            placeholder="Örn: Ahmet Yılmaz"
+                            value={manualForm.contactName}
+                            onChange={(e) => setManualForm({...manualForm, contactName: e.target.value})}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-blue-50"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Teklif mektubunda "Sayın [Ad Soyad] Yetkilisi" şeklinde kullanılacaktır.</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Sektör</label>
+                        <input 
+                            required
+                            type="text" 
+                            placeholder="Örn: Tekstil, Gıda"
+                            value={manualForm.sector}
+                            onChange={(e) => setManualForm({...manualForm, sector: e.target.value})}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                        />
+                    </div>
+
+                    <div>
+                         <label className="block text-sm font-semibold text-gray-700 mb-2">Trafo Merkezi Tipi</label>
+                         <select 
+                            value={manualForm.type}
+                            onChange={(e) => setManualForm({...manualForm, type: e.target.value})}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                         >
+                             <option value="bina">Bina Tipi (Sanayi Tesisleri)</option>
+                             <option value="direk">Direk Tipi</option>
+                         </select>
+                         <p className="text-xs text-gray-500 mt-1">Not: 400 kVA altı bina tipi merkezler, direk tipi olarak da değerlendirilebilir.</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Toplam Kurulu Güç (kVA)</label>
+                        <div className="relative">
+                            <input 
+                                required
+                                type="text" 
+                                placeholder="Örn: 1600 veya 1000+630"
+                                value={manualForm.powerStr}
+                                onChange={(e) => setManualForm({...manualForm, powerStr: e.target.value})}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition font-mono"
+                            />
+                            <Zap className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Birden fazla trafo için '+' ile ayırabilirsiniz.</p>
+                    </div>
+
+                     {/* Yeni Eklenen Alan: Bölge/Şehir Seçimi */}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                            <MapPin className="w-4 h-4 mr-1 text-blue-600"/>
+                            Bölge/Şehir (Katsayı)
+                        </label>
+                        <div className="relative">
+                            <select 
+                                value={manualForm.region}
+                                onChange={handleRegionChange}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition appearance-none bg-white"
+                            >
+                                {REGION_LIST.map((r, index) => (
+                                    <option key={index} value={r.name}>
+                                        {r.name} (x{r.coeff.toFixed(2)})
+                                    </option>
+                                ))}
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                        <p className="text-xs text-green-600 mt-1 font-semibold">
+                            Seçili Katsayı: {manualForm.regionCoeff.toFixed(2)}
+                        </p>
+                    </div>
+
+                    {/* Yeni Eklenen Alan: İskonto Oranı */}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                            <Percent className="w-4 h-4 mr-1 text-blue-600"/>
+                            İskonto Oranı (%)
+                        </label>
+                        <input 
+                            type="number" 
+                            min="0"
+                            max="100"
+                            value={manualForm.customDiscount}
+                            onChange={(e) => setManualForm({...manualForm, customDiscount: parseFloat(e.target.value) || 0})}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition font-bold text-blue-800"
+                        />
+                         <p className="text-xs text-gray-500 mt-1">Varsayılan: %{params.discountRate}</p>
+                    </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                    <div className="text-sm text-gray-500">
+                        <span className="font-bold text-blue-900">Not:</span> EMO {params.year} tarifeleri, {manualForm.region} katsayısı ve %{manualForm.customDiscount} iskonto uygulanacaktır.
+                    </div>
+                    <div className="flex gap-3">
+                        <button 
+                            type="button"
+                            onClick={saveYGProposal}
+                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transform active:scale-95 transition flex items-center"
+                        >
+                            <Save className="mr-2 h-5 w-5"/>
+                            Kaydet
+                        </button>
+                        <button 
+                            type="submit"
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transform active:scale-95 transition flex items-center"
+                        >
+                            <Calculator className="mr-2 h-5 w-5"/>
+                            Hesapla ve Teklif Oluştur
+                        </button>
+                    </div>
+                </div>
+
+             </form>
+           </div>
+        )}
+
+        {/* Tab Content: Periyodik Kontrol */}
+        {activeTab === 'periodic' && (
+          <div className="flex gap-6 flex-col lg:flex-row">
+            
+            {/* Sol Panel: Veri Girişi */}
+            <div className="lg:w-1/3 bg-white p-6 rounded-xl shadow-lg border border-gray-200 overflow-y-auto">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <RefreshCw className="text-green-600" />
+                Periyodik Kontrol Teklif Robotu
+              </h2>
+              
+              <div className="space-y-4">
+                {/* Müşteri Bilgileri */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                  <h3 className="text-sm font-semibold text-blue-800 mb-2">Müşteri Bilgileri</h3>
+                  <div className="grid gap-3">
+                    <input 
+                      type="text" 
+                      placeholder="Firma Adı" 
+                      value={periodicCustomer.name} 
+                      onChange={e => setPeriodicCustomer({...periodicCustomer, name: e.target.value})} 
+                      className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Şehir / Lokasyon" 
+                      value={periodicCustomer.city} 
+                      onChange={e => setPeriodicCustomer({...periodicCustomer, city: e.target.value})} 
+                      className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Yetkili Kişi" 
+                      value={periodicCustomer.contactName} 
+                      onChange={e => setPeriodicCustomer({...periodicCustomer, contactName: e.target.value})} 
+                      className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                    />
+                  </div>
+                </div>
+
+                {/* Teknik Veriler */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Tesis Verileri (EMO 2026)</h3>
+                  
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Toplam Trafo Gücü (kVA)</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.trafoGucu} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, trafoGucu: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Kapalı Alan (m²)</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.yapiAlani} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, yapiAlani: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Topraklama Ölçüm Sayısı</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.topraklamaAdet} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, topraklamaAdet: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Paratoner Tesisat Sayısı</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.paratonerAdet} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, paratonerAdet: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+
+                  <label className="block text-xs font-medium text-gray-600 mb-1">RCD Test Sayısı</label>
+                  <input 
+                    type="number" 
+                    value={periodicInputs.rcdAdet} 
+                    onChange={e => setPeriodicInputs({...periodicInputs, rcdAdet: Number(e.target.value)})} 
+                    className="w-full border p-2 rounded mb-3 focus:ring-2 focus:ring-green-500 outline-none" 
+                  />
+                </div>
+
+                {/* İskonto Ayarı */}
+                <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                  <h3 className="text-sm font-semibold text-green-800 mb-2">Fiyatlandırma</h3>
+                  <label className="block text-xs font-medium text-green-700 mb-1">İskonto Oranı (%)</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="95" 
+                      step="1" 
+                      value={periodicInputs.iskonto} 
+                      onChange={e => setPeriodicInputs({...periodicInputs, iskonto: Number(e.target.value)})} 
+                      className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <span className="font-bold text-green-800 w-12 text-right">%{periodicInputs.iskonto}</span>
+                  </div>
+                </div>
+
+                {/* Hesapla Butonu */}
+                <div className="flex gap-2">
+                  <button 
+                    onClick={savePeriodicProposal}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold transition shadow-md flex justify-center items-center gap-2"
+                  >
+                    <Save className="h-5 w-5"/>
+                    Kaydet
+                  </button>
+                  <button 
+                    onClick={calculatePeriodicPrices}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold transition shadow-md flex justify-center items-center gap-2"
+                  >
+                    <Calculator className="h-5 w-5"/>
+                    Hesapla
+                  </button>
+                </div>
+
+                {/* İşlem Butonları */}
+                <div className="space-y-3">
+                  <button 
+                    onClick={togglePeriodicEditorMode}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold transition shadow-md flex justify-center items-center gap-2"
+                  >
+                    <Edit3 className="h-4 w-4"/>
+                    {periodicEditorMode ? 'Düzenleme Modundan Çık' : 'Düzenleme Modu'}
+                  </button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => window.print()} 
+                      className="bg-gray-700 text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition shadow-md flex justify-center items-center gap-2"
+                    >
+                      <Printer className="h-4 w-4"/>
+                      Yazdır
+                    </button>
+                    <button 
+                      onClick={handlePeriodicPDFExport} 
+                      className="bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md flex justify-center items-center gap-2"
+                    >
+                      <Download className="h-4 w-4"/>
+                      PDF İndir
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-6 text-xs text-gray-400">
+                * Hesaplamalar EMO 2026 Kısım V Test ve Ölçüm Hizmetleri tarifesine göre yapılmaktadır. KDV Hariçtir.
+              </div>
+            </div>
+
+            {/* Sağ Panel: Teklif Önizleme */}
+            <div className="lg:w-2/3 bg-gray-200 p-8 rounded-xl overflow-auto">
+              {/* Editor Mode Banner */}
+              {periodicEditorMode && (
+                <div className="mb-4 bg-indigo-600 text-white p-4 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Edit3 className="h-5 w-5"/>
+                    <span className="font-bold">Düzenleme Modu Aktif - Metinleri doğrudan düzenleyebilirsiniz</span>
+                  </div>
+                  <button 
+                    onClick={togglePeriodicEditorMode}
+                    className="bg-white text-indigo-600 px-4 py-2 rounded hover:bg-gray-100 transition font-bold flex items-center gap-2"
+                  >
+                    <X className="h-4 w-4"/>
+                    Kapat
+                  </button>
+                </div>
+              )}
+              
+              {/* Periyodik Kontrol Paper Structure */}
+              <div 
+                id="periodic-printable-paper"
+                contentEditable={periodicEditorMode}
+                suppressContentEditableWarning={true}
+                className={periodicEditorMode ? 'outline-2 outline-dashed outline-indigo-400' : ''}
+                style={periodicEditorMode ? { minHeight: '297mm' } : {}}
+              >
+                
+                {/* SAYFA 1 */}
+                <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 periodic-pdf-page" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
+                  <div>
+                
+                {/* Header */}
+                <div className="flex justify-between items-center border-b pb-6 mb-6">
+                  {/* Logo Area */}
+                  <div className="flex items-start justify-start min-w-[150px]">
+                    <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
+                  </div>
+                  <div className="text-center flex-1">
+                    <h1 className="text-2xl font-bold text-gray-800">TEKLİF MEKTUBU</h1>
+                    <p className="text-gray-500 text-sm mt-1">Periyodik Kontrol ve Test Hizmetleri</p>
+                  </div>
+                  <div className="text-right w-48">
+                    <p className="text-xs text-gray-500">İzmir, Türkiye</p>
+                    <p className="text-xs text-gray-500 mt-1">Tarih: {periodicCustomer.date}</p>
+                  </div>
+                </div>
+
+                {/* Müşteri Başlığı */}
+                <div className="mb-8">
+                  <h3 className="text-md font-bold text-gray-800 mb-2">
+                    Sayın {periodicCustomer.contactName ? `${periodicCustomer.contactName} - ` : ''}{periodicCustomer.name || '[Firma Adı]'} Yetkilisi,
+                  </h3>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    İşletmenizde talep edilen tüm elektrik sistemleri periyodik kontrol ve yasal test hizmetlerine yönelik fiyat teklifimiz, 
+                    <strong> TMMOB Elektrik Mühendisleri Odası (EMO) 2026 yılı Ücret Tanımları</strong> esas alınarak aşağıda sunulmuştur.
+                  </p>
+                </div>
+
+                {/* Tesis Bilgileri Özeti */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-gray-700 border-b border-gray-200 mb-2 pb-1">1. Tesis Bilgileri</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="p-2 bg-gray-50 rounded">
+                      <span className="text-gray-500 block text-xs">Kurulu Trafo Gücü</span>
+                      <span className="font-semibold text-gray-800">{periodicInputs.trafoGucu} kVA</span>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded">
+                      <span className="text-gray-500 block text-xs">Kapalı Alan</span>
+                      <span className="font-semibold text-gray-800">{periodicInputs.yapiAlani} m²</span>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded">
+                      <span className="text-gray-500 block text-xs">Tesis Yeri</span>
+                      <span className="font-semibold text-gray-800">{periodicCustomer.city || '[Şehir]'}</span>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded">
+                      <span className="text-gray-500 block text-xs">Kapsam</span>
+                      <span className="font-semibold text-gray-800">Yıllık Yasal Periyodik Kontrol</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fiyat Tablosu */}
+                <div className="mb-8">
+                  <h4 className="text-sm font-bold text-gray-700 border-b border-gray-200 mb-2 pb-1">2. Hizmet Bedelleri (EMO 2026 Kısım V)</h4>
+                  <table className="w-full text-sm text-left">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-600">
+                        <th className="p-2 rounded-l">Hizmet Kalemi</th>
+                        <th className="p-2">Detay / Hesaplama</th>
+                        <th className="p-2 text-right rounded-r">Nominal Bedel (TL)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      <tr>
+                        <td className="p-2 font-medium">1. YG/TM Gözle Kontrolü</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.yg.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.yg.total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">2. AG İç Tesisat Kontrolü</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.ag.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.ag.total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">3. Topraklama Ölçümü</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.topraklama.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.topraklama.total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">4. Yıldırımdan Korunma</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.paratoner.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.paratoner.total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">5. RCD Testleri</td>
+                        <td className="p-2 text-xs text-gray-500">{periodicResults.rcd.desc || 'Henüz hesaplanmadı'}</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.rcd.total)}</td>
+                      </tr>
+                      <tr className="bg-gray-50 font-semibold text-gray-700">
+                        <td className="p-2" colSpan="2">Ara Toplam (Hizmetler)</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.subTotal)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-medium">Test Ölçüm Keşif Bedeli</td>
+                        <td className="p-2 text-xs text-gray-500">Sabit Bedel</td>
+                        <td className="p-2 text-right">{formatCurrency(periodicResults.kesif)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Toplam ve İskonto Alanı */}
+                <div className="flex justify-end mb-8">
+                  <div className="w-full md:w-1/2 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <div className="flex justify-between text-sm text-gray-600 mb-2">
+                      <span>EMO Liste Fiyatı Toplamı:</span>
+                      <span className="font-semibold">{formatCurrency(periodicResults.grandTotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-green-700 mb-2">
+                      <span>Uygulanan İskonto (%{periodicInputs.iskonto}):</span>
+                      <span>- {formatCurrency(periodicResults.discountAmount)}</span>
+                    </div>
+                    <div className="border-t-2 border-blue-300 my-3"></div>
+                    <div className="flex justify-between text-lg font-bold text-blue-900">
+                      <span>TEKLİF EDİLEN TOPLAM:</span>
+                      <span>{formatCurrency(periodicResults.finalPrice)}</span>
+                    </div>
+                    <div className="text-right text-xs text-gray-500 mt-1">+ KDV</div>
+                  </div>
+                </div>
+
+                {/* Footer - Sayfa 1 */}
+                <div className="absolute bottom-[10mm] left-0 right-0 border-t border-gray-300 pt-2">
+                  <div className="text-center text-[8pt] text-gray-500">
+                    <p className="font-bold text-gray-800 text-[9pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                    <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                    <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                    <p className="mt-1 text-gray-400">Sayfa 1/2</p>
+                  </div>
+                </div>
+
+                  </div>
+                </div>
+                {/* SAYFA 1 SONU */}
+
+                {/* SAYFA 2 */}
+                <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 periodic-pdf-page" style={{pageBreakBefore: 'always', pageBreakInside: 'avoid', pageBreakAfter: 'auto'}}>
+                  <div>
+
+                {/* Header - Sayfa 2 */}
+                <div className="flex justify-between items-start border-b pb-6 mb-6">
+                  <div className="flex items-start justify-start min-w-[150px]">
+                    <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
+                  </div>
+                </div>
+
+                {/* İndirim Gerekçesi */}
+                <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                  <h4 className="text-[10pt] font-bold text-blue-900 mb-3 flex items-center">
+                    <CheckCircle className="h-5 w-5 mr-2"/>
+                    İndirim Uygulamasının Gerekçesi ve Katma Değer
+                  </h4>
+                  <p className="text-[9pt] text-gray-700 leading-tight mb-3">
+                    Bu hizmetler normalde EMO'nun asgari ücret yönetmeliğine tabi olsa da, Kobinerji olarak size sağladığımız rekabetçi avantajlar ve taahhütlerimiz şunlardır:
+                  </p>
+                  <div className="space-y-3">
+                    <div className="bg-white p-3 rounded border-l-4 border-blue-500">
+                      <h5 className="text-[9pt] font-bold text-gray-800 mb-1">1. Stratejik Müşteri Ölçeği</h5>
+                      <p className="text-[9pt] text-gray-600 leading-tight">
+                        {periodicCustomer.name || 'Müşteriniz'}, sanayi tesisi olarak büyük bir potansiyele sahiptir. Kobinerji'nin {periodicCustomer.city || 'bölgedeki'} konumlanması ve bölgedeki büyük endüstriyel müşterilere odaklanma hedefi, bu ölçekteki bir firmayla uzun vadeli iş birliği için yüksek indirim oranını haklı kılmaktadır.
+                      </p>
+                    </div>
+                    <div className="bg-white p-3 rounded border-l-4 border-green-500">
+                      <h5 className="text-[9pt] font-bold text-gray-800 mb-1">2. Yasal Uyum ve Güvenlik</h5>
+                      <p className="text-[9pt] text-gray-600 leading-tight">
+                        Teklif kapsamındaki tüm hizmetler (Topraklama, RCD Testleri, Yıldırımdan Korunma ve İç Tesisat Gözle Kontrolü), İş Ekipmanlarının Kullanımında Sağlık ve Güvenlik Şartları Yönetmeliği uyarınca zorunlu olan yıllık periyodik kontrol gerekliliklerini eksiksiz yerine getirecektir.
+                      </p>
+                    </div>
+                    <div className="bg-white p-3 rounded border-l-4 border-purple-500">
+                      <h5 className="text-[9pt] font-bold text-gray-800 mb-1">3. Tekrar Eden Hizmet Olanakları</h5>
+                      <p className="text-[9pt] text-gray-600 leading-tight">
+                        EMO mevzuatı, tekrarlanan ölçüm ve denetim hizmetlerinde bedellerin %50'sinin uygulanabileceğini belirtmektedir. Sizin talep ettiğiniz %{periodicInputs.iskonto} iskonto oranı, bu yasal alt sınırın çok üzerinde, Kobinerji'nin rekabetçi konumlanmasını göstermektedir.
+                      </p>
+                    </div>
+                    <div className="bg-white p-3 rounded border-l-4 border-yellow-500">
+                      <h5 className="text-[9pt] font-bold text-gray-800 mb-1">4. Enerji Verimliliği Odaklı Yaklaşım</h5>
+                      <p className="text-[9pt] text-gray-600 leading-tight">
+                        Kobinerji'nin temel uzmanlığı enerji verimliliği ve sanayideki bu potansiyeli ortaya çıkarmaktır. Fabrikanızda yapılacak bu kontroller, sadece yasal zorunluluğu değil, aynı zamanda enerji tasarruf potansiyeli olan alanların belirlenmesine de ön ayak olacaktır, zira Kobinerji bu alanda Enerji Bakanlığı'na bağlı olarak enerji etütleri yapmaktadır.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Alt Bilgi */}
+                <div className="text-[9pt] text-gray-500 border-t pt-4 mb-6">
+                  <p className="mb-2"><strong>Notlar:</strong></p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Fiyatlara KDV dahil değildir.</li>
+                    <li>Tüm hizmetler EMO dokümanlarına (ZPKK01, ZPKK03, vb.) uygun raporlanacaktır.</li>
+                    <li>Kobinerji Mühendislik, MÜSİAD Enerji ve Çevre Sektör Kurulu üyesidir.</li>
+                    <li>Enerji Yönetim Sistemi (ISO 50001) ve VAP konularında ayrıca destek sağlanabilir.</li>
+                  </ul>
+                </div>
+
+                {/* Footer - Sayfa 2 */}
+                <div className="absolute bottom-[10mm] left-0 right-0 border-t border-gray-300 pt-2">
+                  <div className="text-center text-[8pt] text-gray-500">
+                    <p className="font-bold text-gray-800 text-[9pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                    <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                    <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                    <p className="mt-1 text-gray-400">Sayfa 2/2</p>
+                  </div>
+                </div>
+
+                  </div>
+                </div>
+                {/* SAYFA 2 SONU */}
+
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* Keşif Metraj Fiyat Teklifi Tab */}
+        {activeTab === 'kesif' && (
+          <KesifMetraj 
+            onCustomerUpdate={(customerData) => {
+              // Keşif müşteri bilgilerini güncelle
+              setKesifCustomer({
+                name: customerData.musteriAdi || '',
+                address: customerData.adres || '',
+                contactName: customerData.yetkili || '',
+                phone: customerData.telefon || '',
+                date: customerData.tarih || new Date().toLocaleDateString('tr-TR')
+              });
+              // Aynı zamanda selectedCompany'yi de güncelle ki önizleme aktif olsun
+              setSelectedCompany({
+                name: customerData.musteriAdi || 'Firma',
+                yetkili: customerData.yetkili || '',
+                telefon: customerData.telefon || '',
+                email: customerData.email || '',
+                address: customerData.adres || '',
+                projeAdi: customerData.projeAdi || '',
+                regionCoeff: 1.0,
+                totalKVA: 0,
+                region: '',
+                sector: '',
+                type: 'bina',
+                powerStr: ''
+              });
+            }}
+            onNavigateToPreview={() => {
+              // Teklif önizleme tabına geç
+              setActiveTab('proposal');
+            }}
+          />
+        )}
+
+        {/* OLD KESIF BACKUP - SILME */}
+        {false && activeTab === 'kesif_old' && (
+          <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-orange-600 to-orange-700 px-6 py-4 border-b border-orange-800">
+              <h2 className="text-lg font-bold text-white flex items-center">
+                <Hammer className="mr-2 h-5 w-5"/>
+                Keşif Metraj Fiyat Teklifi
+              </h2>
+              <p className="text-orange-100 text-xs mt-1">Elektrik malzemesi ve kablo için keşif metraj listesi oluşturun. Kablo fiyatları: Serer Kablo (İzmir)</p>
+            </div>
+
+            <form onSubmit={handleKesifSubmit} className="p-8 space-y-6">
+              
+              {/* Serer Kablo Bilgi Kutusu */}
+              {productType === 'kablo' && (
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-purple-200">
+                  <div className="flex items-start">
+                    <Cable className="w-5 h-5 mr-2 text-purple-600 mt-0.5"/>
+                    <div>
+                      <h3 className="text-sm font-bold text-purple-800 mb-1">Kablo Fiyatları: Serer Kablo (İzmir)</h3>
+                      <div className="grid grid-cols-3 gap-2 text-xs text-gray-700">
+                        <div><span className="font-semibold">Tel:</span> {KabloFiyatData.telefon}</div>
+                        <div><span className="font-semibold">Web:</span> {KabloFiyatData.web}</div>
+                        <div><span className="font-semibold text-red-600">⚠️ KDV Hariç</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Müşteri Bilgileri */}
+              <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <h3 className="text-md font-bold text-gray-800 mb-4 flex items-center">
+                  <Users className="w-5 h-5 mr-2 text-orange-600"/>
+                  Müşteri Bilgileri
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Firma/Kurum Adı *</label>
+                    <input 
+                      required
+                      type="text" 
+                      placeholder="Örn: XYZ İnşaat Ltd. Şti."
+                      value={kesifCustomer.name}
+                      onChange={(e) => setKesifCustomer({...kesifCustomer, name: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Yetkili Adı Soyadı</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: Ahmet Yılmaz"
+                      value={kesifCustomer.contactName}
+                      onChange={(e) => setKesifCustomer({...kesifCustomer, contactName: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Adres</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: Ankara, Çankaya"
+                      value={kesifCustomer.address}
+                      onChange={(e) => setKesifCustomer({...kesifCustomer, address: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Telefon</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: 0555 123 45 67"
+                      value={kesifCustomer.phone}
+                      onChange={(e) => setKesifCustomer({...kesifCustomer, phone: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 🚀 HIZLI TEKLİF PANELİ */}
+              <div className="bg-gradient-to-br from-cyan-50 to-blue-50 p-6 rounded-xl border-2 border-cyan-200 shadow-lg">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                  <Zap className="w-6 h-6 mr-2 text-cyan-600"/>
+                  ⚡ Hızlı Teklif Araçları
+                </h3>
+                
+                {/* Hızlı Erişim Butonları */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowSavedQuotations(!showSavedQuotations)}
+                    className="bg-white hover:bg-blue-50 border-2 border-blue-300 text-blue-700 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 shadow"
+                  >
+                    <FileText className="w-4 h-4"/>
+                    Kayıtlı Teklifler
+                    {savedQuotations.length > 0 && (
+                      <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">{savedQuotations.length}</span>
+                    )}
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={saveCurrentQuotation}
+                    disabled={kesifProducts.length === 0}
+                    className={`px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 shadow ${
+                      kesifProducts.length === 0
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
+                  >
+                    <Save className="w-4 h-4"/>
+                    Teklifi Kaydet
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setQuickAddMode(!quickAddMode)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 shadow"
+                  >
+                    <Zap className="w-4 h-4"/>
+                    Hızlı Giriş
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowProfitCalculator(!showProfitCalculator)}
+                    className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 shadow"
+                  >
+                    <Calculator className="w-4 h-4"/>
+                    Kar Marjı
+                  </button>
+                </div>
+
+                {/* Excel Import & Kar Marjı Uygulama */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">📊 Excel'den İçe Aktar</label>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleExcelImport}
+                      className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Sütunlar: Ürün, Miktar, Fiyat, Birim</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">💰 Tüm Ürünlere Kar Marjı Ekle</label>
+                    <button
+                      type="button"
+                      onClick={applyProfitMarginToAll}
+                      disabled={kesifProducts.length === 0}
+                      className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
+                        kesifProducts.length === 0
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white'
+                      }`}
+                    >
+                      % Kar Marjı Ekle
+                    </button>
+                  </div>
+                </div>
+
+                {/* Hızlı Giriş Modu */}
+                {quickAddMode && (
+                  <div className="bg-white p-4 rounded-lg border-2 border-purple-300 mt-4">
+                    <h4 className="font-bold text-purple-800 mb-2 flex items-center">
+                      <Zap className="w-4 h-4 mr-2"/>
+                      Hızlı Giriş Modu
+                    </h4>
+                    <p className="text-xs text-gray-600 mb-3">
+                      Her satıra bir ürün: "ürün adı, miktar, fiyat" formatında yazın
+                    </p>
+                    <textarea
+                      value={quickAddText}
+                      onChange={(e) => setQuickAddText(e.target.value)}
+                      placeholder="🔥 ÜÇ FARKLI FORMAT:&#10;&#10;1️⃣ BASIT: Ürün Adı | Miktar | Fiyat&#10;   NYY Kablo 3x2.5 | 100 | 45.50&#10;   Priz Topraklı | 20 | 12&#10;&#10;2️⃣ DETAYLI: Ürün | Miktar | Fiyat | Birim | Marka&#10;   NYM Kablo | 50 | 38.75 | metre | Nexans&#10;&#10;3️⃣ EXCEL KOPYALA-YAPIŞTIR: Doğrudan Excel'den kopyalayın (TAB ile ayrılmış)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm font-mono"
+                      rows={6}
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={handleQuickAdd}
+                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold transition"
+                      >
+                        ✓ Ekle
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickAddMode(false);
+                          setQuickAddText('');
+                        }}
+                        className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-semibold transition"
+                      >
+                        İptal
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Kar Marjı Hesaplayıcı */}
+                {showProfitCalculator && (
+                  <div className="bg-white p-4 rounded-lg border-2 border-orange-300 mt-4">
+                    <h4 className="font-bold text-orange-800 mb-3 flex items-center">
+                      <Calculator className="w-4 h-4 mr-2"/>
+                      Kar Marjı Hesaplayıcı
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Maliyet (TL)</label>
+                        <input
+                          type="number"
+                          value={costPrice}
+                          onChange={(e) => setCostPrice(parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                          step="0.01"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Kar Marjı (%)</label>
+                        <input
+                          type="number"
+                          value={profitMargin}
+                          onChange={(e) => setProfitMargin(parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                        />
+                      </div>
+                    </div>
+                    {costPrice > 0 && (
+                      <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                        <div className="text-sm text-gray-700">
+                          <strong>Satış Fiyatı:</strong> {calculateSellingPrice(costPrice, profitMargin).toFixed(2)} TL
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          Kar: {(calculateSellingPrice(costPrice, profitMargin) - costPrice).toFixed(2)} TL
+                        </div>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfitCalculator(false);
+                        setCostPrice(0);
+                      }}
+                      className="w-full mt-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-semibold transition text-sm"
+                    >
+                      Kapat
+                    </button>
+                  </div>
+                )}
+
+                {/* Favoriler */}
+                {favoriteProducts.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-bold text-gray-800 mb-2 flex items-center">
+                      <Star className="w-4 h-4 mr-2 text-yellow-500 fill-yellow-500"/>
+                      Favori Ürünler ({favoriteProducts.length})
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {favoriteProducts.slice(0, 6).map((product, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => addFavoriteToKesif(product)}
+                          className="bg-white hover:bg-yellow-50 border border-yellow-200 p-2 rounded-lg text-left text-sm transition group"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-800 text-xs truncate">{product.urun}</div>
+                              <div className="text-xs text-gray-600">{product.birimFiyat?.toFixed(2)} TL</div>
+                            </div>
+                            <Plus className="w-4 h-4 text-green-600 opacity-0 group-hover:opacity-100 transition"/>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Son Kullanılanlar */}
+                {recentProducts.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-bold text-gray-800 mb-2 flex items-center">
+                      <Clock className="w-4 h-4 mr-2 text-blue-500"/>
+                      Son Kullanılan Ürünler
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      {recentProducts.slice(0, 6).map((product, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => addFavoriteToKesif(product)}
+                          className="bg-white hover:bg-blue-50 border border-blue-200 p-2 rounded-lg text-left text-xs transition group"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 truncate">
+                              <div className="font-semibold text-gray-800 truncate">{product.urun}</div>
+                              <div className="text-gray-600">{product.birimFiyat?.toFixed(2)} TL</div>
+                            </div>
+                            <Plus className="w-4 h-4 text-green-600 opacity-0 group-hover:opacity-100 transition"/>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Kayıtlı Teklifler Modal */}
+                {showSavedQuotations && savedQuotations.length > 0 && (
+                  <div className="mt-4 bg-white p-4 rounded-lg border-2 border-blue-300">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-blue-800 flex items-center">
+                        <FileText className="w-4 h-4 mr-2"/>
+                        Kayıtlı Teklifler ({savedQuotations.length})
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowSavedQuotations(false)}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        <X className="w-5 h-5"/>
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {savedQuotations.map((quotation) => (
+                        <div key={quotation.id} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-800 text-sm">{quotation.name}</div>
+                              <div className="text-xs text-gray-600">
+                                {quotation.date} • {quotation.products.length} ürün • {quotation.totals.grandTotal.toFixed(2)} TL
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => loadSavedQuotation(quotation)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold"
+                              >
+                                Yükle
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteSavedQuotation(quotation.id)}
+                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-semibold"
+                              >
+                                Sil
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Hazır Paket Ekle Butonu */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg border-2 border-blue-200 mb-6">
+                <button
+                  type="button"
+                  onClick={() => setShowHazirPaketModal(true)}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-4 px-6 rounded-lg font-bold transition shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-6 h-6"/>
+                  ⚡ Hazır Paket Ekle (Hızlı Teklif)
+                </button>
+                <p className="text-xs text-center text-gray-600 mt-2">
+                  Kompanzasyon, ADP, Aydınlatma gibi hazır paketlerle hızlı teklif oluşturun
+                </p>
+              </div>
+
+              {/* AI Akıllı Özellikler */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-lg border-2 border-purple-200">
+                  <button
+                    type="button"
+                    onClick={() => setIsAiWizardOpen(true)}
+                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-4 px-6 rounded-lg font-bold transition shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-6 h-6 animate-pulse"/>
+                    🪄 AI Keşif Sihirbazı
+                  </button>
+                  <p className="text-xs text-center text-gray-600 mt-2">
+                    Projenizi anlatın, AI otomatik malzeme listesi oluştursun
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-lg border-2 border-indigo-200">
+                  <button
+                    type="button"
+                    onClick={handleGenerateProposalEmail}
+                    disabled={kesifProducts.length === 0}
+                    className={`w-full py-4 px-6 rounded-lg font-bold transition shadow-lg flex items-center justify-center gap-2 ${
+                      kesifProducts.length === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white'
+                    }`}
+                  >
+                    <Mail className="w-6 h-6"/>
+                    ✉️ AI Teklif Mektubu Oluştur
+                  </button>
+                  <p className="text-xs text-center text-gray-600 mt-2">
+                    Listedeki ürünlerden profesyonel teklif mektubu oluştur
+                  </p>
+                </div>
+              </div>
+
+              {/* Ürün Tipi Seçimi */}
+              <div className="bg-gradient-to-r from-orange-50 to-purple-50 p-6 rounded-lg border border-orange-200">
+                <h3 className="text-md font-bold text-gray-800 mb-4 flex items-center">
+                  <Plus className="w-5 h-5 mr-2 text-orange-600"/>
+                  Malzeme/Kablo Ekle
+                </h3>
+                
+                {/* Ürün Tipi Seçim Butonları */}
+                <div className="mb-4 flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductType('normal');
+                      setSelectedCableForKesif(null);
+                      setSelectedCategoryForKesif('');
+                    }}
+                    className={`px-6 py-3 rounded-lg font-semibold transition flex-1 ${
+                      productType === 'normal'
+                        ? 'bg-orange-600 text-white shadow-lg'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:border-orange-400'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-4 h-4 inline mr-2"/>
+                    Normal Ürün/Malzeme
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductType('kablo');
+                      setSelectedProduct(null);
+                      setProductSearch('');
+                    }}
+                    className={`px-6 py-3 rounded-lg font-semibold transition flex-1 ${
+                      productType === 'kablo'
+                        ? 'bg-purple-600 text-white shadow-lg'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:border-purple-400'
+                    }`}
+                  >
+                    <Cable className="w-4 h-4 inline mr-2"/>
+                    Kablo (Serer Kablo)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductType('hizmet');
+                      setSelectedProduct(null);
+                      setProductSearch('');
+                      setSelectedCableForKesif(null);
+                      setSelectedCategoryForKesif('');
+                    }}
+                    className={`px-6 py-3 rounded-lg font-semibold transition flex-1 ${
+                      productType === 'hizmet'
+                        ? 'bg-green-600 text-white shadow-lg'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:border-green-400'
+                    }`}
+                  >
+                    <Wrench className="w-4 h-4 inline mr-2"/>
+                    Hizmet/İşçilik
+                  </button>
+                </div>
+
+                {/* Normal Ürün Ekleme Formu */}
+                {productType === 'normal' && (
+                <div className="space-y-4">
+                  {/* Ürün İstatistikleri Özeti */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-gray-800 text-sm flex items-center">
+                        <FileSpreadsheet className="w-4 h-4 mr-2 text-blue-600"/>
+                        Ürün Veritabanı İstatistikleri
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-full font-semibold transition"
+                      >
+                        {showAdvancedFilters ? '▼ Filtreleri Gizle' : '▶ Gelişmiş Filtreler'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div className="bg-white p-2 rounded shadow-sm">
+                        <div className="text-gray-600">Toplam Ürün</div>
+                        <div className="text-lg font-bold text-blue-600">{productStats.toplamUrun}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded shadow-sm">
+                        <div className="text-gray-600">Marka Sayısı</div>
+                        <div className="text-lg font-bold text-green-600">{productStats.markalar.length}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded shadow-sm">
+                        <div className="text-gray-600">Kategori</div>
+                        <div className="text-lg font-bold text-purple-600">{productStats.kategoriSayilari.length}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded shadow-sm">
+                        <div className="text-gray-600">Ort. Fiyat</div>
+                        <div className="text-lg font-bold text-orange-600">{productStats.ortalamaFiyat.toFixed(2)} ₺</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gelişmiş Filtreler */}
+                  {showAdvancedFilters && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        {/* Marka Filtresi */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Marka</label>
+                          <select
+                            value={markaFilter}
+                            onChange={(e) => setMarkaFilter(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                          >
+                            <option value="tumu">Tüm Markalar</option>
+                            {productStats.enPopulerMarkalar.map(([marka, adet]) => (
+                              <option key={marka} value={marka}>{marka} ({adet})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Kategori Filtresi */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Kategori</label>
+                          <select
+                            value={kategoriFilter}
+                            onChange={(e) => setKategoriFilter(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                          >
+                            <option value="tumu">Tüm Kategoriler</option>
+                            {productStats.kategoriSayilari.map(({ ad, adet }) => (
+                              <option key={ad} value={ad}>{ad} ({adet})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Veri Kaynağı Filtresi */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Veri Kaynağı</label>
+                          <select
+                            value={kaynakFilter}
+                            onChange={(e) => setKaynakFilter(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                          >
+                            <option value="tumu">Tüm Kaynaklar</option>
+                            <option value="Fatura1">📄 Fatura1 ({normalizedFatura1.length})</option>
+                            <option value="Fatura2">📄 Fatura2 ({normalizedFatura2.length})</option>
+                          </select>
+                        </div>
+
+                        {/* Sıralama */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Sıralama</label>
+                          <select
+                            value={siralama}
+                            onChange={(e) => setSiralama(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                          >
+                            <option value="alfabetik">Alfabetik (A-Z)</option>
+                            <option value="fiyat-artan">Fiyat (Artan)</option>
+                            <option value="fiyat-azalan">Fiyat (Azalan)</option>
+                            <option value="populer">En Popüler</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Fiyat Aralığı */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Fiyat Aralığı: {fiyatAraligi.min} ₺ - {fiyatAraligi.max >= 100000 ? '∞' : fiyatAraligi.max + ' ₺'}
+                        </label>
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="number"
+                            placeholder="Min"
+                            value={fiyatAraligi.min}
+                            onChange={(e) => setFiyatAraligi({ ...fiyatAraligi, min: parseFloat(e.target.value) || 0 })}
+                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                          <span className="text-gray-500">-</span>
+                          <input
+                            type="number"
+                            placeholder="Max"
+                            value={fiyatAraligi.max >= 100000 ? '' : fiyatAraligi.max}
+                            onChange={(e) => setFiyatAraligi({ ...fiyatAraligi, max: parseFloat(e.target.value) || 100000 })}
+                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMarkaFilter('tumu');
+                              setKategoriFilter('tumu');
+                              setKaynakFilter('tumu');
+                              setFiyatAraligi({ min: 0, max: 100000 });
+                              setSiralama('alfabetik');
+                            }}
+                            className="ml-auto text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                          >
+                            🔄 Filtreleri Temizle
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* En Çok Kullanılan Ürünler */}
+                      {productStats.enCokKullanilanlar.length > 0 && (
+                        <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+                          <h5 className="text-xs font-bold text-yellow-800 mb-2">⭐ Bu Projede En Çok Kullanılan Ürünler:</h5>
+                          <div className="flex flex-wrap gap-2">
+                            {productStats.enCokKullanilanlar.slice(0, 5).map(([urun, adet]) => (
+                              <button
+                                key={urun}
+                                type="button"
+                                onClick={() => {
+                                  setProductSearch(urun);
+                                  setShowProductDropdown(true);
+                                }}
+                                className="text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-900 px-2 py-1 rounded font-medium transition"
+                              >
+                                {urun} ({adet}x)
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Ürün Arama ve Ekleme */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="md:col-span-2 relative">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Ürün Ara ({filteredProducts.length > 0 ? `${filteredProducts.length} sonuç` : 'arama yapın'})
+                      </label>
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          placeholder="Ürün adı veya marka ile arayın..."
+                          value={productSearch}
+                          onChange={(e) => {
+                            setProductSearch(e.target.value);
+                            setShowProductDropdown(true);
+                          }}
+                          onFocus={() => setShowProductDropdown(true)}
+                          className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                        />
+                        <Search className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"/>
+                      </div>
+                      
+                      {/* Dropdown - Geliştirilmiş */}
+                      {showProductDropdown && filteredProducts.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl max-h-96 overflow-y-auto">
+                          <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 px-3 py-2 border-b border-blue-200">
+                            <div className="text-xs font-semibold text-gray-700">
+                              {filteredProducts.length} ürün bulundu
+                              {markaFilter !== 'tumu' && <span className="ml-2 text-blue-600">• Marka: {markaFilter}</span>}
+                              {kategoriFilter !== 'tumu' && <span className="ml-2 text-purple-600">• Kategori: {kategoriFilter}</span>}
+                              {kaynakFilter !== 'tumu' && <span className="ml-2 text-green-600">• Kaynak: {kaynakFilter}</span>}
+                            </div>
+                          </div>
+                          {filteredProducts.map((product, idx) => (
+                            <div 
+                              key={idx}
+                              className="px-4 py-3 hover:bg-gradient-to-r hover:from-orange-50 hover:to-yellow-50 border-b border-gray-100 last:border-0 transition group"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div 
+                                  className="flex-1 cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedProduct(product);
+                                    setProductSearch(product.urun);
+                                    setShowProductDropdown(false);
+                                  }}
+                                >
+                                  <div className="font-semibold text-sm text-gray-800">{product.urun}</div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">{product.marka}</span>
+                                    <span className="text-xs text-gray-500">{product.olcu}</span>
+                                    {product.kaynak && (
+                                      <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded font-medium">{product.kaynak}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleFavorite(product);
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 transition p-1 hover:bg-yellow-100 rounded"
+                                    title={isFavorite(product) ? "Favorilerden çıkar" : "Favorilere ekle"}
+                                  >
+                                    <Star 
+                                      className={`w-4 h-4 ${isFavorite(product) ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`}
+                                    />
+                                  </button>
+                                  <div className="text-right">
+                                    <div className="text-sm font-bold text-orange-600">{product.birimFiyat} ₺</div>
+                                    <div className="text-xs text-gray-500">/{product.olcu}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar</label>
+                      <input 
+                        type="number" 
+                        min="0.01"
+                        step="0.01"
+                        placeholder="Miktar"
+                        value={productQuantity}
+                        onChange={(e) => setProductQuantity(parseFloat(e.target.value) || 0)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                      />
+                    </div>
+                    
+                    <div className="md:col-span-3">
+                      <button 
+                        type="button"
+                        onClick={addProductToKesif}
+                        disabled={!selectedProduct}
+                        className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                      >
+                        <Plus className="w-5 h-5 mr-2"/>
+                        Listeye Ekle
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                )}
+
+                {/* Kablo Ekleme Formu */}
+                {productType === 'kablo' && (
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Kategori Seçimi */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Kablo Kategorisi *</label>
+                    <select 
+                      value={selectedCategoryForKesif}
+                      onChange={(e) => {
+                        setSelectedCategoryForKesif(e.target.value);
+                        setSelectedCableForKesif(null);
+                      }}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                    >
+                      <option value="">-- Kategori Seçiniz --</option>
+                      {KabloFiyatData.kategoriler.map((kategori) => (
+                        <option key={kategori.id} value={kategori.id}>
+                          {kategori.ad}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedCategoryForKesif && (
+                      <p className="text-xs text-gray-600 mt-1">
+                        {KabloFiyatData.kategoriler.find(k => k.id === selectedCategoryForKesif)?.aciklama}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Kablo Seçimi */}
+                  {selectedCategoryForKesif && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Kablo Tipi ve Kesit *</label>
+                      <select 
+                        value={selectedCableForKesif ? selectedCableForKesif.kod : ''}
+                        onChange={(e) => {
+                          const kategori = KabloFiyatData.kategoriler.find(k => k.id === selectedCategoryForKesif);
+                          const cable = kategori?.urunler.find(u => u.kod === e.target.value);
+                          setSelectedCableForKesif(cable || null);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                      >
+                        <option value="">-- Kablo Seçiniz --</option>
+                        {KabloFiyatData.kategoriler
+                          .find(k => k.id === selectedCategoryForKesif)
+                          ?.urunler.map((urun) => (
+                            <option key={urun.kod} value={urun.kod}>
+                              {urun.ad} - {kesifFiyatSecimi === 'fiyat1' ? urun.fiyat1 : (urun.fiyat2 || urun.fiyat1)} TL/{urun.birim}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Fiyat Seçimi */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Fiyat Seçimi</label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center">
+                        <input 
+                          type="radio" 
+                          name="kesifFiyatSecimi" 
+                          value="fiyat1"
+                          checked={kesifFiyatSecimi === 'fiyat1'}
+                          onChange={(e) => setKesifFiyatSecimi(e.target.value)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm text-gray-700">Fiyat 1</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input 
+                          type="radio" 
+                          name="kesifFiyatSecimi" 
+                          value="fiyat2"
+                          checked={kesifFiyatSecimi === 'fiyat2'}
+                          onChange={(e) => setKesifFiyatSecimi(e.target.value)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm text-gray-700">Fiyat 2 (varsa)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Miktar ve Özet */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar (Metre) *</label>
+                      <input 
+                        type="number" 
+                        min="0.01"
+                        step="0.01"
+                        placeholder="Örn: 100"
+                        value={productQuantity}
+                        onChange={(e) => setProductQuantity(parseFloat(e.target.value) || 0)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                      />
+                    </div>
+                    
+                    {selectedCableForKesif && (
+                      <div className="bg-purple-100 p-4 rounded-lg flex flex-col justify-center">
+                        <div className="text-xs text-gray-600">Birim Fiyat</div>
+                        <div className="text-xl font-bold text-purple-700">
+                          {(kesifFiyatSecimi === 'fiyat1' ? selectedCableForKesif.fiyat1 : (selectedCableForKesif.fiyat2 || selectedCableForKesif.fiyat1)).toFixed(2)} TL
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">Toplam: {((kesifFiyatSecimi === 'fiyat1' ? selectedCableForKesif.fiyat1 : (selectedCableForKesif.fiyat2 || selectedCableForKesif.fiyat1)) * productQuantity).toFixed(2)} TL</div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <button 
+                    type="button"
+                    onClick={addProductToKesif}
+                    disabled={!selectedCableForKesif || productQuantity <= 0}
+                    className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <Plus className="w-5 h-5 mr-2"/>
+                    Listeye Ekle
+                  </button>
+                </div>
+                )}
+
+                {/* Hizmet/İşçilik Ekleme Formu */}
+                {productType === 'hizmet' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Hizmet/İşçilik Adı *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: İşçilik, Devreye Alma, Mühendislik Hizmeti"
+                      value={hizmetAdi}
+                      onChange={(e) => setHizmetAdi(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Birim Fiyat (TL) *</label>
+                      <input 
+                        type="number" 
+                        min="0"
+                        step="0.01"
+                        placeholder="Örn: 5000"
+                        value={hizmetFiyat || ''}
+                        onChange={(e) => setHizmetFiyat(parseFloat(e.target.value) || 0)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Birim</label>
+                      <select
+                        value={hizmetBirim}
+                        onChange={(e) => setHizmetBirim(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition"
+                      >
+                        <option value="Gün">Gün</option>
+                        <option value="Saat">Saat</option>
+                        <option value="Adet">Adet</option>
+                        <option value="Takım">Takım</option>
+                        <option value="Proje">Proje</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar *</label>
+                    <input 
+                      type="number" 
+                      min="0.01"
+                      step="0.01"
+                      placeholder="Örn: 1"
+                      value={hizmetMiktar}
+                      onChange={(e) => setHizmetMiktar(parseFloat(e.target.value) || 1)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Açıklama (Opsiyonel)</label>
+                    <textarea 
+                      rows="2"
+                      placeholder="Örn: Panel devreye alma ve test"
+                      value={hizmetAciklama}
+                      onChange={(e) => setHizmetAciklama(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition resize-none"
+                    />
+                  </div>
+
+                  {hizmetAdi && hizmetFiyat > 0 && hizmetMiktar > 0 && (
+                    <div className="bg-green-100 p-4 rounded-lg">
+                      <div className="text-xs text-gray-600">Toplam Tutar</div>
+                      <div className="text-xl font-bold text-green-700">
+                        {(hizmetFiyat * hizmetMiktar).toFixed(2)} TL
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        {hizmetFiyat.toFixed(2)} TL × {hizmetMiktar} {hizmetBirim}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <button 
+                    type="button"
+                    onClick={addProductToKesif}
+                    disabled={!hizmetAdi || hizmetFiyat <= 0 || hizmetMiktar <= 0}
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-semibold transition flex items-center justify-center"
+                  >
+                    <Plus className="w-5 h-5 mr-2"/>
+                    Listeye Ekle
+                  </button>
+                </div>
+                )}
+              </div>
+
+              {/* Ürün Listesi */}
+              {kesifProducts.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-800 px-4 py-3 flex justify-between items-center">
+                    <h3 className="text-md font-bold text-white flex items-center">
+                      <FileSpreadsheet className="w-5 h-5 mr-2"/>
+                      Malzeme/Kablo/Hizmet Listesi ({kesifProducts.length} kalem)
+                    </h3>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const totals = calculateKesifTotals();
+                          let text = `📋 KEŞİF METRAJ LİSTESİ\n`;
+                          text += `================================\n\n`;
+                          text += `Firma: ${kesifCustomer.name || 'Belirtilmemiş'}\n`;
+                          text += `Tarih: ${new Date().toLocaleDateString('tr-TR')}\n\n`;
+                          text += `MALZEME LİSTESİ:\n`;
+                          text += `--------------------------------\n`;
+                          kesifProducts.forEach((p, idx) => {
+                            text += `${idx + 1}. ${p.urun}\n`;
+                            text += `   Marka: ${p.marka || '-'} | ${p.miktar} ${p.birim}\n`;
+                            text += `   Birim Fiyat: ${p.birimFiyat.toFixed(2)} TL\n`;
+                            text += `   Toplam: ${p.toplam.toFixed(2)} TL\n\n`;
+                          });
+                          text += `================================\n`;
+                          text += `Ara Toplam: ${totals.subTotal.toFixed(2)} TL\n`;
+                          text += `İskonto (%${kesifSettings.iskonto}): -${totals.iskontoAmount.toFixed(2)} TL\n`;
+                          text += `İskonto Sonrası: ${totals.afterDiscount.toFixed(2)} TL\n`;
+                          text += `KDV (%${kesifSettings.kdvOrani}): +${totals.kdvAmount.toFixed(2)} TL\n`;
+                          text += `--------------------------------\n`;
+                          text += `GENEL TOPLAM: ${totals.grandTotal.toFixed(2)} TL\n`;
+                          
+                          navigator.clipboard.writeText(text);
+                          alert('✅ Liste panoya kopyalandı!');
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1"
+                      >
+                        <Copy className="w-3 h-3"/>
+                        Panoya Kopyala
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const percentage = prompt('Yüzde değeri girin (+artış, -indirim):', '10');
+                          if (percentage !== null && percentage !== '') {
+                            applyBulkPriceAdjustment(parseFloat(percentage));
+                          }
+                        }}
+                        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1"
+                        title="Özel yüzde ile toplu fiyat ayarlama"
+                      >
+                        <Percent className="w-3 h-3"/>
+                        Toplu %
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => applyBulkPriceAdjustment(10)}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                        title="Tüm fiyatlara %10 zam"
+                      >
+                        +10%
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => applyBulkPriceAdjustment(20)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                        title="Tüm fiyatlara %20 zam"
+                      >
+                        +20%
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => applyBulkPriceAdjustment(-10)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                        title="Tüm fiyatlara %10 indirim"
+                      >
+                        -10%
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`${kesifProducts.length} ürünün tamamını silmek istediğinizden emin misiniz?`)) {
+                            setKesifProducts([]);
+                            alert('✅ Tüm ürünler silindi!');
+                          }
+                        }}
+                        className="bg-gray-700 hover:bg-gray-800 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1"
+                        title="Tüm listeyi temizle"
+                      >
+                        <Trash2 className="w-3 h-3"/>
+                        Tümünü Sil
+                      </button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100 border-b border-gray-300">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">SIRA</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">TİP</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">ÜRÜN ADI</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700">DETAY</th>
+                          <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">BİRİM FİYAT</th>
+                          <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">MİKTAR</th>
+                          <th className="px-4 py-3 text-right text-xs font-bold text-gray-700">TOPLAM</th>
+                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-700">İŞLEM</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {kesifProducts.map((product) => (
+                          <tr key={product.id} className={`border-b border-gray-200 hover:bg-gray-50 ${
+                            product.type === 'kablo' ? 'bg-purple-50' : ''
+                          }`}>
+                            <td className="px-4 py-3 text-gray-700">{product.sira}</td>
+                            <td className="px-4 py-3">
+                              {product.type === 'kablo' ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                                  <Cable className="w-3 h-3 mr-1"/>
+                                  Kablo
+                                </span>
+                              ) : product.type === 'hizmet' ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                  <Wrench className="w-3 h-3 mr-1"/>
+                                  Hizmet
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                                  <FileSpreadsheet className="w-3 h-3 mr-1"/>
+                                  Malzeme
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <input 
+                                type="text"
+                                value={product.urun}
+                                onChange={(e) => updateProductName(product.id, e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <input 
+                                type="text"
+                                value={product.marka}
+                                onChange={(e) => updateProductDetail(product.id, e.target.value)}
+                                className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <input 
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={product.birimFiyat}
+                                onChange={(e) => updateProductPrice(product.id, parseFloat(e.target.value) || 0)}
+                                className="w-24 px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              />
+                              <span className="text-xs text-gray-500 ml-1">TL</span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <input 
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={product.miktar}
+                                onChange={(e) => updateProductQuantity(product.id, parseFloat(e.target.value) || 0)}
+                                className="w-20 px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                              />
+                              <span className="text-xs text-gray-500 ml-1">{product.olcu}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-gray-800">
+                              {product.toplam.toFixed(2)} TL
+                              {product.karMarji > 0 && (
+                                <div className="text-xs text-green-600 font-normal">
+                                  +%{product.karMarji} kar
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                {/* Çoğalt */}
+                                <button 
+                                  type="button"
+                                  onClick={() => duplicateProduct(product.id)}
+                                  className="text-blue-600 hover:text-blue-800 transition p-1 hover:bg-blue-50 rounded"
+                                  title="Çoğalt"
+                                >
+                                  <Copy className="w-4 h-4"/>
+                                </button>
+                                {/* Sil */}
+                                <button 
+                                  type="button"
+                                  onClick={() => removeProductFromKesif(product.id)}
+                                  className="text-red-600 hover:text-red-800 transition p-1 hover:bg-red-50 rounded"
+                                  title="Sil"
+                                >
+                                  <Trash2 className="w-4 h-4"/>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* İskonto ve KDV Ayarları */}
+              {kesifProducts.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                      <Percent className="w-4 h-4 mr-2 text-blue-600"/>
+                      İskonto Oranı (%)
+                    </label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={kesifSettings.iskonto}
+                      onChange={(e) => setKesifSettings({...kesifSettings, iskonto: parseFloat(e.target.value) || 0})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-lg font-semibold"
+                    />
+                  </div>
+                  <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                      <Percent className="w-4 h-4 mr-2 text-green-600"/>
+                      KDV Oranı (%)
+                    </label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={kesifSettings.kdvOrani}
+                      onChange={(e) => setKesifSettings({...kesifSettings, kdvOrani: parseFloat(e.target.value) || 0})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition text-lg font-semibold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Özet ve Toplamlar */}
+              {kesifProducts.length > 0 && (
+                <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-lg border-2 border-gray-300">
+                  <h3 className="text-md font-bold text-gray-800 mb-4">Teklif Özeti</h3>
+                  {(() => {
+                    const totals = calculateKesifTotals();
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-gray-300">
+                          <span className="text-sm font-medium text-gray-700">Ara Toplam:</span>
+                          <span className="text-lg font-semibold text-gray-800">{totals.subTotal.toFixed(2)} TL</span>
+                        </div>
+                        {kesifSettings.iskonto > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b border-gray-300">
+                            <span className="text-sm font-medium text-blue-700">İskonto (% {kesifSettings.iskonto}):</span>
+                            <span className="text-lg font-semibold text-blue-700">- {totals.iskontoAmount.toFixed(2)} TL</span>
+                          </div>
+                        )}
+                        {kesifSettings.iskonto > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b border-gray-300">
+                            <span className="text-sm font-medium text-gray-700">İskonto Sonrası:</span>
+                            <span className="text-lg font-semibold text-gray-800">{totals.afterDiscount.toFixed(2)} TL</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center py-2 border-b border-gray-300">
+                          <span className="text-sm font-medium text-green-700">KDV (% {kesifSettings.kdvOrani}):</span>
+                          <span className="text-lg font-semibold text-green-700">+ {totals.kdvAmount.toFixed(2)} TL</span>
+                        </div>
+                        <div className="flex justify-between items-center py-3 bg-orange-600 text-white px-4 rounded-lg mt-4">
+                          <span className="text-base font-bold">GENEL TOPLAM:</span>
+                          <span className="text-2xl font-bold">{totals.grandTotal.toFixed(2)} TL</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button 
+                type="submit"
+                disabled={kesifProducts.length === 0}
+                className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white py-4 px-6 rounded-lg font-bold text-lg transition shadow-lg flex items-center justify-center"
+              >
+                <FileText className="w-6 h-6 mr-3"/>
+                Teklif Önizlemesine Git
+              </button>
+
+            </form>
+          </div>
+        )}
+        {/* OLD KESIF BACKUP END */}
+
+        {/* Kablo Keşif Metraj Tab */}
+        {/* Proposal View */}
+        {activeTab === 'proposal' && selectedCompany && (
+          <div className="flex gap-6 flex-col lg:flex-row">
+            
+            {/* Sidebar (No Print) */}
+            <div className="lg:w-1/3 space-y-4 no-print">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                  <Lightbulb className="h-5 w-5 mr-2 text-yellow-500" />
+                  Gemini AI Asistanı
+                </h3>
+
+                <button 
+                  onClick={() => handleGeminiCall('email')}
+                  disabled={aiLoading}
+                  className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-3 rounded-lg mb-3 transition shadow disabled:opacity-50"
+                >
+                  <Mail className="h-5 w-5" />
+                  <span>✨ Teklif Sunum E-postası Yaz</span>
+                </button>
+
+                <button 
+                  onClick={() => handleGeminiCall('tips')}
+                  disabled={aiLoading}
+                  className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white py-3 rounded-lg mb-3 transition shadow disabled:opacity-50"
+                >
+                  <TrendingDown className="h-5 w-5" />
+                  <span>✨ Sektörel Enerji İpuçları</span>
+                </button>
+
+                {aiLoading && (
+                    <div className="text-center py-4 text-gray-500 text-sm animate-pulse">
+                        Gemini düşünüyor...
+                    </div>
+                )}
+
+                {aiOutput && (
+                    <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4 relative group">
+                        <button 
+                            onClick={copyToClipboard}
+                            className="absolute top-2 right-2 p-1 bg-white border rounded hover:bg-gray-100 text-gray-500 transition"
+                            title="Kopyala"
+                        >
+                            <Copy className="h-4 w-4" />
+                        </button>
+                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">
+                            {aiActiveFeature === 'email' ? 'E-posta Taslağı' : 'Sektörel Tavsiyeler'}
+                        </h4>
+                        <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans leading-relaxed">
+                            {aiOutput}
+                        </pre>
+                    </div>
+                )}
+                
+                {/* Export & Actions */}
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200 mt-4">
+                    <h3 className="font-bold text-gray-900 mb-3 flex items-center">
+                      <Download className="w-4 h-4 mr-2"/>
+                      Export & İşlemler
+                    </h3>
+                    
+                    {/* Editor Mode Toggle */}
+                    <button 
+                      onClick={toggleEditorMode}
+                      className="w-full flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      <span>{editorMode ? '📝 Düzenleme Modundan Çık' : '✏️ Düzenleme Modu'}</span>
+                    </button>
+                    
+                    {/* PDF Export */}
+                    <button 
+                      onClick={handleDownloadPDF}
+                      className="w-full flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <FileText className="h-4 w-4" />
+                      <span>📄 PDF İndir</span>
+                    </button>
+
+                    {/* Word Export */}
+                    <button 
+                      onClick={handleDownloadWord}
+                      className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <FileText className="h-4 w-4" />
+                      <span>📝 Word İndir</span>
+                    </button>
+
+                    {/* Excel Export */}
+                    <button 
+                      onClick={handleExcelExport}
+                      className="w-full flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <FileSpreadsheet className="h-4 w-4" />
+                      <span>📊 Excel İndir</span>
+                    </button>
+
+                    {/* Email Send */}
+                    <button 
+                      onClick={handleSendEmail}
+                      className="w-full flex items-center justify-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <Mail className="h-4 w-4" />
+                      <span>📧 E-posta Gönder</span>
+                    </button>
+
+                    {/* Print */}
+                    <button 
+                      onClick={handlePrint}
+                      className="w-full flex items-center justify-center space-x-2 bg-gray-700 hover:bg-gray-800 text-white py-2.5 rounded-lg mb-2 transition"
+                    >
+                      <Printer className="h-4 w-4" />
+                      <span>🖨️ Yazdır</span>
+                    </button>
+
+                    {/* Kayıt Et */}
+                    <button 
+                      onClick={() => {
+                        if (!selectedCompany) {
+                          alert('Lütfen önce bir teklif oluşturun!');
+                          return;
+                        }
+                        const name = prompt('Teklif adı girin:', `${selectedCompany.name} - YG Teklifi`);
+                        if (!name) return;
+                        const data = {
+                          form: manualForm,
+                          params: params,
+                          calculated: selectedCompany
+                        };
+                        saveProposal('yg', data, name);
+                      }}
+                      className="w-full flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg transition"
+                    >
+                      <Save className="h-4 w-4" />
+                      <span>💾 Kayıt Et</span>
+                    </button>
+                </div>
+
+                {/* Hızlı Düzenleme */}
+                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
+                    <h3 className="font-bold text-blue-900 mb-2">Hızlı Düzenleme</h3>
+                    
+                    {/* Para Birimi Seçici */}
+                    <div className="mb-3">
+                      <label className="text-xs font-bold text-blue-800 uppercase">💱 Para Birimi</label>
+                      <select 
+                        value={currency} 
+                        onChange={(e) => handleCurrencyChange(e.target.value)}
+                        className="w-full mt-1 p-2 border border-blue-200 rounded text-sm font-semibold text-blue-700"
+                      >
+                        <option value="TRY">🇹🇷 Türk Lirası (TL)</option>
+                        <option value="USD">🇺🇸 Dolar ($)</option>
+                        <option value="EUR">🇪🇺 Euro (€)</option>
+                      </select>
+                      <p className="text-xs text-blue-600 mt-1">Tüm fiyatlar otomatik dönüştürülür</p>
+                    </div>
+                    
+                    <div className="mb-3">
+                    <label className="text-xs font-bold text-blue-800 uppercase">Özel İskonto (%)</label>
+                    <input 
+                        type="number" 
+                        value={params.discountRate} 
+                        onChange={(e) => {
+                          const newDiscount = parseFloat(e.target.value) || 0;
+                          setParams({...params, discountRate: newDiscount});
+                          // selectedCompany'yi de güncelle
+                          if (selectedCompany) {
+                            const newDiscountAmount = selectedCompany.nominalFee * (newDiscount / 100);
+                            const newOfferPrice = selectedCompany.nominalFee - newDiscountAmount;
+                            setSelectedCompany({
+                              ...selectedCompany,
+                              appliedDiscountRate: newDiscount,
+                              discountAmount: newDiscountAmount,
+                              offerPrice: newOfferPrice
+                            });
+                          }
+                        }}
+                        className="w-full mt-1 p-2 border border-blue-200 rounded text-sm"
+                    />
+                    </div>
+                </div>
+              </div>
+            </div>
+            
+
+            {/* Proposal Preview (A4 Paper Style) - Right Side */}
+            <div className="lg:w-2/3 bg-gray-200 p-8 rounded-xl overflow-auto lg:h-[calc(100vh-200px)] flex-grow flex justify-center">
+              
+              {/* Editor Mode Banner */}
+              {editorMode && (
+                <div className="mb-4 space-y-2">
+                  <div className="bg-indigo-600 text-white px-4 py-3 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Edit3 className="w-5 h-5 mr-2"/>
+                      <span className="font-semibold">Düzenleme Modu Aktif - Metinleri doğrudan düzenleyebilirsiniz</span>
+                    </div>
+                    <button 
+                      onClick={toggleEditorMode}
+                      className="bg-white text-indigo-600 px-4 py-1 rounded hover:bg-indigo-50 transition"
+                    >
+                      Kaydet ve Çık
+                    </button>
+                  </div>
+                  
+                  {/* Formatting Toolbar */}
+                  <div className="bg-white border border-gray-300 rounded-lg p-3 flex flex-wrap items-center gap-2">
+                    <button 
+                      onClick={() => document.execCommand('bold')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Kalın"
+                    >
+                      <Bold className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('italic')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="İtalik"
+                    >
+                      <Italic className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('underline')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Altı Çizili"
+                    >
+                      <Type className="w-4 h-4"/>
+                    </button>
+                    <div className="w-px h-6 bg-gray-300"></div>
+                    <select 
+                      onChange={(e) => document.execCommand('fontSize', false, e.target.value)}
+                      className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="">Yazı Boyutu</option>
+                      <option value="1">Çok Küçük</option>
+                      <option value="2">Küçük</option>
+                      <option value="3">Normal</option>
+                      <option value="4">Büyük</option>
+                      <option value="5">Çok Büyük</option>
+                      <option value="6">Dev</option>
+                    </select>
+                    <select 
+                      onChange={(e) => document.execCommand('foreColor', false, e.target.value)}
+                      className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="">Renk</option>
+                      <option value="#000000">Siyah</option>
+                      <option value="#1E3A8A">Mavi</option>
+                      <option value="#DC2626">Kırmızı</option>
+                      <option value="#059669">Yeşil</option>
+                      <option value="#D97706">Turuncu</option>
+                    </select>
+                    <div className="w-px h-6 bg-gray-300"></div>
+                    <button 
+                      onClick={() => document.execCommand('justifyLeft')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Sola Hizala"
+                    >
+                      <AlignLeft className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('justifyCenter')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Ortala"
+                    >
+                      <AlignCenter className="w-4 h-4"/>
+                    </button>
+                    <button 
+                      onClick={() => document.execCommand('justifyRight')}
+                      className="p-2 hover:bg-gray-100 rounded border border-gray-300"
+                      title="Sağa Hizala"
+                    >
+                      <AlignRight className="w-4 h-4"/>
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* A4 Paper Structure (Yazdırılacak Alan) */}
+              <div 
+                id="printable-paper"
+                contentEditable={editorMode}
+                suppressContentEditableWarning={true}
+                className={editorMode ? 'outline-2 outline-dashed outline-indigo-400' : ''}
+                style={editorMode ? { minHeight: '297mm' } : {}}
+              >
+                  
+                  {/* KEŞİF METRAJ TEKLİF - Conditional Render */}
+                  {selectedCompany.type === 'kesif' ? (
+                    <>
+                      {(() => {
+                        const products = selectedCompany.products;
+                        const itemsPerPage = 18;
+                        const totalPages = Math.ceil(products.length / itemsPerPage);
+                        
+                        return Array.from({ length: totalPages }, (_, pageIndex) => {
+                          const startIdx = pageIndex * itemsPerPage;
+                          const endIdx = Math.min(startIdx + itemsPerPage, products.length);
+                          const pageProducts = products.slice(startIdx, endIdx);
+                          const isLastPage = pageIndex === totalPages - 1;
+                          
+                          return (
+                            <div key={pageIndex} className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 pdf-page" style={{pageBreakAfter: isLastPage ? 'auto' : 'always', pageBreakInside: 'avoid'}}>
+                              <div>
+                                {/* Header */}
+                                <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
+                                  <div className="w-1/3 flex items-start">
+                                    <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
+                                  </div>
+                                  <div className="text-right">
+                                    <h1 className="text-xl font-bold text-blue-700 tracking-wide uppercase">
+                                      KEŞİF METRAJ FİYAT TEKLİFİ
+                                    </h1>
+                                    <p className="text-[9pt] text-gray-500 mt-2">Referans No: KM-{new Date().getTime().toString().slice(-6)}</p>
+                                    <p className="text-[9pt] text-gray-600 mt-0.5">{selectedCompany.date}</p>
+                                  </div>
+                                </div>
+
+                                {/* Müşteri Bilgileri - Sadece İlk Sayfa */}
+                                {pageIndex === 0 && (
+                                  <>
+                                    <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                      <h3 className="text-[10pt] font-bold text-blue-800 mb-3 uppercase tracking-wide">Müşteri Bilgileri</h3>
+                                      <div className="grid grid-cols-2 gap-3 text-[9pt]">
+                                        <div><strong>Firma/Kurum:</strong> {selectedCompany.name}</div>
+                                        {selectedCompany.contactName && <div><strong>Yetkili:</strong> {selectedCompany.contactName}</div>}
+                                        {selectedCompany.address && <div><strong>Adres:</strong> {selectedCompany.address}</div>}
+                                        {selectedCompany.phone && <div><strong>Telefon:</strong> {selectedCompany.phone}</div>}
+                                      </div>
+                                    </div>
+
+                                    <p className="mb-4 text-[9.5pt] leading-tight">
+                                      <strong>Sayın {selectedCompany.contactName ? `${selectedCompany.contactName} - ` : ''}{selectedCompany.name} Yetkilisi,</strong>
+                                    </p>
+                                    <p className="mb-6 text-justify text-[9.5pt] leading-tight">
+                                      Talep ettiğiniz elektrik malzemeleri ve kablolarına ilişkin keşif metraj fiyat teklifimiz aşağıda detaylandırılmıştır. 
+                                      Tüm fiyatlar güncel piyasa koşulları göz önünde bulundurularak hazırlanmıştır.
+                                    </p>
+                                  </>
+                                )}
+
+                                {/* Ürün Tablosu */}
+                                <h3 className="text-[10pt] font-bold text-gray-800 mb-3 uppercase tracking-wide">
+                                  {pageIndex === 0 ? 'Malzeme Listesi ve Fiyatlandırma' : 'Malzeme Listesi (Devam)'}
+                                </h3>
+                                <div className="overflow-x-auto mb-6">
+                                  <table className="w-full text-[8pt] border-collapse border border-gray-300">
+                                    <thead style={{backgroundColor: '#1e40af'}}>
+                                      <tr>
+                                        <th className="border border-gray-300 p-2 text-center text-white font-semibold">SIRA</th>
+                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">TİP</th>
+                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">ÜRÜN/KABLO ADI</th>
+                                        <th className="border border-gray-300 p-2 text-left text-white font-semibold">DETAY/KESİT</th>
+                                        <th className="border border-gray-300 p-2 text-right text-white font-semibold">BİRİM FİYAT</th>
+                                        <th className="border border-gray-300 p-2 text-right text-white font-semibold">MİKTAR</th>
+                                        <th className="border border-gray-300 p-2 text-center text-white font-semibold">ÖLÇÜ</th>
+                                        <th className="border border-gray-300 p-2 text-right text-white font-semibold">TOPLAM (TL)</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {pageProducts.map((product, idx) => (
+                                        <tr key={product.id} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                          <td className="border border-gray-300 p-2 text-center">{product.sira}</td>
+                                          <td className="border border-gray-300 p-2 text-center">
+                                            {product.type === 'kablo' ? (
+                                              <span className="text-[7pt] font-semibold text-purple-700">KABLO</span>
+                                            ) : (
+                                              <span className="text-[7pt] font-semibold text-orange-700">MALZEME</span>
+                                            )}
+                                          </td>
+                                          <td className="border border-gray-300 p-2">{product.urun}</td>
+                                          <td className="border border-gray-300 p-2 text-gray-600">{product.marka}</td>
+                                          <td className="border border-gray-300 p-2 text-right">{product.birimFiyat.toFixed(2)} TL</td>
+                                          <td className="border border-gray-300 p-2 text-right font-semibold">{product.miktar}</td>
+                                          <td className="border border-gray-300 p-2 text-center">{product.olcu}</td>
+                                          <td className="border border-gray-300 p-2 text-right font-semibold">{product.toplam.toFixed(2)} TL</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                {/* Özet Tablo ve Şartlar - Sadece Son Sayfa */}
+                                {isLastPage && (
+                                  <>
+                                    <div className="flex justify-end mb-6">
+                                      <div className="w-1/2 bg-gray-50 border border-gray-300 rounded-lg overflow-hidden">
+                                        <table className="w-full text-[9pt]">
+                                          <tbody>
+                                            <tr className="border-b border-gray-300">
+                                              <td className="p-3 font-semibold">Ara Toplam:</td>
+                                              <td className="p-3 text-right font-bold">{selectedCompany.totals.subTotal.toFixed(2)} TL</td>
+                                            </tr>
+                                            {selectedCompany.settings.iskonto > 0 && (
+                                              <tr className="border-b border-gray-300 bg-blue-50">
+                                                <td className="p-3 font-semibold text-blue-700">İskonto (% {selectedCompany.settings.iskonto}):</td>
+                                                <td className="p-3 text-right font-bold text-blue-700">- {selectedCompany.totals.iskontoAmount.toFixed(2)} TL</td>
+                                              </tr>
+                                            )}
+                                            {selectedCompany.settings.iskonto > 0 && (
+                                              <tr className="border-b border-gray-300">
+                                                <td className="p-3 font-semibold">İskonto Sonrası:</td>
+                                                <td className="p-3 text-right font-bold">{selectedCompany.totals.afterDiscount.toFixed(2)} TL</td>
+                                              </tr>
+                                            )}
+                                            <tr className="border-b border-gray-300 bg-green-50">
+                                              <td className="p-3 font-semibold text-green-700">KDV (% {selectedCompany.settings.kdvOrani}):</td>
+                                              <td className="p-3 text-right font-bold text-green-700">+ {selectedCompany.totals.kdvAmount.toFixed(2)} TL</td>
+                                            </tr>
+                                            <tr className="bg-orange-600 text-white">
+                                              <td className="p-4 font-bold text-lg">GENEL TOPLAM:</td>
+                                              <td className="p-4 text-right font-bold text-xl">{selectedCompany.totals.grandTotal.toFixed(2)} TL</td>
+                                            </tr>
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+
+                                    <div className="mt-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                      <h3 className="text-[10pt] font-bold text-gray-800 mb-3">Genel Şartlar ve Notlar</h3>
+                                      <ul className="list-disc list-inside text-[9pt] leading-relaxed space-y-2">
+                                        <li>Teklif geçerlilik süresi: 15 gündür.</li>
+                                        <li>Fiyatlara KDV dahil edilmiştir.</li>
+                                        <li>Teslimat süresi: Sipariş onayından sonra 7-10 iş günüdür.</li>
+                                        <li>Ödeme şartları: Görüşülerek belirlenecektir.</li>
+                                        <li>Fiyatlar hammadde ve döviz kurundaki değişikliklere bağlı olarak revize edilebilir.</li>
+                                        <li>Malzemeler kaliteli ve orijinaldir, gerekli belge ve sertifikalarla birlikte teslim edilir.</li>
+                                      </ul>
+                                    </div>
+                                  </>
+                                )}
+
+                              </div>
+
+                              {/* Footer */}
+                              <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-2">
+                                <div className="text-[9pt] text-gray-600">
+                                  <p className="font-bold text-gray-800 text-[9.5pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                                  <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                                  <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                                  <p className="text-gray-400 mt-1 text-right">Sayfa {pageIndex + 1}/{totalPages}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </>
+                  ) : (
+                    <>
+                  {/* SAYFA 1 - YG İŞLETME SORUMLULUĞU */}
+                  <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[10pt] leading-tight text-gray-800 pdf-page" style={{pageBreakAfter: 'always', pageBreakInside: 'avoid'}}>
+                    <div>
+                        {/* Header */}
+                        <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
+                            {/* Top Left Logo */}
+                            <div className="w-1/3 flex items-start">
+                                <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
+                            </div>
+                            <div className="text-right">
+                                <h1 className="text-lg font-bold text-gray-800 tracking-wide uppercase">FİYAT TEKLİFİ</h1>
+                                <p className="text-[9pt] text-gray-500 mt-2">Referans No: {selectedCompany.refNo}</p>
+                                <p className="text-[9pt] text-gray-600 mt-0.5">{new Date().toLocaleDateString('tr-TR', {day: '2-digit', month: 'long', year: 'numeric'})}</p>
+                            </div>
+                        </div>
+
+                        {/* Body Content */}
+                        <p className="mb-4 text-[9.5pt] leading-tight">
+                          <strong>Sayın {selectedCompany.contactName ? `${selectedCompany.contactName} - ` : ''}{selectedCompany.name} Yetkilisi,</strong>
+                        </p>
+                    <p className="mb-4 text-justify text-[9.5pt] leading-tight">
+                      Tesisinize yönelik <strong>YG İşletme Sorumluluğu</strong> hizmeti fiyat teklifi, talep ettiğiniz trafo kurulu gücü ve 
+                      TMMOB Elektrik Mühendisleri Odası'nın (EMO) {params.year} yılı Ücret Tanımları (KISIM III) esas alınarak, 
+                      rekabetçi piyasa koşulları doğrultusunda tekliflerimizde uyguladığımız indirim oranıyla aşağıda sunulmuştur.
+                    </p>
+
+                    <h3 className="text-[10pt] font-bold text-gray-800 mt-5 mb-2 uppercase tracking-wide">1. Tesis Bilgileri ve Toplam Kurulu Güç</h3>
+                    <p className="mb-2 text-[9.5pt] leading-tight">Tesisinizde bulunan transformatörlerin toplam kurulu gücü (Yüksek Gerilim Tesisleri) aşağıdaki gibidir:</p>
+                    <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-3">
+                      <ul className="list-disc list-inside text-[9.5pt] leading-tight">
+                        <li>Trafo Güçleri Dağılımı: <strong>{selectedCompany.powerStr} kVA</strong></li>
+                        <li>Toplam Kurulu Güç: <strong>{selectedCompany.totalKVA || 0} kVA ({((selectedCompany.totalKVA || 0) / 1000).toFixed(2)} MVA)</strong></li>
+                        <li>Tesis Tipi: <strong>{selectedCompany.type === 'direk' ? 'Direk Tipi Trafo Merkezi' : 'Bina Tipi Trafo Merkezi'}</strong></li>
+                        <li>Bölge/Katsayı: <strong>{selectedCompany.region || 'Belirtilmemiş'} (x{(selectedCompany.regionCoeff || 1.0).toFixed(2)})</strong></li>
+                        <li>Sektör: <strong>{selectedCompany.sector}</strong></li>
+                      </ul>
+                    </div>
+
+                    <h3 className="text-[10pt] font-bold text-gray-800 mt-5 mb-2 uppercase tracking-wide">2. EMO {params.year} Yılı Aylık Asgari Ücret Hesaplaması</h3>
+                    <p className="mb-2 text-[9.5pt] leading-tight">EMO {params.year} Yılı Ücret Tanımları'nda (Kısım III), bina ve direk tipi trafo merkezleri için aylık işletme sorumluluğu bedelleri kapasiteye göre belirlenmektedir.</p>
+                    
+                    <table className="w-full text-[9pt] border-collapse border border-gray-300 mb-3">
+                      <thead style={{backgroundColor: '#bbdefb'}}>
+                        <tr>
+                          <th className="border border-gray-300 p-2 text-left font-semibold text-[9pt]" style={{color: '#1565c0'}}>Kapasite Aralığı</th>
+                          <th className="border border-gray-300 p-2 text-left font-semibold text-[9pt]" style={{color: '#1565c0'}}>Birim Fiyat</th>
+                          <th className="border border-gray-300 p-2 text-right font-semibold text-[9pt]" style={{color: '#1565c0'}}>Tutar (TL)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* BİNA TİPİ GÖSTERİMİ */}
+                        {selectedCompany.type !== 'direk' && selectedCompany.totalKVA >= 400 && (
+                          <>
+                            <tr>
+                              <td className="border border-gray-300 p-2">İlk 400 kVA (Sabit)</td>
+                              <td className="border border-gray-300 p-2">{formatCurrency(params.baseFee)}</td>
+                              <td className="border border-gray-300 p-2 text-right">{formatCurrency(params.baseFee)}</td>
+                            </tr>
+                            {selectedCompany.totalKVA > 400 && selectedCompany.totalKVA <= 5000 && (
+                              <tr>
+                                <td className="border border-gray-300 p-2">401 - {selectedCompany.totalKVA} kVA Arası (Artan)</td>
+                                <td className="border border-gray-300 p-2">{params.rate1} TL/kVA</td>
+                                <td className="border border-gray-300 p-2 text-right">
+                                  {formatCurrency((selectedCompany.totalKVA - 400) * params.rate1)}
+                                </td>
+                              </tr>
+                            )}
+                            {selectedCompany.totalKVA > 5000 && (
+                              <>
+                              <tr>
+                                <td className="border border-gray-300 p-2">401 - 5000 kVA Arası (Artan)</td>
+                                <td className="border border-gray-300 p-2">{params.rate1} TL/kVA</td>
+                                <td className="border border-gray-300 p-2 text-right">
+                                  {formatCurrency(4600 * params.rate1)}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="border border-gray-300 p-2">5000 kVA Üzeri (Artan)</td>
+                                <td className="border border-gray-300 p-2">{params.rate2} TL/kVA</td>
+                                <td className="border border-gray-300 p-2 text-right">
+                                  {formatCurrency((selectedCompany.totalKVA - 5000) * params.rate2)}
+                                </td>
+                              </tr>
+                              </>
+                            )}
+                          </>
+                        )}
+
+                        {/* DİREK TİPİ VEYA <400 BİNA GÖSTERİMİ */}
+                        {(selectedCompany.type === 'direk' || (selectedCompany.type === 'bina' && selectedCompany.totalKVA < 400)) && (
+                          <tr>
+                              <td className="border border-gray-300 p-2">
+                                  {selectedCompany.totalKVA <= 50 ? '0-50 kVA' : 
+                                  selectedCompany.totalKVA <= 160 ? '51-160 kVA' : '161-400 kVA'} Sabit Bedel
+                              </td>
+                              <td className="border border-gray-300 p-2">Sabit</td>
+                              <td className="border border-gray-300 p-2 text-right">
+                                  {formatCurrency(selectedCompany.nominalFee / (selectedCompany.regionCoeff || 1))}
+                              </td>
+                          </tr>
+                        )}
+                        
+                        {(selectedCompany.regionCoeff || params.regionCoeff) !== 1 && (
+                          <tr style={{backgroundColor: '#d4f5d4'}}>
+                            <td className="border border-gray-300 p-2" colSpan="2">Bölgesel Azaltma Katsayısı (x {(selectedCompany.regionCoeff || params.regionCoeff)})</td>
+                            <td className="border border-gray-300 p-2 text-right font-bold" style={{color: '#2e7d32'}}>
+                                {(selectedCompany.regionCoeff || params.regionCoeff) < 1 ? '-' : '+'}{formatCurrency(Math.abs(selectedCompany.nominalFee - (selectedCompany.nominalFee / (selectedCompany.regionCoeff || params.regionCoeff))))}
+                            </td>
+                          </tr>
+                        )}
+
+                        <tr className="font-bold" style={{backgroundColor: '#c8f0c8'}}>
+                          <td className="border border-gray-300 p-2" colSpan="2">EMO {params.year} TOPLAM NOMİNAL TARİFE (KDV Hariç)</td>
+                          <td className="border border-gray-300 p-2 text-right">{formatCurrency(selectedCompany.nominalFee)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <h3 className="text-[10pt] font-bold text-gray-800 mt-5 mb-2 uppercase tracking-wide">3. Uygulanan İskonto ve Nihai Teklif</h3>
+                    <p className="mb-4 text-[9.5pt] leading-tight">Piyasa koşullarına uyum sağlamak amacıyla, işletmenize özel <strong>%{selectedCompany.appliedDiscountRate || params.discountRate}</strong> iskonto uygulanmıştır.</p>
+                    
+                    <div className="rounded p-4 border-2 mb-1" style={{backgroundColor: '#c8e6c9', borderColor: '#81c784'}}>
+                      <div className="flex justify-between items-center mb-1.5 text-[9.5pt]" style={{color: '#2e7d32'}}>
+                        <span>EMO Nominal Tarife:</span>
+                        <span>{formatCurrency(selectedCompany.nominalFee)}</span>
+                      </div>
+                      <div className="flex justify-between items-center mb-3 text-[9.5pt]" style={{color: '#2e7d32'}}>
+                        <span>İskonto Tutarı (%{selectedCompany.appliedDiscountRate || params.discountRate}):</span>
+                        <span>- {formatCurrency(selectedCompany.discountAmount)}</span>
+                      </div>
+                      <div className="pt-3 flex justify-between items-center text-[11pt] font-bold" style={{borderTop: '1px solid #66bb6a', color: '#1b5e20'}}>
+                        <span>AYLIK TEKLİF FİYATI:</span>
+                        <span>{formatCurrency(selectedCompany.offerPrice)} + KDV</span>
+                      </div>
+                    </div>
+
+                    <div className="text-[9pt] text-gray-600 border-t pt-1 mt-0" style={{pageBreakInside: 'avoid'}}>
+                      <h4 className="font-bold mb-1 text-[9.5pt]">Açıklamalar:</h4>
+                      <ul className="list-disc list-inside space-y-0.5 text-[9pt] leading-tight">
+                        <li>1. Bu teklif {params.year} yılı boyunca geçerli olmak üzere aylık periyotlarla hazırlanmıştır.</li>
+                        <li>2. İşletme sorumluluğu hizmetinin SMM tarafından üstlenilmesi halinde YG tesisi en az ayda bir kez denetlenmelidir.</li>
+                        <li>3. Enerji tüketiminin izlenmesi ve kompanzasyon tesisinin sağlıklı çalışıp çalışmadığının denetlenmesi bu hizmetin SORUMLULUK KAPSAMINDADIR.</li>
+                        <li>4. EMO tarafından hazırlanan Elektrik Yüksek Gerilim Tesisleri İşletme Sorumluluğu Yönetmeliği bu sözleşmenin ayrılmaz bir parçasıdır. YG İşletme Sorumluluğunu üstlenecek mühendisin EMO tarafından verilen YGTİS belgesine sahip olması gerekir.</li>
+                        <li>5. İşveren olarak sizin yükümlülüğünüz, İşletme Sorumlusunun görevlerini yerine getirebilmesi için gerekli imalatları/hizmetleri sağlamak, talep edilen güvenlik malzemelerini almak ve uyarılarına riayet etmektir.</li>
+                      </ul>
+                    </div>
+                    </div>
+                    
+                    {/* Footer - Sayfa 1 */}
+                    <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-2">
+                      <div className="text-[9pt] text-gray-600">
+                        <p className="font-bold text-gray-800 text-[9.5pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                        <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                        <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                        <p className="text-gray-400 mt-1 text-right">Sayfa 1/2</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* SAYFA 2 - Ücretsiz Ek Hizmetler */}
+                  <div className="bg-white max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] pb-[35mm] shadow-2xl relative text-[9.5pt] leading-tight text-gray-800 page-break pdf-page" style={{pageBreakBefore: 'always', pageBreakInside: 'avoid', pageBreakAfter: 'auto'}}>
+                    <div>
+                      <div className="flex justify-between items-start mb-6 border-b border-gray-300 pb-4">
+                            {/* Page 2 Header - Logo */}
+                            <div className="w-1/3 flex items-start">
+                              <img src="/fatura_logo.png" alt="Kobinerji Logo" className="h-24 max-w-[210px] object-contain" />
+                            </div>
+                            <div className="text-right">
+                            </div>
+                      </div>
+
+                      <h3 className="text-[10pt] font-bold text-gray-800 mb-2 uppercase tracking-wide border-b border-gray-300 pb-2">Kobinerji Mühendislik İçin Artı Değer Katacak Ücretsiz Hizmetler</h3>
+                      <p className="mb-3 text-justify text-[9.5pt] leading-tight">
+                        YG İşletme Sorumluluğu hizmeti kapsamında enerji tüketiminin izlenmesi ve kompanzasyon tesisinin sağlıklı çalışıp çalışmadığının denetlenmesi sorumluğunuzun dışında tutulmuştur. Ancak, Kobinerji Mühendislik olarak satın alma birimi için maliyet kontrolü ve operasyonel güvenliği artıracak bu kritik alanlarda ücretsiz ek hizmetler sunabiliriz:
+                      </p>
+
+                      <div className="space-y-2 pb-8">
+                          <div className="bg-gray-50 p-2.5 rounded border-l-2 border-gray-400">
+                            <h4 className="font-bold text-gray-800 text-[9.5pt] mb-1">1. Arıza Önleme Odaklı Termal Görüntüleme</h4>
+                            <p className="text-[9pt] text-gray-600 mb-0.5 leading-tight">
+                              Üretim sürekliliğinin kritik olduğu büyük tesislerde, YG tesisatında (trafolar, OG hücreleri ve bara bağlantıları) meydana gelebilecek gevşek bağlantılar, aşırı ısınmaya ve ciddi arızalara neden olabilir.
+                            </p>
+                            <ul className="list-disc list-inside text-[9pt] text-gray-600 pl-2 space-y-0.5 leading-tight">
+                              <li><strong>Ücretsiz Hizmet:</strong> Yıl içinde 12 kez (Örneğin aylık periyotlarla) transformatörlerin ve yüksek gerilim hücrelerinin termal kamera ile kontrol edilmesi ve bu kontrollerin raporlanması.</li>
+                              <li><strong>Artı Değer:</strong> Bu denetim, YG ekipmanlarında arıza potansiyeli olan aşırı ısınmaları ve kontak gevşekliklerini (seri ark) erkenden belirleyerek, üretim kesintisi kaynaklı büyük ekonomik kayıpların önüne geçer.</li>
+                            </ul>
+                          </div>
+
+                          <div className="bg-gray-50 p-2.5 rounded border-l-2 border-gray-400">
+                            <h4 className="font-bold text-gray-800 text-[9.5pt] mb-1">2. Reaktif Güç ve Enerji Kalitesi Takibi</h4>
+                            <p className="text-[9pt] text-gray-600 mb-0.5 leading-tight">
+                              Yüksek enerji tüketicisi olan sanayi firmaları için reaktif güç cezaları önemli bir maliyet kalemidir. EMO yönetmelikleri bu takibi kapsamaz.
+                            </p>
+                            <ul className="list-disc list-inside text-[9pt] text-gray-600 pl-2 space-y-0.5 leading-tight">
+                              <li><strong>Ücretsiz Hizmet:</strong> Tesisin reaktif güç durumunun ve güç faktörünün (PF) uzaktan izlenmesi ve çeyreklik dönemlerde (her ayda bir) kompanzasyon sisteminin durumu ve olası ceza riskleri hakkında özet rapor sunulması.</li>
+                              <li><strong>Artı Değer:</strong> Yasal sınırların (genellikle 0.95 seviyesine yakın) dışına çıkılmasını önleyerek, yüksek kompanzasyon cezası riskini ortadan kaldırmaya yardımcı olur ve görünür güç talebini iyileştirir.</li>
+                            </ul>
+                          </div>
+
+                          <div className="bg-gray-50 p-2.5 rounded border-l-2 border-gray-400">
+                            <h4 className="font-bold text-gray-800 text-[9.5pt] mb-1">3. Enerji Verimliliği ve Sürdürülebilirlik Ön Analizi</h4>
+                            <p className="text-[9pt] text-gray-600 mb-0.5 leading-tight">
+                              Büyük firmalar GES ve enerji verimliliği (IE3/IE4 motorlar, VSD uygulamaları) konusunda aktif yatırımlar yapmaktadır.
+                            </p>
+                            <ul className="list-disc list-inside text-[9pt] text-gray-600 pl-2 space-y-0.5 leading-tight">
+                              <li><strong>Ücretsiz Hizmet:</strong> Tesisinizdeki enerji yoğun alanların (fanlar, pompalar, motorlar) ön analizi ve Yüksek Verimli Motorlar (IE3/IE4/IE5) veya Değişken Hızlı Sürücü (VSD) kullanım potansiyelinin belirlenmesi için başlangıç danışmanlığı.</li>
+                              <li><strong>Artı Değer:</strong> Enerji (kW) tüketimini ve karbon ayak izini azaltma hedeflerine ulaşılmasına yardımcı olurken, aynı zamanda motorların daha iyi güç faktörleri (PF) ile çalışmasını sağlayarak trafo üzerindeki reaktif yükü azaltır ve kapasiteyi daha etkin kullanır.</li>
+                            </ul>
+                          </div>
+
+                          <div className="bg-gray-50 p-2.5 rounded border-l-2 border-gray-400">
+                            <h4 className="font-bold text-gray-800 text-[9.5pt] mb-1">4. Yedek Malzeme ve Kritik Stok Listesi Danışmanlığı</h4>
+                            <p className="text-[9pt] text-gray-600 mb-0.5 leading-tight">
+                              Gıda sanayinde kritik arızalara hızlı müdahale esastır. Yedek parça yönetimi, arıza süresini (downtime) doğrudan etkiler.
+                            </p>
+                            <ul className="list-disc list-inside text-[9pt] text-gray-600 pl-2 space-y-0.5 leading-tight">
+                              <li><strong>Ücretsiz Hizmet:</strong> Tesisinizdeki YG ve AG kritik ekipmanlar (trafo buşingleri, parafudr, sekonder koruma röleleri, OG hücre mekanizmaları vb.) için risk ve tedarik sürelerine dayalı acil durum yedek parça listesi ve önerilen minimum stok seviyelerinin belirlenmesi konusunda danışmanlık sağlanması.</li>
+                              <li><strong>Artı Değer:</strong> Arıza durumunda gerekli yedek parçaların hızlı teminini sağlayarak arıza onarım süresini (MTTR) minimize eder ve işletme sürekliliğini destekler.</li>
+                            </ul>
+                          </div>
+                      </div>
+                      
+                      <p className="mt-2 mb-16 text-[9pt] italic text-gray-600 border-t border-gray-300 pt-2 leading-tight">
+                        Bu ücretsiz ek hizmetler, Kobinerji Mühendislik'in sadece yasal zorunlulukları karşılayan bir tedarikçi değil, aynı zamanda maliyet optimizasyonuna ve operasyonel güvenliğe odaklanan stratejik bir çözüm ortağı olduğunu göstermektedir.
+                      </p>
+                    </div>
+
+                    {/* Footer - Page 2 - Always at bottom */}
+                    <div className="absolute bottom-[10mm] left-[10mm] right-[10mm] border-t border-gray-300 pt-2" style={{pageBreakInside: 'avoid'}}>
+                      <div className="text-[9pt] text-gray-600">
+                        <p className="font-bold text-gray-800 text-[9.5pt]">KOBİNERJİ MÜHENDİSLİK</p>
+                        <p className="text-[9pt] mt-0.5">Kemalpaşa O.S.B. Gazi Bulv. Ceran Plaza No:177/19 35170 Kemalpaşa / İzmir</p>
+                        <p className="text-[9pt]">Tel: +90 535 714 52 88 | www.kobinerji.com</p>
+                        <p className="text-gray-400 mt-1 text-right">Sayfa 2/2</p>
+                      </div>
+                    </div>
+                  </div>
+                  </>
+                  )}
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+      </div>
+
+      {/* Hazır Paket Modal */}
+      {showHazirPaketModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-6 h-6 text-yellow-300"/>
+                <h2 className="text-xl font-bold text-white">Hazır Paket Seçimi - Hızlı Teklif</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowHazirPaketModal(false);
+                  setSelectedHazirPaket(null);
+                }}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition"
+              >
+                <X className="w-6 h-6"/>
+              </button>
+            </div>
+
+            {/* Kar Marjı Ayarı */}
+            <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingDown className="w-5 h-5 text-green-600"/>
+                  <label className="text-sm font-semibold text-gray-700">Kar Marjı (%)</label>
+                </div>
+                <div className="flex items-center gap-4">
+                  <input 
+                    type="range"
+                    min="10"
+                    max="80"
+                    step="5"
+                    value={paketKarMarji}
+                    onChange={(e) => setPaketKarMarji(parseInt(e.target.value))}
+                    className="w-48"
+                  />
+                  <input 
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={paketKarMarji}
+                    onChange={(e) => setPaketKarMarji(parseInt(e.target.value) || 30)}
+                    className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold text-green-700"
+                  />
+                  <span className="text-sm text-gray-600">Alış fiyatlarına %{paketKarMarji} kar eklenir</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Paket Listesi */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {HazirPaketler.paketler.map((paket) => (
+                  <div
+                    key={paket.id}
+                    onClick={() => setSelectedHazirPaket(paket.id)}
+                    className={`cursor-pointer rounded-lg border-2 p-4 transition transform hover:scale-105 ${
+                      selectedHazirPaket === paket.id
+                        ? 'border-blue-500 bg-blue-50 shadow-lg'
+                        : 'border-gray-200 bg-white hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-bold text-gray-800 text-sm">{paket.ad}</h3>
+                      {selectedHazirPaket === paket.id && (
+                        <CheckCircle className="w-5 h-5 text-blue-600"/>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mb-2">{paket.kategori}</p>
+                    <p className="text-xs text-gray-600 mb-3 line-clamp-2">{paket.aciklama}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <FileSpreadsheet className="w-4 h-4"/>
+                      <span className="font-semibold">{paket.urunler.length} kalem ürün</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Seçili Paket Detayları */}
+            {selectedHazirPaket && (
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <h3 className="text-sm font-bold text-gray-800 mb-3">
+                  📋 {HazirPaketler.paketler.find(p => p.id === selectedHazirPaket)?.ad} - Ürün Listesi
+                </h3>
+                <div className="max-h-48 overflow-y-auto bg-white rounded-lg border border-gray-200 p-3">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-100 sticky top-0">
+                      <tr>
+                        <th className="px-2 py-1 text-left">Ürün</th>
+                        <th className="px-2 py-1 text-center">Miktar</th>
+                        <th className="px-2 py-1 text-left">Açıklama</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HazirPaketler.paketler
+                        .find(p => p.id === selectedHazirPaket)
+                        ?.urunler.map((urun, idx) => (
+                          <tr key={idx} className="border-b border-gray-100">
+                            <td className="px-2 py-2 font-medium">{urun.urun}</td>
+                            <td className="px-2 py-2 text-center">{urun.miktar} {urun.birim}</td>
+                            <td className="px-2 py-2 text-gray-600">{urun.aciklama}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-100 border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-800">{HazirPaketler.paketler.length}</span> farklı hazır paket mevcut
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowHazirPaketModal(false);
+                    setSelectedHazirPaket(null);
+                  }}
+                  className="px-6 py-2 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-200 transition"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={addHazirPaketToKesif}
+                  disabled={!selectedHazirPaket}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5"/>
+                  Paketi Listeye Ekle
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Keşif Sihirbazı Modal */}
+      {isAiWizardOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden animate-fadeIn">
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 flex justify-between items-center text-white">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-8 h-8 animate-pulse text-yellow-300"/>
+                <div>
+                  <h3 className="font-bold text-xl">🪄 AI Keşif Sihirbazı</h3>
+                  <p className="text-sm text-purple-100">Yapay zeka ile otomatik malzeme listesi oluştur</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsAiWizardOpen(false)}
+                className="hover:bg-white/20 p-2 rounded-lg transition"
+              >
+                <X className="w-6 h-6"/>
+              </button>
+            </div>
+            
+            <div className="p-8">
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg mb-6 border border-purple-200">
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  <span className="font-bold text-purple-700">💡 Nasıl kullanılır:</span><br/>
+                  Projenizi detaylı bir şekilde anlatın. Örneğin: "150m² 3+1 daire için komple elektrik tesisatı", 
+                  "Ofis binası 5 kat için aydınlatma ve priz hattı", "Villa için dış cephe ve bahçe aydınlatması" vb.
+                </p>
+              </div>
+              
+              <textarea 
+                className="w-full h-40 p-4 border-2 border-gray-300 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 outline-none resize-none mb-6 text-gray-800 placeholder-gray-400"
+                placeholder="Projenizi buraya yazın... Örneğin: &#10;&#10;'200 metrekare, 4+1 villa için komple elektrik tesisatı. Salonda spot aydınlatma, her odada priz ve anahtar, mutfakta bol priz, dış cephede bahçe aydınlatması gerekiyor.'"
+                value={aiWizardPrompt}
+                onChange={(e) => setAiWizardPrompt(e.target.value)}
+              />
+
+              {aiError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex items-center gap-2">
+                  <X className="w-5 h-5"/>
+                  <span className="text-sm">{aiError}</span>
+                </div>
+              )}
+              
+              <button 
+                onClick={handleAiWizard}
+                disabled={aiLoading || !aiWizardPrompt.trim()}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95"
+              >
+                {aiLoading ? (
+                  <>
+                    <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"/>
+                    AI Analiz Ediyor...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-6 h-6"/>
+                    Sihirli Listeyi Oluştur
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Teklif Mektubu Modal */}
+      {isEmailGeneratorOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-fadeIn">
+            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 p-6 flex justify-between items-center text-white shrink-0">
+              <div className="flex items-center gap-3">
+                <Mail className="w-8 h-8"/>
+                <div>
+                  <h3 className="font-bold text-xl">✉️ Profesyonel Teklif Mektubu</h3>
+                  <p className="text-sm text-indigo-100">AI tarafından oluşturuldu</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsEmailGeneratorOpen(false)}
+                className="hover:bg-white/20 p-2 rounded-lg transition"
+              >
+                <X className="w-6 h-6"/>
+              </button>
+            </div>
+            
+            <div className="p-8 flex-1 overflow-y-auto">
+              {aiLoading ? (
+                <div className="h-96 flex flex-col items-center justify-center text-indigo-600">
+                  <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"/>
+                  <p className="font-bold text-lg">Profesyonel teklifiniz hazırlanıyor...</p>
+                  <p className="text-sm text-gray-500 mt-2">Bu birkaç saniye sürebilir</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-indigo-200">
+                    <p className="text-sm text-gray-700 flex items-start gap-2">
+                      <Lightbulb className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5"/>
+                      <span>
+                        <span className="font-bold text-indigo-700">Düzenleme İpucu:</span> Metni istediğiniz gibi düzenleyebilir, 
+                        ardından kopyalayıp e-posta programınıza yapıştırabilirsiniz.
+                      </span>
+                    </p>
+                  </div>
+                  
+                  <textarea 
+                    className="w-full h-[500px] p-6 border-2 border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500 outline-none font-mono text-sm leading-relaxed text-gray-800 resize-none"
+                    value={generatedEmail}
+                    onChange={(e) => setGeneratedEmail(e.target.value)}
+                    placeholder="Teklif mektubu burada görünecek..."
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-between items-center gap-4 shrink-0">
+              <div className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-800">{kesifProducts.length}</span> ürün • 
+                <span className="font-semibold text-indigo-600 ml-1">{calculateKesifTotals().grandTotal.toFixed(2)} TL</span>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsEmailGeneratorOpen(false)}
+                  className="px-6 py-2 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-100 transition"
+                >
+                  Kapat
+                </button>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedEmail);
+                    alert("✅ Teklif mektubu panoya kopyalandı!");
+                  }}
+                  disabled={!generatedEmail || aiLoading}
+                  className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold flex items-center gap-2 transition shadow-lg"
+                >
+                  <Copy className="w-5 h-5"/>
+                  Metni Kopyala
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default App;
