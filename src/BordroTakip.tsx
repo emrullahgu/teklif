@@ -2035,9 +2035,11 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
   // Excel Export - Tüm Personel
   const exportToExcel = async () => {
     try {
-      const exportData = visibleEmployees.map(emp => {
+      const exportData = await Promise.all(visibleEmployees.map(async (emp) => {
         const empData = appData[emp.id]?.[monthKey];
         const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
+        const previousBalance = await getPreviousMonthBalance(emp.id, currentMonth, currentYear);
+        const totalDue = previousBalance + stats.netPayable;
         // 🔒 O ay için geçerli olan maaş (güncel maaş değil)
         const effSalary = getEffectiveSalary(emp, salaryHistory[emp.id], currentMonth, currentYear);
         
@@ -2058,11 +2060,13 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
           'Brüt Hakediş': stats.grossTotal.toFixed(2),
           'Avanslar': stats.totalAdvances.toFixed(2),
           'Net Hakediş': stats.netPayable.toFixed(2),
+          'Geçmiş Aydan Devreden Bakiye': previousBalance.toFixed(2),
+          'Toplam Borç (Bakiye + Net)': totalDue.toFixed(2),
           'Resmi Maaş (Ödenecek)': stats.officialPay.toFixed(2),
           'Ek Ödeme': (stats.netPayable - stats.officialPay).toFixed(2),
-          'TOPLAM ÖDENECEK': stats.netPayable.toFixed(2)
+          'TOPLAM ÖDENECEK': totalDue.toFixed(2)
         };
-      });
+      }));
 
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
@@ -2089,6 +2093,8 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
     try {
       const empData = appData[employee.id]?.[monthKey];
       const stats = calculateEmployeeStats(employee, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
+      const previousBalance = await getPreviousMonthBalance(employee.id, currentMonth, currentYear);
+      const totalDue = previousBalance + stats.netPayable;
       // 🔒 O ay için geçerli olan maaş (PDF'de güncel maaş değil, o döneme ait maaş görünmeli)
       const effSalary = getEffectiveSalary(employee, salaryHistory[employee.id], currentMonth, currentYear);
       
@@ -2171,11 +2177,13 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
       bordroBody.push(
         ['', ''],
         ['NET HAKEDIS', `${stats.netPayable.toFixed(2)} TL`],
+        ['GECMIS AYDAN DEVREDEN BAKIYE', `${previousBalance.toFixed(2)} TL`],
+        ['TOPLAM BORC (Bakiye + Net)', `${totalDue.toFixed(2)} TL`],
         ['', ''],
         ['Resmi Maas', `${stats.officialPay.toFixed(2)} TL`],
         ['Ek Odeme', `${(stats.netPayable - stats.officialPay).toFixed(2)} TL`],
         ['', ''],
-        ['TOPLAM ODENECEK', `${stats.netPayable.toFixed(2)} TL`]
+        ['TOPLAM ODENECEK', `${totalDue.toFixed(2)} TL`]
       );
       
       // Bordro Tablosu
@@ -2200,6 +2208,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
           if (data.cell.text[0] && (
             data.cell.text[0].includes('BRUT HAKEDIS') || 
             data.cell.text[0].includes('NET HAKEDIS') || 
+            data.cell.text[0].includes('TOPLAM BORC') ||
             data.cell.text[0].includes('TOPLAM ODENECEK')
           )) {
             data.cell.styles.fillColor = [239, 246, 255];
@@ -2417,9 +2426,11 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
       doc.line(20, startY + 18, 190, startY + 18);
       
       // Özet Tablo Verisi
-      const tableData = visibleEmployees.map(emp => {
+      const tableData = await Promise.all(visibleEmployees.map(async (emp) => {
         const empData = appData[emp.id]?.[monthKey];
         const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
+        const previousBalance = await getPreviousMonthBalance(emp.id, currentMonth, currentYear);
+        const totalDue = previousBalance + stats.netPayable;
         const cleanName = emp.name.replace(/İ/g, 'I').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
         
         return [
@@ -2429,25 +2440,27 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
           `${stats.grossTotal.toFixed(0)} TL`,
           `${stats.totalAdvances.toFixed(0)} TL`,
           `${stats.netPayable.toFixed(0)} TL`,
-          `${stats.officialPay.toFixed(0)} TL`,
-          `${(stats.netPayable - stats.officialPay).toFixed(0)} TL`
+          `${previousBalance.toFixed(0)} TL`,
+          `${totalDue.toFixed(0)} TL`
         ];
-      });
+      }));
 
       // Toplamlar
-      const totals = visibleEmployees.reduce((acc, emp) => {
+      const totals = (await Promise.all(visibleEmployees.map(async (emp) => {
         const empData = appData[emp.id]?.[monthKey];
         const stats = calculateEmployeeStats(emp, empData, daysInMonth, currentMonth, currentYear, salaryHistory);
-        return {
-          workDays: acc.workDays + stats.totalWorkDays,
-          overtime: acc.overtime + stats.totalOvertimeHours,
-          gross: acc.gross + stats.grossTotal,
-          advances: acc.advances + stats.totalAdvances,
-          net: acc.net + stats.netPayable,
-          official: acc.official + stats.officialPay,
-          hand: acc.hand + (stats.netPayable - stats.officialPay)
-        };
-      }, { workDays: 0, overtime: 0, gross: 0, advances: 0, net: 0, official: 0, hand: 0 });
+        const previousBalance = await getPreviousMonthBalance(emp.id, currentMonth, currentYear);
+        const totalDue = previousBalance + stats.netPayable;
+        return { stats, previousBalance, totalDue };
+      }))).reduce((acc, item) => ({
+        workDays: acc.workDays + item.stats.totalWorkDays,
+        overtime: acc.overtime + item.stats.totalOvertimeHours,
+        gross: acc.gross + item.stats.grossTotal,
+        advances: acc.advances + item.stats.totalAdvances,
+        net: acc.net + item.stats.netPayable,
+        previous: acc.previous + item.previousBalance,
+        totalDue: acc.totalDue + item.totalDue
+      }), { workDays: 0, overtime: 0, gross: 0, advances: 0, net: 0, previous: 0, totalDue: 0 });
 
       tableData.push([
         'TOPLAM',
@@ -2456,13 +2469,13 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
         `${totals.gross.toFixed(0)} TL`,
         `${totals.advances.toFixed(0)} TL`,
         `${totals.net.toFixed(0)} TL`,
-        `${totals.official.toFixed(0)} TL`,
-        `${totals.hand.toFixed(0)} TL`
+        `${totals.previous.toFixed(0)} TL`,
+        `${totals.totalDue.toFixed(0)} TL`
       ]);
 
       (doc as any).autoTable({
         startY: startY + 25,
-        head: [['Personel', 'Gun', 'Mesai', 'Brut', 'Avans', 'Net', 'Resmi', 'Ek Odeme']],
+        head: [['Personel', 'Gun', 'Mesai', 'Brut', 'Avans', 'Net', 'Devreden', 'Toplam Borc/Odenecek']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [30, 58, 138], textColor: 255, fontSize: 8, fontStyle: 'bold' },
@@ -3464,12 +3477,10 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                   </>
                                 )}
                                 <div className="flex justify-between font-black text-lg pt-2 bg-blue-50 p-2 rounded"><span>NET HAKEDİŞ:</span><span>{formatCurrency(currentStats.netPayable)}</span></div>
-                                {selectedEmployeePreviousBalance !== 0 && (
-                                  <div className="flex justify-between font-black text-base pt-1 bg-yellow-50 p-2 rounded border border-yellow-200">
-                                    <span>TOPLAM BORÇ (Bakiye + Net):</span>
-                                    <span>{formatCurrency(selectedEmployeePreviousBalance + currentStats.netPayable)}</span>
-                                  </div>
-                                )}
+                                <div className="flex justify-between font-black text-base pt-1 bg-yellow-50 p-2 rounded border border-yellow-200">
+                                  <span>TOPLAM BORÇ (Bakiye + Net):</span>
+                                  <span>{formatCurrency(selectedEmployeePreviousBalance + currentStats.netPayable)}</span>
+                                </div>
                                 <div className="bg-green-50 p-2 rounded border border-green-200 mt-2 space-y-1">
                                     <div className="flex justify-between font-bold text-green-700 text-sm border-b border-green-200 pb-1">
                                         <span>Resmi Maaş:</span>
@@ -3481,7 +3492,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                     </div>
                                     <div className="flex justify-between font-black text-green-700 text-lg border-t-2 border-green-300 pt-1">
                                         <span>TOPLAM ÖDENECEK:</span>
-                                        <span>{formatCurrency(currentStats.netPayable)}</span>
+                                        <span>{formatCurrency(selectedEmployeePreviousBalance + currentStats.netPayable)}</span>
                                     </div>
                                 </div>
                                 <p className="text-[11px] text-gray-400 pt-1">
