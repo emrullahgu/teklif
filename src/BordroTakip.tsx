@@ -426,6 +426,11 @@ export default function BordroTakip() {
   // gerçekte ödenen tutar bu bakiyeyle birlikte hesaba katılır.
   const [selectedEmployeePreviousBalance, setSelectedEmployeePreviousBalance] = useState(0);
 
+  // 🔒 İCMAL TABLOSU (özet görünüm): her personelin geçmiş aydan devreden
+  // bakiyesi, employeeId -> bakiye şeklinde. TOPLAM sütununu doğru hesaplamak için kullanılır.
+  const [summaryPreviousBalances, setSummaryPreviousBalances] = useState<Record<string, number>>({});
+
+
   // 🔒 AYI KAPAT MODALI: Her personel için geçmiş bakiye + bu ay net maaş +
   // toplam borç + (kullanıcının gireceği) ödenen tutar + yeni bakiye
   const [showCloseMonthModal, setShowCloseMonthModal] = useState(false);
@@ -1643,6 +1648,23 @@ export default function BordroTakip() {
     });
     return () => { cancelled = true; };
   }, [selectedEmployeeId, currentMonth, currentYear]);
+
+  // 🔒 İCMAL TABLOSU: her personelin geçmiş aydan devreden bakiyesini yükle,
+  // böylece TOPLAM sütunu, Detay görünümündeki TOPLAM ÖDENECEK ile eşleşir.
+  useEffect(() => {
+    if (visibleEmployees.length === 0) {
+      setSummaryPreviousBalances({});
+      return;
+    }
+    let cancelled = false;
+    Promise.all(visibleEmployees.map(async emp => {
+      const balance = await getPreviousMonthBalance(emp.id, currentMonth, currentYear);
+      return [emp.id, balance] as const;
+    })).then(entries => {
+      if (!cancelled) setSummaryPreviousBalances(Object.fromEntries(entries));
+    });
+    return () => { cancelled = true; };
+  }, [visibleEmployees, currentMonth, currentYear]);
 
   // --- HANDLERS ---
 
@@ -3262,7 +3284,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                         <td className="p-4 text-right text-red-600">{stats.totalAdvances > 0 ? formatCurrency(stats.totalAdvances) : '-'}</td>
                                         <td className="p-4 text-right font-black text-red-600 bg-red-50 border-l-4 border-red-300">{formatCurrency(stats.officialPay)}</td>
                                         <td className="p-4 text-right font-black text-green-600 bg-green-50">{formatCurrency(stats.netPayable - stats.officialPay)}</td>
-                                        <td className="p-4 text-right font-black text-blue-600 bg-blue-50 border-l-4 border-blue-300 text-lg">{formatCurrency(stats.netPayable)}</td>
+                                        <td className="p-4 text-right font-black text-blue-600 bg-blue-50 border-l-4 border-blue-300 text-lg">{formatCurrency(stats.netPayable + (summaryPreviousBalances[emp.id] || 0))}</td>
                                         <td className="p-4 text-center flex justify-center space-x-2">
                                             <button 
                                                 onClick={() => openEditModal(emp)}
@@ -3336,16 +3358,22 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                             return sum + stats.totalAdvances;
                                         }, 0))}
                                     </td>
-                                    <td className="p-4 text-right text-xl bg-red-800 border-l-4 border-yellow-300">
-                                        {formatCurrency(visibleEmployees.reduce((sum, emp) => {
-                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
-                                            return sum + stats.netPayable;
-                                        }, 0))}
-                                    </td>
-                                    <td className="p-4 text-right text-sm opacity-75">
+                                    <td className="p-4 text-right bg-red-50/10">
                                         {formatCurrency(visibleEmployees.reduce((sum, emp) => {
                                             const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
                                             return sum + stats.officialPay;
+                                        }, 0))}
+                                    </td>
+                                    <td className="p-4 text-right bg-green-50/10">
+                                        {formatCurrency(visibleEmployees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
+                                            return sum + (stats.netPayable - stats.officialPay);
+                                        }, 0))}
+                                    </td>
+                                    <td className="p-4 text-right text-xl bg-red-800 border-l-4 border-yellow-300">
+                                        {formatCurrency(visibleEmployees.reduce((sum, emp) => {
+                                            const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
+                                            return sum + stats.netPayable + (summaryPreviousBalances[emp.id] || 0);
                                         }, 0))}
                                     </td>
                                     <td className="p-4"></td>
