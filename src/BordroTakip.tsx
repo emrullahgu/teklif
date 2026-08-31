@@ -3283,7 +3283,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                         <td className="p-4 text-right text-green-700 font-semibold">{formatCurrency(stats.grossTotal)}</td>
                                         <td className="p-4 text-right text-red-600">{stats.totalAdvances > 0 ? formatCurrency(stats.totalAdvances) : '-'}</td>
                                         <td className="p-4 text-right font-black text-red-600 bg-red-50 border-l-4 border-red-300">{formatCurrency(stats.officialPay)}</td>
-                                        <td className="p-4 text-right font-black text-green-600 bg-green-50">{formatCurrency(stats.netPayable - stats.officialPay)}</td>
+                                        <td className="p-4 text-right font-black text-green-600 bg-green-50">{formatCurrency(stats.netPayable - stats.officialPay + (summaryPreviousBalances[emp.id] || 0))}</td>
                                         <td className="p-4 text-right font-black text-blue-600 bg-blue-50 border-l-4 border-blue-300 text-lg">{formatCurrency(stats.netPayable + (summaryPreviousBalances[emp.id] || 0))}</td>
                                         <td className="p-4 text-center flex justify-center space-x-2">
                                             <button 
@@ -3367,7 +3367,7 @@ TÜM TAKSİT PLANINI silmek istiyor musunuz?
                                     <td className="p-4 text-right bg-green-50/10">
                                         {formatCurrency(visibleEmployees.reduce((sum, emp) => {
                                             const stats = calculateEmployeeStats(emp, appData[emp.id]?.[monthKey], daysInMonth, currentMonth, currentYear, salaryHistory);
-                                            return sum + (stats.netPayable - stats.officialPay);
+                                            return sum + (stats.netPayable - stats.officialPay) + (summaryPreviousBalances[emp.id] || 0);
                                         }, 0))}
                                     </td>
                                     <td className="p-4 text-right text-xl bg-red-800 border-l-4 border-yellow-300">
