@@ -46,7 +46,6 @@ export default function HaftalikRaporlama() {
   const [excelDataAktif, setExcelDataAktif] = useState([]);
   const [excelDataEnduktif, setExcelDataEnduktif] = useState([]);
   const [excelDataKapasitif, setExcelDataKapasitif] = useState([]);
-  const [showExcelPreview, setShowExcelPreview] = useState(false);
 
   // OSOS Özet Tablosu State'leri
   const [ososOzetTablosu, setOsosOzetTablosu] = useState([]);
@@ -160,7 +159,79 @@ export default function HaftalikRaporlama() {
 
   // Eski tek Excel upload fonksiyonu - Artık kullanılmıyor
   // 3 ayrı Excel upload fonksiyonları: handleExcelUploadAktif, handleExcelUploadEnduktif, handleExcelUploadKapasitif
-  
+
+  // 'Tarih' kolonu Excel serial numarası, Date nesnesi veya "2026.09.08 10:17:00" gibi
+  // metin (SayacSorgu export formatı) olabilir; hepsini destekle.
+  const parseTarihValue = (excelDate) => {
+    if (excelDate instanceof Date) return excelDate;
+    if (typeof excelDate === 'number') {
+      return new Date((excelDate - 25569) * 86400 * 1000);
+    }
+    if (typeof excelDate === 'string') {
+      const trimmed = excelDate.trim();
+      const match = trimmed.match(/^(\d{4})[.\-\/](\d{2})[.\-\/](\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+      if (match) {
+        const [, y, mo, d, h, mi, s] = match;
+        return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s || 0));
+      }
+      const parsed = new Date(trimmed);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date();
+  };
+
+  // Ortak Excel satır parse fonksiyonu: hem eski format (Okunan Endeks Değeri,
+  // Hesaplanmış Endeks, Tüketim kolonları) hem de yeni SayacSorgu.xlsx formatını
+  // (Okunan Değer, Endeks Değeri, tüketim kolonu yok) destekler.
+  const parseEnergyExcelRows = (jsonData) => {
+    const rows = jsonData.map((row, idx) => {
+      const jsDate = parseTarihValue(row['Tarih']);
+      const okunanEndeks = row['Okunan Endeks Değeri'] ?? row['Okunan Değer'] ?? 0;
+      const carpan = row['Çarpan'] || 1380;
+      const hesaplanmisEndeks = row['Hesaplanmış Endeks'] ?? row['Endeks Değeri'] ?? (okunanEndeks * carpan);
+
+      // Tüketim kolonunu bul (eski format bunu doğrudan içerir)
+      let tuketim = null;
+      for (const key in row) {
+        if (key.toLowerCase().includes('tüketim') || key.toLowerCase().includes('tuketim')) {
+          tuketim = row[key] || 0;
+          break;
+        }
+      }
+
+      const gunAdi = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][jsDate.getDay()];
+      const gun = jsDate.getDate().toString().padStart(2, '0');
+      const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
+      const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
+      return {
+        _idx: idx,
+        _jsDate: jsDate,
+        tarih: jsDate.toISOString().split('T')[0],
+        saat: `${gunAdi} ${gun}.${ay} ${saatDk}`,
+        okunan_endeks: okunanEndeks,
+        carpan,
+        hesaplanmis_endeks: hesaplanmisEndeks,
+        tuketim,
+        raw_data: row
+      };
+    });
+
+    // Tüketim kolonu hiç yoksa (yeni SayacSorgu formatı), ardışık endeks
+    // değerleri farkından tüketimi hesapla
+    if (rows.every(r => r.tuketim === null)) {
+      const sorted = [...rows].sort((a, b) => a._jsDate - b._jsDate);
+      sorted.forEach((r, i) => {
+        r.tuketim = i === 0 ? 0 : Math.max(0, r.hesaplanmis_endeks - sorted[i - 1].hesaplanmis_endeks);
+      });
+    } else {
+      rows.forEach(r => { if (r.tuketim === null) r.tuketim = 0; });
+    }
+
+    rows.sort((a, b) => a._idx - b._idx);
+    return rows.map(({ _jsDate, _idx, ...rest }) => rest);
+  };
+
   // 3 Ayrı Excel Upload Handler'ları
   const handleExcelUploadAktif = async (e) => {
     const file = e.target.files[0];
@@ -175,41 +246,7 @@ export default function HaftalikRaporlama() {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Excel serial date'i JS Date'e çevir
-        const parsedData = jsonData.map(row => {
-          const excelDate = row['Tarih'];
-          let jsDate;
-          
-          if (typeof excelDate === 'number') {
-            jsDate = new Date((excelDate - 25569) * 86400 * 1000);
-          } else {
-            jsDate = new Date(excelDate);
-          }
-
-          // Tüketim kolonunu bul
-          let tuketim = 0;
-          for (const key in row) {
-            if (key.toLowerCase().includes('tüketim') || key.toLowerCase().includes('tuketim')) {
-              tuketim = row[key] || 0;
-              break;
-            }
-          }
-
-          const gunAdi = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][jsDate.getDay()];
-          const gun = jsDate.getDate().toString().padStart(2, '0');
-          const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
-          const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-
-          return {
-            tarih: jsDate.toISOString().split('T')[0],
-            saat: `${gunAdi} ${gun}.${ay} ${saatDk}`,
-            okunan_endeks: row['Okunan Endeks Değeri'] || 0,
-            carpan: row['Çarpan'] || 1380,
-            hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
-            tuketim: tuketim,
-            raw_data: row
-          };
-        });
+        const parsedData = parseEnergyExcelRows(jsonData);
 
         setExcelDataAktif(parsedData);
         alert(`AKTİF Enerji Excel verisi yüklendi! (${parsedData.length} satır)`);
@@ -234,41 +271,7 @@ export default function HaftalikRaporlama() {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Excel serial date'i JS Date'e çevir
-        const parsedData = jsonData.map(row => {
-          const excelDate = row['Tarih'];
-          let jsDate;
-          
-          if (typeof excelDate === 'number') {
-            jsDate = new Date((excelDate - 25569) * 86400 * 1000);
-          } else {
-            jsDate = new Date(excelDate);
-          }
-
-          // Tüketim kolonunu bul
-          let tuketim = 0;
-          for (const key in row) {
-            if (key.toLowerCase().includes('tüketim') || key.toLowerCase().includes('tuketim')) {
-              tuketim = row[key] || 0;
-              break;
-            }
-          }
-
-          const gunAdi = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][jsDate.getDay()];
-          const gun = jsDate.getDate().toString().padStart(2, '0');
-          const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
-          const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-
-          return {
-            tarih: jsDate.toISOString().split('T')[0],
-            saat: `${gunAdi} ${gun}.${ay} ${saatDk}`,
-            okunan_endeks: row['Okunan Endeks Değeri'] || 0,
-            carpan: row['Çarpan'] || 1380,
-            hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
-            tuketim: tuketim,
-            raw_data: row
-          };
-        });
+        const parsedData = parseEnergyExcelRows(jsonData);
 
         setExcelDataEnduktif(parsedData);
         alert(`ENDÜKTİF Reaktif Excel verisi yüklendi! (${parsedData.length} satır)`);
@@ -293,41 +296,7 @@ export default function HaftalikRaporlama() {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Excel serial date'i JS Date'e çevir
-        const parsedData = jsonData.map(row => {
-          const excelDate = row['Tarih'];
-          let jsDate;
-          
-          if (typeof excelDate === 'number') {
-            jsDate = new Date((excelDate - 25569) * 86400 * 1000);
-          } else {
-            jsDate = new Date(excelDate);
-          }
-
-          // Tüketim kolonunu bul
-          let tuketim = 0;
-          for (const key in row) {
-            if (key.toLowerCase().includes('tüketim') || key.toLowerCase().includes('tuketim')) {
-              tuketim = row[key] || 0;
-              break;
-            }
-          }
-
-          const gunAdi = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][jsDate.getDay()];
-          const gun = jsDate.getDate().toString().padStart(2, '0');
-          const ay = (jsDate.getMonth() + 1).toString().padStart(2, '0');
-          const saatDk = jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-
-          return {
-            tarih: jsDate.toISOString().split('T')[0],
-            saat: `${gunAdi} ${gun}.${ay} ${saatDk}`,
-            okunan_endeks: row['Okunan Endeks Değeri'] || 0,
-            carpan: row['Çarpan'] || 1380,
-            hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
-            tuketim: tuketim,
-            raw_data: row
-          };
-        });
+        const parsedData = parseEnergyExcelRows(jsonData);
 
         setExcelDataKapasitif(parsedData);
         alert(`KAPASİTİF Reaktif Excel verisi yüklendi! (${parsedData.length} satır)`);
@@ -345,29 +314,58 @@ export default function HaftalikRaporlama() {
       const lines = text.split('\n').filter(line => line.trim());
       const parsedData = [];
 
-      for (const line of lines) {
-        // Tab veya çoklu boşluklarla ayrılmış değerleri al
-        const parts = line.split(/\t+|\s{2,}/).map(p => p.trim()).filter(p => p);
-        
-        if (parts.length < 7) continue; // En az 7 kolon olmalı
-        
-        // Sayıları parse et (Türkçe format: 3.296,18 -> 3296.18)
-        const parseNumber = (str) => {
-          if (!str || str === 'SQL' || str === 'MAX') return 0;
-          return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
-        };
+      // Sayıları parse et (Türkçe format: 3.296,18 -> 3296.18)
+      const parseNumber = (str) => {
+        if (!str || str === 'SQL' || str === 'MAX') return 0;
+        return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
+      };
 
-        const row = {
-          endeks_kodu: parts[0] || '',
-          aciklama: parts[1] || '',
-          ilk_endeks: parseNumber(parts[2]),
-          son_endeks: parseNumber(parts[3]),
-          endeks_farki: parseNumber(parts[4]),
-          carpan: parseNumber(parts[5]),
-          tuketim: parseNumber(parts[6]),
-          yasal_sinir: parts[7] || '',
-          durum: parts[8] || ''
-        };
+      for (const line of lines) {
+        // Tab ile ayrılmış veriyi tek '\t' üzerinden böl ki boş hücreler (örn. boş
+        // "Sınır" kolonu) kaybolmasın; tab yoksa çoklu boşlukla ayrılmış kabul et.
+        const rawParts = line.includes('\t') ? line.split('\t') : line.split(/\s{2,}/);
+        const parts = rawParts.map(p => p.trim());
+        while (parts.length && parts[parts.length - 1] === '') parts.pop(); // sondaki boş hücreleri at
+
+        if (parts.length < 5) continue; // En az kod, açıklama, ilk/son endeks ve tüketim olmalı
+        if (!/^\d+\.\d+\.\d+$/.test(parts[0])) continue; // İlk kolon OBIS kodu olmalı (örn: 1.8.0)
+
+        const ilkEndeks = parseNumber(parts[2]);
+        const sonEndeks = parseNumber(parts[3]);
+        const beklenenFark = sonEndeks - ilkEndeks;
+        const dorduncuKolon = parseNumber(parts[4]);
+
+        // Eski format: Endeks Kodu, Açıklama, İlk, Son, Endeks Farkı, Çarpan, Tüketim, [Yasal Sınır], [Durum]
+        // 4. kolon (Endeks Farkı) Son-İlk farkına yakınsa eski format kabul edilir.
+        const eskiFormat = parts.length >= 6 && Math.abs(dorduncuKolon - beklenenFark) < Math.max(1, Math.abs(beklenenFark) * 0.05);
+
+        let row;
+        if (eskiFormat) {
+          row = {
+            endeks_kodu: parts[0] || '',
+            aciklama: parts[1] || '',
+            ilk_endeks: ilkEndeks,
+            son_endeks: sonEndeks,
+            endeks_farki: dorduncuKolon,
+            carpan: parseNumber(parts[5]),
+            tuketim: parseNumber(parts[6]),
+            yasal_sinir: parts[7] || '',
+            durum: parts[8] || ''
+          };
+        } else {
+          // Yeni format (SayacSorgu/OSOS özet): Endeks Kodu, Açıklama, İlk, Son, Tüketim, [Sınır], [Ceza Oranı]
+          row = {
+            endeks_kodu: parts[0] || '',
+            aciklama: parts[1] || '',
+            ilk_endeks: ilkEndeks,
+            son_endeks: sonEndeks,
+            endeks_farki: beklenenFark,
+            carpan: 0,
+            tuketim: dorduncuKolon,
+            yasal_sinir: parts[5] || '',
+            durum: parts[6] || ''
+          };
+        }
 
         parsedData.push(row);
       }
@@ -401,14 +399,22 @@ export default function HaftalikRaporlama() {
     alert(`${parsed.length} satır OSOS verisi yüklendi!`);
   };
 
-  const applyExcelDataToForm = () => {
-    // Artık kullanılmıyor - 3 ayrı Excel yüklenecek
-    console.warn('applyExcelDataToForm artık kullanılmamaktadır.');
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
+    if (autoCalculateCosPhi && !formData.guc_faktoru) {
+      alert('Güç faktörü otomatik hesaplanamadı. Lütfen önce OSOS özet tablosunu (1.8.0 ve 5.8.0 satırları tüketimli) yapıştırın ya da otomatik hesaplamayı kapatıp manuel girin.');
+      return;
+    }
+    if (isNaN(parseFloat(formData.guc_faktoru)) || isNaN(parseFloat(formData.aktif_guc)) || isNaN(parseFloat(formData.enerji_tuketimi)) || isNaN(parseFloat(formData.hedef_guc_faktoru))) {
+      alert('Lütfen zorunlu sayısal alanları (Güç Faktörü, Aktif Güç, Enerji Tüketimi, Hedef Güç Faktörü) geçerli bir değerle doldurun.');
+      return;
+    }
+    if (!ilkKayit && isNaN(parseFloat(formData.onceki_hafta_guc_faktoru))) {
+      alert('Önceki hafta güç faktörünü girin ya da "Bu fabrikanın ilk kaydı" seçeneğini işaretleyin.');
+      return;
+    }
+
     try {
       const rapor = {
         ...formData,
@@ -455,17 +461,19 @@ export default function HaftalikRaporlama() {
   };
 
   const handleEdit = (rapor) => {
+    setAutoCalculateCosPhi(false);
+    setIlkKayit(rapor.onceki_hafta_guc_faktoru === null || rapor.onceki_hafta_guc_faktoru === undefined);
     setFormData({
       fabrika_adi: rapor.fabrika_adi,
       hafta_baslangic: rapor.hafta_baslangic,
       hafta_bitis: rapor.hafta_bitis,
       guc_faktoru: rapor.guc_faktoru,
-      reaktif_guc: rapor.reaktif_guc,
+      reaktif_guc: rapor.reaktif_guc ?? '',
       aktif_guc: rapor.aktif_guc,
       kompanzasyon_durumu: rapor.kompanzasyon_durumu,
       enerji_tuketimi: rapor.enerji_tuketimi,
-      maliyet: rapor.maliyet,
-      onceki_hafta_guc_faktoru: rapor.onceki_hafta_guc_faktoru,
+      maliyet: rapor.maliyet ?? '',
+      onceki_hafta_guc_faktoru: rapor.onceki_hafta_guc_faktoru ?? '',
       hedef_guc_faktoru: rapor.hedef_guc_faktoru,
       notlar: rapor.notlar || '',
       gorsel_url: rapor.gorsel_url || ''
@@ -576,7 +584,7 @@ export default function HaftalikRaporlama() {
   const handleYeniRapor = () => {
     setEditingId(null);
     resetForm();
-    
+
     if (raporlar.length > 0) {
       const sonRapor = raporlar[0];
       setFormData(prev => ({
@@ -584,6 +592,9 @@ export default function HaftalikRaporlama() {
         onceki_hafta_guc_faktoru: sonRapor.guc_faktoru,
         fabrika_adi: sonRapor.fabrika_adi
       }));
+    } else {
+      // Sistemde hiç rapor yoksa referans al\u0131nacak bir "\u00f6nceki hafta" de\u011feri olamaz
+      setIlkKayit(true);
     }
     setShowModal(true);
   };
@@ -676,7 +687,10 @@ export default function HaftalikRaporlama() {
   const getTrend = (rapor) => {
     const current = parseFloat(rapor.guc_faktoru);
     const previous = parseFloat(rapor.onceki_hafta_guc_faktoru);
-    
+
+    if (rapor.onceki_hafta_guc_faktoru === null || rapor.onceki_hafta_guc_faktoru === undefined || isNaN(previous)) {
+      return { icon: Minus, color: 'text-gray-500', text: 'İlk Kayıt' };
+    }
     if (current > previous) {
       return { icon: TrendingUp, color: 'text-green-600', text: 'Yükseliş' };
     } else if (current < previous) {
@@ -876,7 +890,7 @@ export default function HaftalikRaporlama() {
                         <TrendIcon className="w-4 h-4" />
                         <span className="text-xs font-medium">{trend.text}</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Önceki: {rapor.onceki_hafta_guc_faktoru}</p>
+                      <p className="text-xs text-gray-500 mt-1">Önceki: {rapor.onceki_hafta_guc_faktoru ?? 'İlk kayıt'}</p>
                     </div>
                   </div>
 
@@ -888,7 +902,7 @@ export default function HaftalikRaporlama() {
                     </div>
                     <div className="p-2 bg-purple-50 rounded">
                       <p className="text-xs text-gray-600">Reaktif Güç</p>
-                      <p className="text-sm font-bold text-purple-700">{rapor.reaktif_guc} kVAr</p>
+                      <p className="text-sm font-bold text-purple-700">{rapor.reaktif_guc ? `${rapor.reaktif_guc} kVAr` : '-'}</p>
                     </div>
                   </div>
 
@@ -906,7 +920,7 @@ export default function HaftalikRaporlama() {
                     </div>
                     <div className="p-2 bg-orange-50 rounded">
                       <p className="text-xs text-gray-600">Maliyet</p>
-                      <p className="text-sm font-bold text-orange-700">{parseFloat(rapor.maliyet).toLocaleString('tr-TR')} ₺</p>
+                      <p className="text-sm font-bold text-orange-700">{rapor.maliyet ? `${parseFloat(rapor.maliyet).toLocaleString('tr-TR')} ₺` : '-'}</p>
                     </div>
                   </div>
 
@@ -934,17 +948,11 @@ export default function HaftalikRaporlama() {
 
                 {/* Actions */}
                 <div className="p-4 bg-gray-50 border-t border-gray-200 flex gap-2">
-                  {rapor.excel_data && (
+                  {(rapor.excel_data_aktif || rapor.excel_data_enduktif || rapor.excel_data_kapasitif || rapor.osos_ozet_tablo) && (
                     <button
                       onClick={() => {
-                        try {
-                          const excelData = JSON.parse(rapor.excel_data);
-                          setParsedExcelData(excelData);
-                          setSelectedRapor(rapor);
-                          setShowGrafikModal(true);
-                        } catch (e) {
-                          alert('Excel verisi okunamadı');
-                        }
+                        setSelectedRapor(rapor);
+                        setShowGrafikModal(true);
                       }}
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition text-sm"
                     >
@@ -1510,192 +1518,8 @@ export default function HaftalikRaporlama() {
           </div>
         )}
 
-        {/* Excel Önizleme Modal */}
-        {showExcelPreview && parsedExcelData.length > 0 && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-              <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-4 flex justify-between items-center text-white sticky top-0 z-10 rounded-t-xl">
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="w-6 h-6" />
-                  <h3 className="font-bold text-lg">Excel Veri Önizleme</h3>
-                </div>
-                <button onClick={() => setShowExcelPreview(false)} className="hover:bg-white/20 p-1 rounded">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              
-              <div className="p-6">
-                {/* Enerji Türü ve Kolon Seçimi */}
-                <div className="mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-xl p-6">
-                  <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-indigo-600" />
-                    Veri Türü Seçimi
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Veri Kolonu
-                      </label>
-                      <select
-                        value={selectedDataColumn}
-                        onChange={(e) => {
-                          setSelectedDataColumn(e.target.value);
-                          // Veriyi yeniden parse et
-                          const updatedData = excelData.map(row => {
-                            const excelDate = row['Tarih'];
-                            const jsDate = new Date((excelDate - 25569) * 86400 * 1000);
-                            return {
-                              tarih: jsDate.toISOString().split('T')[0],
-                              saat: jsDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-                              okunan_endeks: row['Okunan Endeks Değeri'] || 0,
-                              carpan: row['Çarpan'] || 1380,
-                              hesaplanmis_endeks: row['Hesaplanmış Endeks'] || 0,
-                              tuketim: row[e.target.value] || 0,
-                              enerji_turu: selectedEnergyType,
-                              raw_data: row
-                            };
-                          });
-                          setParsedExcelData(updatedData);
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      >
-                        {excelColumns.map(col => (
-                          <option key={col} value={col}>{col}</option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">Excel'de hangi kolon kullanılsın?</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Enerji Türü
-                      </label>
-                      <select
-                        value={selectedEnergyType}
-                        onChange={(e) => {
-                          setSelectedEnergyType(e.target.value);
-                          // Veriyi güncelle
-                          const updatedData = parsedExcelData.map(row => ({
-                            ...row,
-                            enerji_turu: e.target.value
-                          }));
-                          setParsedExcelData(updatedData);
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      >
-                        <option value="aktif">⚡ Aktif Enerji (kWh)</option>
-                        <option value="enduktif">🔴 Reaktif Endüktif (kVArh)</option>
-                        <option value="kapasitif">🔵 Reaktif Kapasitif (kVArh)</option>
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">Bu veri hangi enerji türü?</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 p-3 bg-white rounded-lg border border-indigo-200">
-                    <p className="text-sm font-semibold text-gray-700">
-                      Seçili: <span className="text-indigo-600">{selectedDataColumn}</span> 
-                      {selectedEnergyType === 'aktif' && ' (⚡ Aktif Enerji)'}
-                      {selectedEnergyType === 'enduktif' && ' (🔴 Reaktif Endüktif)'}
-                      {selectedEnergyType === 'kapasitif' && ' (🔵 Reaktif Kapasitif)'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mb-4 grid grid-cols-3 gap-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600">Toplam Satır</p>
-                    <p className="text-2xl font-bold text-blue-600">{parsedExcelData.length}</p>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600">Toplam Tüketim</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {parsedExcelData.reduce((sum, r) => sum + parseFloat(r.tuketim || 0), 0).toFixed(2)} 
-                      {selectedEnergyType === 'aktif' ? ' kWh' : ' kVArh'}
-                    </p>
-                  </div>
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600">Tarih Aralığı</p>
-                    <p className="text-sm font-bold text-purple-600">
-                      {parsedExcelData[0]?.tarih} - {parsedExcelData[parsedExcelData.length - 1]?.tarih}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Tüketim Grafiği */}
-                <div className="mb-6 bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-bold text-gray-700 mb-3">Günlük Tüketim Grafiği</h4>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={groupDataByDay(parsedExcelData)}>
-                      <defs>
-                        <linearGradient id="colorTuketim" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="gun" fontSize={12} />
-                      <YAxis fontSize={12} />
-                      <Tooltip />
-                      <Area type="monotone" dataKey="tuketim" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorTuketim)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Veri Tablosu */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
-                    <thead className="bg-gray-100">
-                      <tr>
-                        <th className="border p-2 text-left">#</th>
-                        <th className="border p-2 text-left">Tarih</th>
-                        <th className="border p-2 text-left">Saat</th>
-                        <th className="border p-2 text-right">Okunan Endeks</th>
-                        <th className="border p-2 text-right">Çarpan</th>
-                        <th className="border p-2 text-right">Hesaplanmış Endeks</th>
-                        <th className="border p-2 text-right">Tüketim (kWh)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {parsedExcelData.slice(0, 100).map((row, idx) => (
-                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="border p-2">{idx + 1}</td>
-                          <td className="border p-2">{row.tarih}</td>
-                          <td className="border p-2">{row.saat}</td>
-                          <td className="border p-2 text-right">{row.okunan_endeks}</td>
-                          <td className="border p-2 text-right">{row.carpan}</td>
-                          <td className="border p-2 text-right">{row.hesaplanmis_endeks.toFixed(2)}</td>
-                          <td className="border p-2 text-right font-semibold">{row.tuketim.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {parsedExcelData.length > 100 && (
-                    <p className="text-center text-sm text-gray-500 mt-2">
-                      İlk 100 satır gösteriliyor. Toplam: {parsedExcelData.length} satır
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex gap-3 pt-6 mt-6 border-t border-gray-200">
-                  <button
-                    onClick={applyExcelDataToForm}
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition"
-                  >
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Verileri Forma Aktar</span>
-                  </button>
-                  <button
-                    onClick={() => setShowExcelPreview(false)}
-                    className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg transition"
-                  >
-                    Kapat
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Grafik Modal */}
-        {showGrafikModal && selectedRapor && parsedExcelData.length > 0 && (
+        {/* Grafik Modal - rapora ait 3 enerji türü (Aktif/Endüktif/Kapasitif) ve OSOS tablosunu gösterir */}
+        {showGrafikModal && selectedRapor && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-y-auto">
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 flex justify-between items-center text-white sticky top-0 z-10 rounded-t-xl">
@@ -1703,169 +1527,177 @@ export default function HaftalikRaporlama() {
                   <LineChart className="w-6 h-6" />
                   <h3 className="font-bold text-lg">Detaylı Tüketim Grafikleri - {selectedRapor.fabrika_adi}</h3>
                 </div>
-                <button onClick={() => setShowGrafikModal(false)} className="hover:bg-white/20 p-1 rounded">
+                <button onClick={() => { setShowGrafikModal(false); setSelectedRapor(null); }} className="hover:bg-white/20 p-1 rounded">
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
-              <div className="p-6 space-y-6">
-                {/* Enerji Türü Badge */}
-                {parsedExcelData.length > 0 && parsedExcelData[0].enerji_turu && (
-                  <div className="flex items-center justify-center gap-3 p-4 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-lg">
-                    <p className="text-lg font-bold text-gray-800">
-                      Enerji Türü: 
-                      {parsedExcelData[0].enerji_turu === 'aktif' && ' ⚡ Aktif Enerji (kWh)'}
-                      {parsedExcelData[0].enerji_turu === 'enduktif' && ' 🔴 Reaktif Endüktif (kVArh)'}
-                      {parsedExcelData[0].enerji_turu === 'kapasitif' && ' 🔵 Reaktif Kapasitif (kVArh)'}
-                    </p>
-                  </div>
-                )}
 
-                {/* Saatlik Tüketim Grafiği */}
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border-2 border-blue-200">
-                  <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-blue-600" />
-                    Günlük Enerji Tüketimi {parsedExcelData[0]?.enerji_turu === 'aktif' ? '(kWh)' : '(kVArh)'}
-                  </h4>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <AreaChart data={groupDataByDay(parsedExcelData)}>
-                      <defs>
-                        <linearGradient id="colorTuketim2" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="gun" fontSize={11} />
-                      <YAxis fontSize={11} label={{ value: 'kWh', angle: -90, position: 'insideLeft' }} />
-                      <Tooltip contentStyle={{ background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }} />
-                      <Area type="monotone" dataKey="tuketim" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorTuketim2)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
+              <div className="p-6 space-y-8">
+                {(() => {
+                  const excelSets = [
+                    { data: selectedRapor.excel_data_aktif, type: 'aktif', title: 'Aktif Enerji', code: '1.8.0', unit: 'kWh', color: '#10b981', emoji: '⚡' },
+                    { data: selectedRapor.excel_data_enduktif, type: 'enduktif', title: 'Reaktif Endüktif Enerji', code: '5.8.0', unit: 'kVArh', color: '#f59e0b', emoji: '🔴' },
+                    { data: selectedRapor.excel_data_kapasitif, type: 'kapasitif', title: 'Reaktif Kapasitif Enerji', code: '8.8.0', unit: 'kVArh', color: '#ec4899', emoji: '🔵' }
+                  ]
+                    .filter(s => s.data)
+                    .map(s => {
+                      try {
+                        return { ...s, rows: JSON.parse(s.data) };
+                      } catch (e) {
+                        console.error(`${s.type} Excel verisi parse edilemedi:`, e);
+                        return { ...s, rows: [] };
+                      }
+                    })
+                    .filter(s => s.rows.length > 0);
 
-                {/* Bar Chart - Endeks Değerleri */}
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border-2 border-green-200">
-                  <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-green-600" />
-                    Günlük Ortalama Hesaplanmış Endeks Değerleri
-                  </h4>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <RechartsBar data={groupDataByDay(parsedExcelData)}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="gun" fontSize={11} />
-                      <YAxis fontSize={11} />
-                      <Tooltip contentStyle={{ background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }} />
-                      <Bar dataKey="hesaplanmis_endeks" fill="#10b981" radius={[8, 8, 0, 0]} />
-                    </RechartsBar>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Line Chart - Okunan Endeks */}
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
-                  <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-purple-600" />
-                    Günlük Ortalama Okunan Endeks Trendi
-                  </h4>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <RechartsLine data={groupDataByDay(parsedExcelData)}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="gun" fontSize={11} />
-                      <YAxis fontSize={11} />
-                      <Tooltip contentStyle={{ background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }} />
-                      <Legend />
-                      <Line type="monotone" dataKey="okunan_endeks" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
-                    </RechartsLine>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* İstatistikler */}
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="bg-gradient-to-br from-orange-100 to-orange-200 p-4 rounded-lg text-center">
-                    <p className="text-sm text-orange-700 font-medium">Max Günlük Tüketim</p>
-                    <p className="text-2xl font-bold text-orange-900">
-                      {Math.max(...groupDataByDay(parsedExcelData).map(d => d.tuketim)).toFixed(2)} kWh
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-blue-100 to-blue-200 p-4 rounded-lg text-center">
-                    <p className="text-sm text-blue-700 font-medium">Min Günlük Tüketim</p>
-                    <p className="text-2xl font-bold text-blue-900">
-                      {Math.min(...groupDataByDay(parsedExcelData).map(d => d.tuketim)).toFixed(2)} kWh
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-green-100 to-green-200 p-4 rounded-lg text-center">
-                    <p className="text-sm text-green-700 font-medium">Günlük Ortalama</p>
-                    <p className="text-2xl font-bold text-green-900">
-                      {(groupDataByDay(parsedExcelData).reduce((sum, d) => sum + d.tuketim, 0) / groupDataByDay(parsedExcelData).length).toFixed(2)} kWh
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-purple-100 to-purple-200 p-4 rounded-lg text-center">
-                    <p className="text-sm text-purple-700 font-medium">Toplam</p>
-                    <p className="text-2xl font-bold text-purple-900">
-                      {parsedExcelData.reduce((sum, d) => sum + d.tuketim, 0).toFixed(2)} kWh
-                    </p>
-                  </div>
-                </div>
-
-                {/* OSOS Özet Tablosu */}
-                {selectedRapor.osos_ozet_tablo && (() => {
-                  try {
-                    const ososData = JSON.parse(selectedRapor.osos_ozet_tablo);
+                  if (excelSets.length === 0 && !selectedRapor.osos_ozet_tablo) {
                     return (
-                      <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-xl border-2 border-orange-200">
-                        <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                          <BarChart3 className="w-5 h-5 text-orange-600" />
-                          OSOS Özet Tablosu - Endeks Bilgileri
-                        </h4>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs border-collapse">
-                            <thead className="bg-orange-600 text-white">
-                              <tr>
-                                <th className="border p-2 text-left">Kod</th>
-                                <th className="border p-2 text-left">Açıklama</th>
-                                <th className="border p-2 text-right">İlk Endeks</th>
-                                <th className="border p-2 text-right">Son Endeks</th>
-                                <th className="border p-2 text-right">Fark</th>
-                                <th className="border p-2 text-right">Çarpan</th>
-                                <th className="border p-2 text-right">Tüketim</th>
-                                <th className="border p-2 text-center">Yasal Sınır</th>
-                                <th className="border p-2 text-center">Durum</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {ososData.map((row, idx) => {
-                                const isMainRow = ['1.8.0', '5.8.0', '8.8.0'].includes(row.endeks_kodu);
-                                return (
-                                  <tr key={idx} className={isMainRow ? 'bg-yellow-100' : (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
-                                    <td className={`border p-2 ${isMainRow ? 'font-bold' : ''}`}>{row.endeks_kodu}</td>
-                                    <td className={`border p-2 ${isMainRow ? 'font-bold' : ''}`}>{row.aciklama}</td>
-                                    <td className="border p-2 text-right">{row.ilk_endeks.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
-                                    <td className="border p-2 text-right">{row.son_endeks.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
-                                    <td className="border p-2 text-right">{row.endeks_farki.toLocaleString('tr-TR', { minimumFractionDigits: 4 })}</td>
-                                    <td className="border p-2 text-right">{row.carpan.toLocaleString('tr-TR')}</td>
-                                    <td className={`border p-2 text-right ${isMainRow ? 'font-bold text-orange-700' : ''}`}>{row.tuketim.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
-                                    <td className="border p-2 text-center">{row.yasal_sinir}</td>
-                                    <td className={`border p-2 text-center font-semibold ${row.durum.includes('%') ? (parseFloat(row.durum.replace('%', '').trim()) > 15 ? 'text-red-600' : 'text-green-600') : ''}`}>{row.durum}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="mt-3 p-3 bg-white rounded-lg border border-orange-200">
-                          <p className="text-xs text-gray-600">
-                            <strong>Açıklama:</strong> 
-                            1.8.x: Aktif enerji tüketimi (Gündüz, Puant, Gece dönemleri) |
-                            5.8.0: Endüktif reaktif enerji (Yasal sınır: %20) |
-                            8.8.0: Kapasitif reaktif enerji (Yasal sınır: %15) |
-                            2.8.0: Ters yön aktif enerji (veriş)
-                          </p>
-                        </div>
+                      <div className="text-center py-16 text-gray-500">
+                        <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-40" />
+                        <p>Bu rapor için görselleştirilecek Excel veya OSOS verisi bulunamadı.</p>
                       </div>
                     );
-                  } catch (e) {
-                    return null;
                   }
+
+                  return (
+                    <>
+                      {excelSets.map((excelSet) => {
+                        const gunlukVeri = groupDataByDay(excelSet.rows);
+                        if (gunlukVeri.length === 0) return null;
+                        const toplam = gunlukVeri.reduce((sum, d) => sum + d.tuketim, 0);
+                        const maxVal = Math.max(...gunlukVeri.map(d => d.tuketim));
+                        const minVal = Math.min(...gunlukVeri.map(d => d.tuketim));
+                        const ortalama = toplam / gunlukVeri.length;
+
+                        return (
+                          <div key={excelSet.type} className="space-y-4">
+                            <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: excelSet.color }}>
+                              <span>{excelSet.emoji}</span> {excelSet.title} <span className="text-sm font-normal text-gray-500">(OBIS {excelSet.code} · {excelSet.unit})</span>
+                            </h4>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <h5 className="font-semibold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                                  <Activity className="w-4 h-4" style={{ color: excelSet.color }} /> Günlük Tüketim
+                                </h5>
+                                <ResponsiveContainer width="100%" height={260}>
+                                  <AreaChart data={gunlukVeri}>
+                                    <defs>
+                                      <linearGradient id={`color-${excelSet.type}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor={excelSet.color} stopOpacity={0.7} />
+                                        <stop offset="95%" stopColor={excelSet.color} stopOpacity={0.05} />
+                                      </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                    <XAxis dataKey="gun" fontSize={11} />
+                                    <YAxis fontSize={11} />
+                                    <Tooltip formatter={(v) => [`${Number(v).toFixed(2)} ${excelSet.unit}`, 'Tüketim']} contentStyle={{ background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }} />
+                                    <Area type="monotone" dataKey="tuketim" stroke={excelSet.color} strokeWidth={2} fillOpacity={1} fill={`url(#color-${excelSet.type})`} />
+                                  </AreaChart>
+                                </ResponsiveContainer>
+                              </div>
+
+                              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <h5 className="font-semibold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                                  <TrendingUp className="w-4 h-4" style={{ color: excelSet.color }} /> Okunan Endeks Trendi
+                                </h5>
+                                <ResponsiveContainer width="100%" height={260}>
+                                  <RechartsLine data={gunlukVeri}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                    <XAxis dataKey="gun" fontSize={11} />
+                                    <YAxis fontSize={11} />
+                                    <Tooltip contentStyle={{ background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }} />
+                                    <Line type="monotone" dataKey="okunan_endeks" stroke={excelSet.color} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
+                                  </RechartsLine>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div className="p-3 rounded-lg text-center border" style={{ backgroundColor: `${excelSet.color}14`, borderColor: `${excelSet.color}40` }}>
+                                <p className="text-xs text-gray-600">Toplam</p>
+                                <p className="text-lg font-bold" style={{ color: excelSet.color }}>{toplam.toFixed(2)} {excelSet.unit}</p>
+                              </div>
+                              <div className="p-3 rounded-lg text-center bg-gray-100">
+                                <p className="text-xs text-gray-600">Günlük Ortalama</p>
+                                <p className="text-lg font-bold text-gray-800">{ortalama.toFixed(2)} {excelSet.unit}</p>
+                              </div>
+                              <div className="p-3 rounded-lg text-center bg-red-50">
+                                <p className="text-xs text-gray-600">Max</p>
+                                <p className="text-lg font-bold text-red-600">{maxVal.toFixed(2)} {excelSet.unit}</p>
+                              </div>
+                              <div className="p-3 rounded-lg text-center bg-emerald-50">
+                                <p className="text-xs text-gray-600">Min</p>
+                                <p className="text-lg font-bold text-emerald-600">{minVal.toFixed(2)} {excelSet.unit}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* OSOS Özet Tablosu */}
+                      {selectedRapor.osos_ozet_tablo && (() => {
+                        try {
+                          const ososData = JSON.parse(selectedRapor.osos_ozet_tablo);
+                          return (
+                            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-xl border-2 border-orange-200">
+                              <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <BarChart3 className="w-5 h-5 text-orange-600" />
+                                OSOS Özet Tablosu - Endeks Bilgileri
+                              </h4>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs border-collapse">
+                                  <thead className="bg-orange-600 text-white">
+                                    <tr>
+                                      <th className="border p-2 text-left">Kod</th>
+                                      <th className="border p-2 text-left">Açıklama</th>
+                                      <th className="border p-2 text-right">İlk Endeks</th>
+                                      <th className="border p-2 text-right">Son Endeks</th>
+                                      <th className="border p-2 text-right">Fark</th>
+                                      <th className="border p-2 text-right">Çarpan</th>
+                                      <th className="border p-2 text-right">Tüketim</th>
+                                      <th className="border p-2 text-center">Yasal Sınır</th>
+                                      <th className="border p-2 text-center">Durum</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {ososData.map((row, idx) => {
+                                      const isMainRow = ['1.8.0', '5.8.0', '8.8.0'].includes(row.endeks_kodu);
+                                      return (
+                                        <tr key={idx} className={isMainRow ? 'bg-yellow-100' : (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
+                                          <td className={`border p-2 ${isMainRow ? 'font-bold' : ''}`}>{row.endeks_kodu}</td>
+                                          <td className={`border p-2 ${isMainRow ? 'font-bold' : ''}`}>{row.aciklama}</td>
+                                          <td className="border p-2 text-right">{(row.ilk_endeks || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                                          <td className="border p-2 text-right">{(row.son_endeks || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                                          <td className="border p-2 text-right">{(row.endeks_farki || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                                          <td className="border p-2 text-right">{row.carpan ? row.carpan.toLocaleString('tr-TR') : '-'}</td>
+                                          <td className={`border p-2 text-right ${isMainRow ? 'font-bold text-orange-700' : ''}`}>{(row.tuketim || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                                          <td className="border p-2 text-center">{row.yasal_sinir || '-'}</td>
+                                          <td className={`border p-2 text-center font-semibold ${(row.durum || '').includes('%') ? (parseFloat((row.durum || '').replace('%', '').trim()) > 15 ? 'text-red-600' : 'text-green-600') : ''}`}>{row.durum || '-'}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <div className="mt-3 p-3 bg-white rounded-lg border border-orange-200">
+                                <p className="text-xs text-gray-600">
+                                  <strong>Açıklama:</strong>
+                                  1.8.x: Aktif enerji tüketimi (Gündüz, Puant, Gece dönemleri) |
+                                  5.8.0: Endüktif reaktif enerji (Yasal sınır: %20) |
+                                  8.8.0: Kapasitif reaktif enerji (Yasal sınır: %15) |
+                                  2.8.0: Ters yön aktif enerji (veriş)
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        } catch (e) {
+                          console.error('OSOS tablo parse hatası:', e);
+                          return null;
+                        }
+                      })()}
+                    </>
+                  );
                 })()}
               </div>
             </div>
@@ -1910,7 +1742,7 @@ export default function HaftalikRaporlama() {
                           alert('Değişiklikler kaydedildi!');
                           setSelectedRapor(editedPdfData);
                           setPdfEditMode(false);
-                          fetchRaporlar(); // Listeyi güncelle
+                          loadData(); // Listeyi güncelle
                         }
                       }}
                       className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium flex items-center gap-2 transition-colors"
@@ -1943,7 +1775,8 @@ export default function HaftalikRaporlama() {
                   {(() => {
                     const durum = getDurum(selectedRapor);
                     const trend = getTrend(selectedRapor);
-                    const gucFaktoruFark = (parseFloat(selectedRapor.guc_faktoru) - parseFloat(selectedRapor.onceki_hafta_guc_faktoru)) * 100;
+                    const hasOncekiHafta = selectedRapor.onceki_hafta_guc_faktoru !== null && selectedRapor.onceki_hafta_guc_faktoru !== undefined && !isNaN(parseFloat(selectedRapor.onceki_hafta_guc_faktoru));
+                    const gucFaktoruFark = hasOncekiHafta ? (parseFloat(selectedRapor.guc_faktoru) - parseFloat(selectedRapor.onceki_hafta_guc_faktoru)) * 100 : 0;
                     const gucFaktoruYuzde = ((parseFloat(selectedRapor.guc_faktoru) / parseFloat(selectedRapor.hedef_guc_faktoru)) * 100).toFixed(1);
 
                     const pages = [];
@@ -1996,7 +1829,11 @@ export default function HaftalikRaporlama() {
                           <p style={{ fontSize: '10px', lineHeight: '1.6', color: '#555', margin: 0 }}>
                             Bu hafta güç faktörü <strong>{selectedRapor.guc_faktoru}</strong> seviyesinde ölçülmüştür. 
                             Bu değer hedef <strong>{selectedRapor.hedef_guc_faktoru}</strong> değerinin <strong>%{gucFaktoruYuzde}</strong>'sine karşılık gelmektedir. 
-                            Önceki haftaya göre {gucFaktoruFark >= 0 ? <strong style={{ color: '#10b981' }}>artış</strong> : <strong style={{ color: '#ef4444' }}>düşüş</strong>} göstermiştir ({Math.abs(gucFaktoruFark).toFixed(1)}%). 
+                            {hasOncekiHafta ? (
+                              <>Önceki haftaya göre {gucFaktoruFark >= 0 ? <strong style={{ color: '#10b981' }}>artış</strong> : <strong style={{ color: '#ef4444' }}>düşüş</strong>} göstermiştir ({Math.abs(gucFaktoruFark).toFixed(1)}%). </>
+                            ) : (
+                              <>Bu tesis için ilk rapor kaydıdır, önceki haftayla karşılaştırma bulunmamaktadır. </>
+                            )}
                             {durum.text === 'UYGUN' ? 
                               <><strong style={{ color: '#10b981', fontSize: '12px' }}> ✓ Performans hedeflerimize uygundur.</strong> Mevcut kompanzasyon sistemi etkin çalışmaktadır.</> : 
                               durum.text === 'DİKKAT' ? 
@@ -2055,7 +1892,7 @@ export default function HaftalikRaporlama() {
                               </tr>
                               <tr style={{ background: 'white' }}>
                                 <td style={{ padding: '10px', fontSize: '11px', fontWeight: 'bold', color: '#334155', border: '1px solid #e2e8f0' }}>Maliyet</td>
-                                <td style={{ padding: '10px', fontSize: '11px', color: '#1e293b', border: '1px solid #e2e8f0' }}>{parseFloat(selectedRapor.maliyet).toLocaleString('tr-TR')} ₺</td>
+                                <td style={{ padding: '10px', fontSize: '11px', color: '#1e293b', border: '1px solid #e2e8f0' }}>{selectedRapor.maliyet ? `${parseFloat(selectedRapor.maliyet).toLocaleString('tr-TR')} ₺` : '-'}</td>
                                 <td style={{ padding: '10px', fontSize: '11px', color: '#64748b', border: '1px solid #e2e8f0' }}>Toplam enerji maliyeti</td>
                               </tr>
                               <tr style={{ background: '#f8fafc' }}>
@@ -2073,13 +1910,13 @@ export default function HaftalikRaporlama() {
                               </tr>
                               <tr style={{ background: 'white' }}>
                                 <td style={{ padding: '10px', fontSize: '11px', fontWeight: 'bold', color: '#334155', border: '1px solid #e2e8f0' }}>Önceki Hafta Güç Faktörü</td>
-                                <td style={{ padding: '10px', fontSize: '11px', color: '#1e293b', border: '1px solid #e2e8f0' }}>{selectedRapor.onceki_hafta_guc_faktoru}</td>
+                                <td style={{ padding: '10px', fontSize: '11px', color: '#1e293b', border: '1px solid #e2e8f0' }}>{selectedRapor.onceki_hafta_guc_faktoru ?? 'İlk kayıt'}</td>
                                 <td style={{ padding: '10px', fontSize: '11px', color: '#64748b', border: '1px solid #e2e8f0' }}>Karşılaştırma için</td>
                               </tr>
                               <tr style={{ background: '#f8fafc' }}>
                                 <td style={{ padding: '10px', fontSize: '11px', fontWeight: 'bold', color: '#334155', border: '1px solid #e2e8f0' }}>Trend</td>
                                 <td style={{ padding: '10px', fontSize: '11px', color: '#1e293b', border: '1px solid #e2e8f0' }}>{trend.text}</td>
-                                <td style={{ padding: '10px', fontSize: '11px', color: '#64748b', border: '1px solid #e2e8f0' }}>{gucFaktoruFark >= 0 ? 'Pozitif yönde' : 'Negatif yönde'}</td>
+                                <td style={{ padding: '10px', fontSize: '11px', color: '#64748b', border: '1px solid #e2e8f0' }}>{hasOncekiHafta ? (gucFaktoruFark >= 0 ? 'Pozitif yönde' : 'Negatif yönde') : 'İlk kayıt, kıyaslama yok'}</td>
                               </tr>
                             </tbody>
                           </table>
@@ -2095,9 +1932,10 @@ export default function HaftalikRaporlama() {
                               <p style={{ margin: '2px 0 0 0' }}>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
                             </div>
                             {(() => {
-                              const hasExcel = selectedRapor.excel_data;
-                              const hasImage = selectedRapor.gorsel_url;
-                              const totalPages = 2 + (hasExcel ? 1 : 0) + (hasImage ? 1 : 0);
+                              const excelPageCount = [selectedRapor.excel_data_aktif, selectedRapor.excel_data_enduktif, selectedRapor.excel_data_kapasitif].filter(Boolean).length;
+                              const hasOsosTable = selectedRapor.osos_ozet_tablo ? 1 : 0;
+                              const hasImage = selectedRapor.gorsel_url ? 1 : 0;
+                              const totalPages = 2 + excelPageCount + hasOsosTable + hasImage;
                               return <p style={{ margin: '0', fontWeight: 'bold', color: '#2980b9', fontSize: '9px' }}>Sayfa 1/{totalPages}</p>;
                             })()}
                           </div>
@@ -2177,9 +2015,10 @@ export default function HaftalikRaporlama() {
                               <p style={{ margin: '2px 0 0 0' }}>Tel: +90 535 714 52 88 | www.kobinerji.com</p>
                             </div>
                             {(() => {
-                              const hasExcel = selectedRapor.excel_data;
-                              const hasImage = selectedRapor.gorsel_url;
-                              const totalPages = 2 + (hasExcel ? 1 : 0) + (hasImage ? 1 : 0);
+                              const excelPageCount = [selectedRapor.excel_data_aktif, selectedRapor.excel_data_enduktif, selectedRapor.excel_data_kapasitif].filter(Boolean).length;
+                              const hasOsosTable = selectedRapor.osos_ozet_tablo ? 1 : 0;
+                              const hasImage = selectedRapor.gorsel_url ? 1 : 0;
+                              const totalPages = 2 + excelPageCount + hasOsosTable + hasImage;
                               return <p style={{ margin: '0', fontWeight: 'bold', color: '#2980b9', fontSize: '9px' }}>Sayfa 2/{totalPages}</p>;
                             })()}
                           </div>
@@ -2204,7 +2043,8 @@ export default function HaftalikRaporlama() {
                           excelPageCount++;
                           const currentPageNum = 2 + excelPageCount;
                           const hasImage = selectedRapor.gorsel_url;
-                          const totalPages = 2 + excelDataSets.filter(s => s.data).length + (hasImage ? 1 : 0);
+                          const hasOsosTable = selectedRapor.osos_ozet_tablo ? 1 : 0;
+                          const totalPages = 2 + excelDataSets.filter(s => s.data).length + hasOsosTable + (hasImage ? 1 : 0);
                           
                           pages.push(
                             <div key={`page-excel-${setIndex}`} className="haftalik-pdf-page shadow-xl" style={{ width: '210mm', height: '297mm', background: 'white', padding: '15mm 20mm 30mm 20mm', fontFamily: 'Arial, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }}>
