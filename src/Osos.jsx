@@ -6,6 +6,9 @@ import html2canvas from 'html2canvas';
 import OsosCanliIzleme from './OsosCanliIzleme.jsx';
 import { supabase } from './supabaseClient';
 
+// KOSBI/OSOS yardimci sunucusu: varsayilan olarak sitenin kendi adresi (sunucuda /api/kosbi -> kosbi-proxy)
+const KOSBI_API = import.meta.env.VITE_KOSBI_API_URL || '';
+
 export default function Osos() {
   const [ososTab, setOsosTab] = useState('rapor'); // 'rapor' veya 'canli'
   const [printMode, setPrintMode] = useState(false);
@@ -678,7 +681,7 @@ export default function Osos() {
       console.log(`🔐 KOSBI login yapılıyor: ${user.name}`);
       
       // 1. Backend'e login yap
-      const loginResponse = await fetch('http://localhost:3001/api/kosbi/login', {
+      const loginResponse = await fetch(`${KOSBI_API}/api/kosbi/login`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
@@ -699,7 +702,7 @@ export default function Osos() {
       
       // 2. Sayaç verilerini çek
       const metersResponse = await fetch(
-        `http://localhost:3001/api/kosbi/meters/${loginData.sessionId}`
+        `${KOSBI_API}/api/kosbi/meters/${loginData.sessionId}`
       );
       
       const metersData = await metersResponse.json();
