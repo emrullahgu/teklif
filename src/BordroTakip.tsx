@@ -1303,16 +1303,22 @@ export default function BordroTakip() {
     try {
       console.log('🗑️ Veritabanından siliniyor:', id);
       
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('bordro_expenses')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
 
       if (error) {
         console.error('❌ DELETE ERROR:', error);
         throw new Error(`Silme hatası: ${error.message}`);
       }
-      
+
+      // Hata dönmese de hiçbir satır silinmemiş olabilir (kayıt yok veya yetki kuralı engelledi)
+      if (!data || data.length !== 1) {
+        throw new Error('Kayıt veritabanından silinemedi (bulunamadı veya bu işlem için yetki yok).');
+      }
+
       console.log('✅ Veritabanından silindi:', id);
       
     } catch (error) {
