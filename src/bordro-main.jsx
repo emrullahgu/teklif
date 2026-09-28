@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import BordroTakip from './BordroTakip.jsx';
+import AuthGate from './AuthGate.jsx';
 import './index.css';
 
 export const BordroWithPassword = () => {
@@ -92,6 +93,8 @@ export const BordroWithPassword = () => {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BordroWithPassword />
+    <AuthGate>
+      <BordroWithPassword />
+    </AuthGate>
   </React.StrictMode>,
 );

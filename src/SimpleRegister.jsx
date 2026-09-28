@@ -65,7 +65,7 @@ const SimpleRegister = ({ onSwitchToLogin }) => {
       console.log('🔵 Kayıt işlemi başlıyor...', formData.email);
       
       // Kullanıcı kaydet
-      const newUser = register(formData);
+      const newUser = await register(formData);
       
       console.log('🟢 Kullanıcı başarıyla kaydedildi:', newUser);
       

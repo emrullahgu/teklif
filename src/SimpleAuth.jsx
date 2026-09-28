@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// SimpleAuth — Supabase Auth ile oturum yönetimi.
+//
+// Giriş Supabase Auth (GoTrue) ile yapılır; oturum tarayıcıda saklanır ve tüm sayfalarda
+// (ana uygulama, bordro, osos, akaryakıt...) ortaktır. Kullanıcının rol / onay / bordro
+// yetkisi public.users tablosundan okunur. Onaylanmamış hesaplar giriş yapamaz.
+// Veritabanında tablolar sadece giriş yapmış, onaylı kullanıcılara açıktır (RLS).
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import ActivityLogger from './activityLogger';
 
@@ -12,136 +18,144 @@ export const useAuth = () => {
   return context;
 };
 
+async function profilGetir(userId) {
+  const { data, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+  if (error) throw error;
+  if (data) delete data.password;
+  return data;
+}
+
+function yerelKayitTemizle() {
+  localStorage.removeItem('currentUser');
+}
+
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setLoading(false);
+  // Oturumdaki kullanıcının profilini yükler; onaysızsa oturumu kapatır.
+  const oturumuYukle = useCallback(async (session) => {
+    if (!session?.user) {
+      setCurrentUser(null);
+      yerelKayitTemizle();
+      return null;
+    }
+    const profil = await profilGetir(session.user.id);
+    if (!profil || !profil.approved) {
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      yerelKayitTemizle();
+      return null;
+    }
+    // Eski kodun okuduğu kopya (activityLogger vb.)
+    localStorage.setItem('currentUser', JSON.stringify(profil));
+    setCurrentUser(profil);
+    return profil;
   }, []);
 
-  const signIn = async (email, password) => {
-    try {
-      // Şifre kontrolü sunucuda yapılır (bcrypt); şifreler tarayıcıya hiç gelmez
-      const { data: user, error } = await supabase.rpc('app_login', {
-        p_email: email,
-        p_password: password,
-      });
+  useEffect(() => {
+    let aktif = true;
+    supabase.auth.getSession()
+      .then(({ data }) => oturumuYukle(data.session))
+      .catch((e) => console.error('Oturum yüklenemedi:', e?.message || e))
+      .finally(() => { if (aktif) setLoading(false); });
 
-      if (error) throw error;
-      if (!user) {
-        throw new Error('E-posta veya şifre hatalı!');
+    const { data: dinleyici } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        yerelKayitTemizle();
       }
+    });
+    return () => {
+      aktif = false;
+      dinleyici.subscription.unsubscribe();
+    };
+  }, [oturumuYukle]);
 
-      if (!user.approved) {
+  const signIn = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: (email || '').trim().toLowerCase(),
+      password,
+    });
+    if (error) {
+      if (error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message || '')) {
         throw new Error('Hesabınız henüz onaylanmamış. Lütfen admin onayını bekleyin.');
       }
-
-      const userToStore = { ...user };
-      delete userToStore.password;
-
-      localStorage.setItem('currentUser', JSON.stringify(userToStore));
-      setCurrentUser(userToStore);
-
-      // Login log kaydı
-      await ActivityLogger.login(user.email);
-
-      return userToStore;
-    } catch (error) {
-      console.error('❌ Login hatası:', error.message || error);
-      throw error;
+      throw new Error('E-posta veya şifre hatalı!');
     }
+    const profil = await oturumuYukle(data.session);
+    if (!profil) {
+      throw new Error('Hesabınız henüz onaylanmamış. Lütfen admin onayını bekleyin.');
+    }
+    try {
+      await ActivityLogger.login(profil.email);
+    } catch {
+      /* log yazılamazsa girişi engelleme */
+    }
+    return profil;
   };
 
-  const signOut = () => {
+  const signOut = async () => {
     const userEmail = currentUser?.email;
-    localStorage.removeItem('currentUser');
-    setCurrentUser(null);
-    
-    // Logout log kaydı
     if (userEmail) {
-      ActivityLogger.logout(userEmail);
+      try {
+        await ActivityLogger.logout(userEmail);
+      } catch {
+        /* sessiz */
+      }
     }
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    yerelKayitTemizle();
   };
 
+  // Yeni kayıt: hesap onaysız oluşturulur, admin onaylayana kadar giriş yapılamaz.
   const register = async (userData) => {
-    try {
-      // E-posta kontrolü
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('email')
-        .eq('email', userData.email)
-        .single();
-
-      if (existingUser) {
-        throw new Error('Bu e-posta adresi zaten kullanılıyor!');
-      }
-
-      // Yeni kullanıcı oluştur
-      const { data, error } = await supabase
-        .from('users')
-        .insert([{
-          ...userData,
-          approved: false,
-          role: 'user'
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      return data;
-    } catch (error) {
-      console.error('❌ Kayıt hatası:', error);
-      throw error;
-    }
+    const { data, error } = await supabase.rpc('app_register', {
+      p_email: (userData.email || '').trim().toLowerCase(),
+      p_password: userData.password,
+      p_name: userData.name || null,
+      p_company: userData.company || null,
+    });
+    if (error) throw new Error(error.message);
+    return { id: data, email: userData.email, name: userData.name, company: userData.company, approved: false };
   };
 
+  // Profil bilgilerini günceller. Şifre burada değişmez (changeOwnPassword / admin RPC).
   const updateUser = async (userId, updates) => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .update(updates)
-        .eq('id', userId)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // currentUser güncelle
-      if (currentUser && currentUser.id === userId) {
-        const updatedUser = { ...currentUser, ...updates };
-        delete updatedUser.password;
-        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-        setCurrentUser(updatedUser);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Kullanıcı güncelleme hatası:', error);
-      throw error;
+    const { password, ...alanlar } = updates || {};
+    if (password) {
+      throw new Error('Şifre değiştirmek için changeOwnPassword kullanın.');
     }
+    const { data, error } = await supabase
+      .from('users')
+      .update(alanlar)
+      .eq('id', userId)
+      .select()
+      .single();
+    if (error) throw error;
+
+    if (currentUser && currentUser.id === userId) {
+      const guncel = { ...currentUser, ...data };
+      delete guncel.password;
+      localStorage.setItem('currentUser', JSON.stringify(guncel));
+      setCurrentUser(guncel);
+    }
+    return data;
+  };
+
+  const changeOwnPassword = async (eskiSifre, yeniSifre) => {
+    const { error } = await supabase.rpc('app_change_own_password', { p_old: eskiSifre, p_new: yeniSifre });
+    if (error) throw new Error(error.message);
   };
 
   const deleteAccount = async (userId) => {
-    try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      // Eğer kendi hesabını siliyorsa logout yap
-      if (currentUser && currentUser.id === userId) {
-        signOut();
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Hesap silme hatası:', error);
-      throw error;
+    const { error } = await supabase.rpc('app_delete_user', { p_user_id: userId });
+    if (error) throw new Error(error.message);
+    if (currentUser && currentUser.id === userId) {
+      await signOut();
     }
+    return true;
   };
 
   const value = {
@@ -151,8 +165,9 @@ export const AuthProvider = ({ children }) => {
     signOut,
     register,
     updateUser,
+    changeOwnPassword,
     deleteAccount,
-    isAuthenticated: currentUser !== null
+    isAuthenticated: currentUser !== null,
   };
 
   return (
