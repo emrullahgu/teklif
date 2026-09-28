@@ -38,6 +38,17 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
   const [editUserError, setEditUserError] = useState('');
 
 
+  // Ana uygulamada zaten admin olarak giriş yapılmışsa tekrar sorma
+  useEffect(() => {
+    if (isEmbedded) return;
+    supabase.auth.getSession().then(async ({ data }) => {
+      const uid = data.session?.user?.id;
+      if (!uid) return;
+      const { data: profil } = await supabase.from('users').select('role, approved').eq('id', uid).maybeSingle();
+      if (profil?.role === 'admin' && profil?.approved) setIsAuthenticated(true);
+    });
+  }, [isEmbedded]);
+
   useEffect(() => {
     if (isAuthenticated) {
       loadUsers();
@@ -187,11 +198,11 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
         return;
       }
       const newPassword = generateRandomPassword();
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ password: newPassword, updated_at: new Date().toISOString() })
-        .eq('id', userId);
-      if (updateError) throw updateError;
+      const { error: updateError } = await supabase.rpc('app_admin_set_password', {
+        p_user_id: userId,
+        p_new: newPassword,
+      });
+      if (updateError) throw new Error(updateError.message);
 
       console.log('📧 Login bilgileri gönderiliyor:', user.email);
 
@@ -258,17 +269,21 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
         updated_at: new Date().toISOString()
       };
 
-      // Şifre doluysa ekle
-      if (editUserForm.password) {
-        updateData.password = editUserForm.password;
-      }
-
       const { error } = await supabase
         .from('users')
         .update(updateData)
         .eq('id', editingUser.id);
 
       if (error) throw error;
+
+      // Şifre doluysa sunucuda değiştir (bcrypt, admin yetkisi kontrol edilir)
+      if (editUserForm.password) {
+        const { error: sifreHatasi } = await supabase.rpc('app_admin_set_password', {
+          p_user_id: editingUser.id,
+          p_new: editUserForm.password,
+        });
+        if (sifreHatasi) throw new Error(sifreHatasi.message);
+      }
       
       alert('✅ Kullanıcı bilgileri başarıyla güncellendi!');
       
@@ -311,21 +326,22 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
       // Şifre yoksa otomatik oluştur
       const password = newUserForm.password || generateRandomPassword();
 
-      // Kullanıcıyı oluştur
-      const { data: newUser, error } = await supabase
-        .from('users')
-        .insert([{
-          name: newUserForm.name,
-          email: newUserForm.email,
-          company: newUserForm.company,
-          password: password,
-          role: newUserForm.role,
-          approved: true // Admin oluşturduğu için otomatik onaylı
-        }])
-        .select()
-        .single();
+      // Kullanıcıyı sunucuda oluştur (onaylı; admin yetkisi kontrol edilir)
+      const { data: yeniId, error } = await supabase.rpc('app_admin_create_user', {
+        p_email: newUserForm.email,
+        p_password: password,
+        p_name: newUserForm.name,
+        p_company: newUserForm.company,
+        p_role: newUserForm.role,
+      });
 
-      if (error) throw error;
+      if (error) throw new Error(error.message);
+      const newUser = {
+        id: yeniId,
+        email: (newUserForm.email || '').trim().toLowerCase(),
+        name: newUserForm.name,
+        company: newUserForm.company,
+      };
 
       console.log('✅ Yeni kullanıcı oluşturuldu:', newUser.email);
 
@@ -378,16 +394,24 @@ const SimpleAdminPanel = ({ isEmbedded = false }) => {
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
-    // Admin girişi de sunucuda doğrulanır: sadece rolü 'admin' olan onaylı kullanıcılar
-    const { data: user, error } = await supabase.rpc('app_login', {
-      p_email: adminEmail,
-      p_password: adminPassword,
+    // Supabase Auth ile giriş; sadece rolü 'admin' olan onaylı kullanıcılar
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: (adminEmail || '').trim().toLowerCase(),
+      password: adminPassword,
     });
-    if (!error && user && user.role === 'admin' && user.approved) {
-      setIsAuthenticated(true);
-    } else {
-      alert('Hatalı e-posta veya şifre!');
+    if (!error && data.session) {
+      const { data: profil } = await supabase
+        .from('users')
+        .select('role, approved')
+        .eq('id', data.session.user.id)
+        .maybeSingle();
+      if (profil?.role === 'admin' && profil?.approved) {
+        setIsAuthenticated(true);
+        return;
+      }
+      await supabase.auth.signOut();
     }
+    alert('Hatalı e-posta veya şifre!');
   };
 
   if (!isAuthenticated) {

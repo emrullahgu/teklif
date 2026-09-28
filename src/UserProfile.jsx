@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import { User, Lock, Building2, Mail, Save, X, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 
 const UserProfile = ({ onClose }) => {
-  const { currentUser, updateUser, signOut } = useAuth();
+  const { currentUser, updateUser, changeOwnPassword, signOut } = useAuth();
   const [formData, setFormData] = useState({
     name: currentUser?.name || '',
     company: currentUser?.company || '',
@@ -43,28 +43,19 @@ const UserProfile = ({ onClose }) => {
         if (!formData.currentPassword) {
           throw new Error('Mevcut şifrenizi girmeniz gerekiyor');
         }
-        // Mevcut şifre sunucuda doğrulanır
-        const { data: dbUser, error: pwError } = await supabase.rpc('app_login', {
-          p_email: currentUser.email,
-          p_password: formData.currentPassword,
-        });
-        if (pwError) {
-          throw new Error('Kullanıcı doğrulanamadı');
-        }
-        if (!dbUser) {
-          throw new Error('Mevcut şifre yanlış!');
-        }
         if (formData.newPassword !== formData.confirmPassword) {
           throw new Error('Yeni şifreler eşleşmiyor!');
         }
         if (formData.newPassword.length < 6) {
           throw new Error('Yeni şifre en az 6 karakter olmalı!');
         }
-        // Veritabanı yeni şifreyi hash'leyip ayrı tabloda saklar
-        updates.password = formData.newPassword;
       }
 
       await updateUser(currentUser.id, updates);
+      if (formData.newPassword) {
+        // Mevcut şifre sunucuda doğrulanır, yeni şifre bcrypt ile kaydedilir
+        await changeOwnPassword(formData.currentPassword, formData.newPassword);
+      }
 
       setSuccess('Bilgileriniz başarıyla güncellendi!');
       
