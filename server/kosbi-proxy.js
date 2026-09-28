@@ -9,11 +9,11 @@ require('dotenv').config();
 const ososService = require('./osos-service');
 
 const app = express();
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'https://kobinerji.netlify.app'],
+  origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()) : ['http://localhost:3000', 'http://localhost:5173', 'https://kobinerji.netlify.app'],
   credentials: true
 }));
 app.use(express.json());

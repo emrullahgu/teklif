@@ -1,9 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase bağlantı bilgileri
-const supabaseUrl = 'https://ctylfbmukmoxpzwzeffr.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0eWxmYm11a21veHB6d3plZmZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5ODQyMTMsImV4cCI6MjA4MjU2MDIxM30.kI4bc_zcb1FJ-E_be7HRtEZ4im00KXGE_OHrnPR4POM';
-const supabaseServiceRoleKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0eWxmYm11a21veHB6d3plZmZyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Njk4NDIxMywiZXhwIjoyMDgyNTYwMjEzfQ.14kc5zULNFa04lc0yFP-p7Odim321Wud890H4rgCdbc';
+// Adres ve anahtar Netlify ortam degiskenlerinden gelir (Site settings > Environment variables)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('VITE_SUPABASE_URL ve VITE_SUPABASE_ANON_KEY tanimli olmali');
+}
 
 // Normal client (anon key ile) - Okuma ve auth için
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -21,17 +25,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// 🔐 Admin client (service_role key ile) - Delete/Update için
-// Bu client RLS'i bypass eder, DİKKATLE KULLAN!
-export const adminSupabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-  db: {
-    schema: 'public'
-  }
-});
 
 // Kullanıcı tablosu şeması:
 // CREATE TABLE users (
@@ -47,3 +40,7 @@ export const adminSupabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
 //   created_by TEXT,
 //   updated_by TEXT
 // );
+
+// Sunucu durum kontrolu (SunucuDurumu.jsx) icin
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_ANON_KEY = supabaseAnonKey;

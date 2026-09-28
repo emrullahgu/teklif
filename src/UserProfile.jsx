@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from './SimpleAuth';
+import { supabase } from './supabaseClient';
 import { User, Lock, Building2, Mail, Save, X, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 
 const UserProfile = ({ onClose }) => {
@@ -32,21 +33,25 @@ const UserProfile = ({ onClose }) => {
     setLoading(true);
 
     try {
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const userIndex = users.findIndex(u => u.id === currentUser.id);
-
-      if (userIndex === -1) {
-        throw new Error('Kullanıcı bulunamadı');
-      }
-
-      const user = users[userIndex];
+      const updates = {
+        name: formData.name,
+        company: formData.company,
+      };
 
       // Şifre değiştirme kontrolü
       if (formData.newPassword) {
         if (!formData.currentPassword) {
           throw new Error('Mevcut şifrenizi girmeniz gerekiyor');
         }
-        if (user.password !== formData.currentPassword) {
+        // Mevcut şifre sunucuda doğrulanır
+        const { data: dbUser, error: pwError } = await supabase.rpc('app_login', {
+          p_email: currentUser.email,
+          p_password: formData.currentPassword,
+        });
+        if (pwError) {
+          throw new Error('Kullanıcı doğrulanamadı');
+        }
+        if (!dbUser) {
           throw new Error('Mevcut şifre yanlış!');
         }
         if (formData.newPassword !== formData.confirmPassword) {
@@ -55,20 +60,11 @@ const UserProfile = ({ onClose }) => {
         if (formData.newPassword.length < 6) {
           throw new Error('Yeni şifre en az 6 karakter olmalı!');
         }
-        user.password = formData.newPassword;
+        // Veritabanı yeni şifreyi hash'leyip ayrı tabloda saklar
+        updates.password = formData.newPassword;
       }
 
-      // Kullanıcı bilgilerini güncelle
-      user.name = formData.name;
-      user.company = formData.company;
-
-      users[userIndex] = user;
-      localStorage.setItem('users', JSON.stringify(users));
-
-      // Context'i güncelle
-      if (updateUser) {
-        updateUser(user);
-      }
+      await updateUser(currentUser.id, updates);
 
       setSuccess('Bilgileriniz başarıyla güncellendi!');
       
