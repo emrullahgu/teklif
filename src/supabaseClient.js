@@ -1,8 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase bağlantı bilgileri
-const supabaseUrl = 'https://ctylfbmukmoxpzwzeffr.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0eWxmYm11a21veHB6d3plZmZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5ODQyMTMsImV4cCI6MjA4MjU2MDIxM30.kI4bc_zcb1FJ-E_be7HRtEZ4im00KXGE_OHrnPR4POM';
+// Adres ve anahtar Netlify ortam degiskenlerinden gelir (Site settings > Environment variables)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('VITE_SUPABASE_URL ve VITE_SUPABASE_ANON_KEY tanimli olmali');
+}
 
 // Normal client (anon key ile) - Okuma ve auth için
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
