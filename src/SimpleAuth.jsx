@@ -16,74 +16,20 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Admin bilgileri
-  const ADMIN_EMAIL = 'emrullah.gunay@kobinerji.com';
-  const ADMIN_PASSWORD = 'Eg8502Eg.';
-
   useEffect(() => {
-    // Admin kullanıcısını otomatik oluştur (yoksa)
-    initializeAdmin();
     setLoading(false);
   }, []);
 
-  const initializeAdmin = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', ADMIN_EMAIL)
-        .single();
-
-      if (error && error.code === 'PGRST116') {
-        // Admin yok, oluştur
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert([{
-            email: ADMIN_EMAIL,
-            password: ADMIN_PASSWORD,
-            name: 'Admin',
-            company: 'Kob Enerji',
-            approved: true,
-            role: 'admin'
-          }]);
-
-        if (insertError) {
-          console.error('Admin oluşturma hatası:', insertError);
-        } else {
-          console.log('✅ Admin kullanıcısı oluşturuldu');
-        }
-      }
-    } catch (error) {
-      console.error('Admin kontrolü hatası:', error);
-    }
-  };
-
   const signIn = async (email, password) => {
     try {
-      console.log('🔐 Login denemesi:', { email, password });
+      // Şifre kontrolü sunucuda yapılır (bcrypt); şifreler tarayıcıya hiç gelmez
+      const { data: user, error } = await supabase.rpc('app_login', {
+        p_email: email,
+        p_password: password,
+      });
 
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .eq('password', password)
-        .single();
-
-      if (error || !user) {
-        // Ayrıntılı hata ayıklama
-        const { data: userByEmail } = await supabase
-          .from('users')
-          .select('*')
-          .eq('email', email)
-          .single();
-
-        if (userByEmail) {
-          console.log('❌ E-posta bulundu ama şifre yanlış!');
-          console.log('Girilen şifre:', password);
-          console.log('Kayıtlı şifre:', userByEmail.password);
-        } else {
-          console.log('❌ E-posta bulunamadı!');
-        }
+      if (error) throw error;
+      if (!user) {
         throw new Error('E-posta veya şifre hatalı!');
       }
 
@@ -91,21 +37,18 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Hesabınız henüz onaylanmamış. Lütfen admin onayını bekleyin.');
       }
 
-      console.log('✅ Giriş başarılı!', user);
-
-      // Şifreyi saklama (güvenlik için)
       const userToStore = { ...user };
       delete userToStore.password;
 
       localStorage.setItem('currentUser', JSON.stringify(userToStore));
       setCurrentUser(userToStore);
-      
+
       // Login log kaydı
       await ActivityLogger.login(user.email);
-      
+
       return userToStore;
     } catch (error) {
-      console.error('❌ Login hatası:', error);
+      console.error('❌ Login hatası:', error.message || error);
       throw error;
     }
   };
@@ -123,8 +66,6 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      console.log('📝 Kayıt işlemi başlatılıyor:', userData);
-
       // E-posta kontrolü
       const { data: existingUser } = await supabase
         .from('users')
@@ -149,7 +90,6 @@ export const AuthProvider = ({ children }) => {
 
       if (error) throw error;
 
-      console.log('✅ Kayıt başarılı:', data);
       return data;
     } catch (error) {
       console.error('❌ Kayıt hatası:', error);
