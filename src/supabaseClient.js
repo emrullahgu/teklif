@@ -40,3 +40,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 //   created_by TEXT,
 //   updated_by TEXT
 // );
+
+// Sunucu durum kontrolu (SunucuDurumu.jsx) icin
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_ANON_KEY = supabaseAnonKey;
