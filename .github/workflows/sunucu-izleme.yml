@@ -1,0 +1,81 @@
+# Ofisteki Ubuntu sunucusunu internetten izler.
+# Siteler veya API erisilemezse "sunucu-kapali" etiketli bir issue acar (GitHub e-posta gonderir);
+# sunucu duzelince issue'yu kendisi kapatir.
+name: Sunucu izleme
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency:
+  group: sunucu-izleme
+  cancel-in-progress: false
+
+jobs:
+  kontrol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Siteleri ve API'yi kontrol et
+        id: kontrol
+        run: |
+          H=https://sunucu.tail0e7d76.ts.net
+          sorunlar=""
+          kontrol() { # kontrol <ad> <adres> <kabul_edilen_kodlar>
+            kod=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --retry 2 --retry-delay 15 --retry-all-errors "$2" || true)
+            case " $3 " in *" $kod "*) echo "OK   $1 ($kod)";; *) echo "HATA $1 ($kod)"; sorunlar="$sorunlar- $1: HTTP ${kod:-000}"$'\n';; esac
+          }
+          kontrol "Kobinerji teklif sitesi" "$H/" "200"
+          kontrol "VoltGuard teklif sitesi" "$H:8443/" "200"
+          kontrol "SahaTakip sitesi" "$H:10000/" "200"
+          # API: anahtarsiz istege 401 donmesi sunucunun ayakta oldugunu gosterir
+          for y in teklif voltguard sahatakip; do kontrol "$y API" "$H/$y/auth/v1/health" "200 401"; done
+          {
+            echo 'sorunlar<<SONU'
+            printf '%s' "$sorunlar"
+            echo 'SONU'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Issue ac veya kapat
+        uses: actions/github-script@v7
+        env:
+          SORUNLAR: ${{ steps.kontrol.outputs.sorunlar }}
+        with:
+          script: |
+            const sorunlar = (process.env.SORUNLAR || '').trim();
+            const { owner, repo } = context.repo;
+            const { data: acik } = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: 'sunucu-kapali', per_page: 5,
+            });
+            const zaman = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
+            if (sorunlar && acik.length === 0) {
+              await github.rest.issues.create({
+                owner, repo,
+                title: '🔴 Sunucu kapalı / erişilemiyor',
+                labels: ['sunucu-kapali'],
+                assignees: [owner],
+                body: [
+                  `**${zaman}** itibarıyla ofisteki sunucuya internetten ulaşılamıyor.`,
+                  '',
+                  sorunlar,
+                  '',
+                  'Kontrol edilecekler: Ubuntu bilgisayar açık mı, elektrik/şarj var mı, internete bağlı mı?',
+                  'Sunucu düzelince bu kayıt otomatik kapanır.',
+                ].join('\n'),
+              });
+              core.warning('Sunucu erisilemiyor, issue acildi');
+            } else if (sorunlar && acik.length > 0) {
+              core.warning('Sunucu hala erisilemiyor');
+            } else if (!sorunlar && acik.length > 0) {
+              for (const i of acik) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: i.number,
+                  body: `✅ **${zaman}** itibarıyla sunucu tekrar erişilebilir.`,
+                });
+                await github.rest.issues.update({ owner, repo, issue_number: i.number, state: 'closed' });
+              }
+            }
