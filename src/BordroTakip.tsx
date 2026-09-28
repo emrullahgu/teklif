@@ -28,7 +28,7 @@ import {
   Shield,
   History
 } from 'lucide-react';
-import { supabase, adminSupabase } from './supabaseClient';
+import { supabase } from './supabaseClient';
 import ActivityLogger from './activityLogger';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -1301,10 +1301,9 @@ export default function BordroTakip() {
   // 🔒 Gider/Avans Sil (Çift onaylı güvenli silme)
   const deleteExpenseFromDB = async (id: string) => {
     try {
-      console.log('🗑️ Veritabanından siliniyor (adminSupabase ile):', id);
+      console.log('🗑️ Veritabanından siliniyor:', id);
       
-      // 🔐 Admin client kullan (service_role key ile - Trigger bypass)
-      const { error } = await adminSupabase
+      const { error } = await supabase
         .from('bordro_expenses')
         .delete()
         .eq('id', id);
