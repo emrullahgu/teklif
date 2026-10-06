@@ -2,7 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 
 // Supabase bağlantı bilgileri
 // Adres ve anahtar Netlify ortam degiskenlerinden gelir (Site settings > Environment variables)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+// VITE_SB_YOL tanimliysa (netlify.toml, ornek "/sb") tarayici sunucuya sitenin KENDI adresinden
+// ulasir: https://<site>/sb/... Netlify bu yolu sunucuya iletir (netlify.toml [[redirects]]).
+// Boylece sunucu adresi tarayiciya gomulmez, CORS/CSP sorunu olmaz ve sunucu adresi
+// degistiginde sadece netlify.toml guncellenir. Tanimli degilse eski davranis (VITE_SUPABASE_URL).
+const sbYol = import.meta.env.VITE_SB_YOL;
+const supabaseUrl =
+  sbYol && typeof window !== 'undefined'
+    ? `${window.location.origin}${sbYol}`
+    : import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
