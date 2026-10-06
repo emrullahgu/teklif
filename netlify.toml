@@ -2,6 +2,14 @@
   command = "npm run build"
   publish = "dist"
 
+# Sunucu API'si: tarayici /sb/... ister, Netlify bunu sunucuya iletir (kullanici tarafinda kurulum gerekmez).
+# Sunucu adresi degisince SADECE asagidaki "to" satiri degisir. SPA kuralindan ONCE durmali.
+[[redirects]]
+  from = "/sb/*"
+  to = "https://casa-inexpensive-redeem-aerospace.trycloudflare.com/teklif/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -9,6 +17,7 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  VITE_SB_YOL = "/sb"
   SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
 
 [[headers]]
